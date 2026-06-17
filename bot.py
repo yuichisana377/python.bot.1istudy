@@ -5,6 +5,22 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timedelta
 import json
 import os
+from flask import Flask
+from threading import Thread
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "I'm alive"
+
+def run():
+    app.run(host='0.0.0.0', port=10000)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
 
 TOKEN = os.getenv("TOKEN")
 
@@ -343,6 +359,9 @@ async def help_command(interaction: discord.Interaction):
     )
 
     await interaction.response.send_message(msg, ephemeral=True)
+keep_alive()
+bot.run(TOKEN)
+
 
 
 bot.run(TOKEN)
