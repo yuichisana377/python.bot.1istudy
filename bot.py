@@ -360,8 +360,5 @@ async def help_command(interaction: discord.Interaction):
 
     await interaction.response.send_message(msg, ephemeral=True)
 keep_alive()
-bot.run(TOKEN)
-
-
 
 bot.run(TOKEN)
