@@ -213,9 +213,6 @@ async def add_plan(interaction: discord.Interaction, date: str, category: str, c
     )
 
 
-# ================================
-#  category の autocomplete（候補 + 自由入力OK）
-# ================================
 @add_plan.autocomplete("category")
 async def category_autocomplete(interaction: discord.Interaction, current: str):
 
@@ -400,7 +397,7 @@ async def send_today_plans():
         await channel.send(msg)
 
 # ================================
-#  /edit（部分編集 + 選択式 category）
+#  /edit
 # ================================
 @bot.tree.command(name="edit", description="登録済みの予定を編集する（変更したい部分だけ入力）")
 @app_commands.describe(
@@ -541,7 +538,6 @@ async def setchannel(interaction: discord.Interaction):
     guild_id = interaction.guild.id
     config = load_config(guild_id)
 
-    # 今いるチャンネルを通知先にする
     channel = interaction.channel
     config["remind_channel_id"] = channel.id
     save_config(guild_id, config)
@@ -571,16 +567,10 @@ async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(msg, ephemeral=True)
 
 
-# ================================
-#  ★ add_job は on_ready の外（正しい）
-# ================================
 scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=0)
 scheduler.add_job(send_today_plans, "cron", hour=5, minute=30)
 scheduler.add_job(cleanup_past_plans, "cron", hour=0, minute=0)
 
-# ================================
-#  ★ start() は on_ready の中（正しい）
-# ================================
 started = False
 
 @bot.event
