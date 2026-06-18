@@ -515,19 +515,20 @@ async def category_autocomplete(interaction: discord.Interaction, current: str):
 #  自動 cleanup（全サーバー）
 # ================================
 async def cleanup_past_plans():
-    for filename in os.listdir():
-        if filename.startswith("plans_") and filename.endswith(".json"):
-            guild_id = int(filename.replace("plans_", "").replace(".json", ""))
+    config_files = list_all_configs()
 
-            plans = load_plans(guild_id)
-            today = datetime.now().strftime("%Y-%m-%d")
+    for filename in config_files:
+        guild_id = int(filename.replace("config_", "").replace(".json", ""))
 
-            new_plans = [p for p in plans if p["date"] >= today]
+        plans = load_plans(guild_id)
+        today = datetime.now().strftime("%Y-%m-%d")
 
-            if len(new_plans) != len(plans):
-                save_plans(guild_id, new_plans)
-                print(f"{guild_id} の過去予定を削除しました。")
+        new_plans = [p for p in plans if p["date"] >= today]
 
+        if len(new_plans) != len(plans):
+            save_plans(guild_id, new_plans)
+            print(f"{guild_id} の過去予定を削除しました。")
+ko
 
 # ================================
 #  /setchannel
