@@ -347,58 +347,57 @@ async def send_tomorrow_plans():
     for filename in config_files:
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
 
-            config = load_config(guild_id)
-            channel_id = config.get("remind_channel_id")
-            if not channel_id:
-                continue
+        config = load_config(guild_id)
+        channel_id = config.get("remind_channel_id")
+        if not channel_id:
+            continue
 
-            channel = bot.get_channel(channel_id)
-            if not channel:
-                continue
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            continue
 
-            plans = load_plans(guild_id)
-            tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-            tomorrow_plans = [p for p in plans if p["date"] == tomorrow]
+        plans = load_plans(guild_id)
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow_plans = [p for p in plans if p["date"] == tomorrow]
 
-            if tomorrow_plans:
-                msg = "こんばんは！明日の予定です。\n"
-                for p in tomorrow_plans:
-                    msg += f"・{p['subject']} {p['content']}\n"
-                msg += "@everyone"
-            else:
-                msg = "こんばんは！明日の予定はありません。\n@everyone"
+        if tomorrow_plans:
+            msg = "こんばんは！明日の予定です。\n"
+            for p in tomorrow_plans:
+                msg += f"・{p['subject']} {p['content']}\n"
+            msg += "@everyone"
+        else:
+            msg = "こんばんは！明日の予定はありません。\n@everyone"
 
-            await channel.send(msg)
+        await channel.send(msg)
 
-
-async def send_tomorrow_plans():
+async def send_today_plans():
     config_files = list_all_configs()
 
     for filename in config_files:
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
 
-            config = load_config(guild_id)
-            channel_id = config.get("remind_channel_id")
-            if not channel_id:
-                continue
+        config = load_config(guild_id)
+        channel_id = config.get("remind_channel_id")
+        if not channel_id:
+            continue
 
-            channel = bot.get_channel(channel_id)
-            if not channel:
-                continue
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            continue
 
-            plans = load_plans(guild_id)
-            today = datetime.now().strftime("%Y-%m-%d")
-            today_plans = [p for p in plans if p["date"] == today]
+        plans = load_plans(guild_id)
+        today = datetime.now().strftime("%Y-%m-%d")
+        today_plans = [p for p in plans if p["date"] == today]
 
-            if today_plans:
-                msg = "おはようございます！今日の予定です。\n"
-                for p in today_plans:
-                    msg += f"・{p['subject']} {p['content']}\n"
-                msg += "@everyone"
-            else:
-                msg = "おはようございます！今日の予定はありません。\n@everyone"
+        if today_plans:
+            msg = "おはようございます！今日の予定です。\n"
+            for p in today_plans:
+                msg += f"・{p['subject']} {p['content']}\n"
+            msg += "@everyone"
+        else:
+            msg = "おはようございます！今日の予定はありません。\n@everyone"
 
-            await channel.send(msg)
+        await channel.send(msg)
 
 # ================================
 #  /edit（部分編集 + 選択式 category）
@@ -575,7 +574,7 @@ async def help_command(interaction: discord.Interaction):
 # ================================
 #  ★ add_job は on_ready の外（正しい）
 # ================================
-scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=55)
+scheduler.add_job(send_tomorrow_plans, "cron", hour=21, minute=0)
 scheduler.add_job(send_today_plans, "cron", hour=6, minute=30)
 scheduler.add_job(cleanup_past_plans, "cron", hour=0, minute=0)
 
