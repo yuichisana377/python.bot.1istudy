@@ -7,6 +7,8 @@ import json
 import os
 from flask import Flask
 from threading import Thread
+from pytz import timezone
+
 
 app = Flask('')
 
@@ -28,7 +30,8 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler(timezone=timezone("Asia/Tokyo"))
+
 
 
 # ================================
