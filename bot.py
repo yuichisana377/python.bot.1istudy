@@ -102,22 +102,6 @@ def save_plans(guild_id: int, plans: list):
 
     requests.put(url, headers=headers, json=data)
 
-
-
-# ================================
-#  起動時
-# ================================
-
-
-@bot.event
-async def on_ready():
-    print("Bot is ready!")
-    await bot.tree.sync()
-    print("Slash commands synced.")
-
-    
-
-
 # ================================
 #  /add（category 自由入力 + 候補表示）
 # ================================
@@ -546,6 +530,17 @@ async def help_command(interaction: discord.Interaction):
 
     await interaction.response.send_message(msg, ephemeral=True)
 
+
+# ================================
+#  起動時
+# ================================
+
+
+@bot.event
+async def on_ready():
+    print("Bot is ready!")
+    await bot.tree.sync()
+    print("Slash commands synced.")
 scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=15)
 scheduler.add_job(send_today_plans, "cron", hour=6, minute=30)
 scheduler.add_job(cleanup_past_plans, "cron", hour=0, minute=0)
