@@ -353,11 +353,12 @@ async def send_tomorrow_plans():
         if not channel:
             continue
 
-       
         jst = timezone("Asia/Tokyo")
         tomorrow = (datetime.now(jst) + timedelta(days=1)).strftime("%Y-%m-%d")
-        
+
+        # ★ここが重要
         plans = load_plans(guild_id)
+
         tomorrow_plans = [p for p in plans if p["date"] == tomorrow]
 
         if tomorrow_plans:
@@ -369,6 +370,7 @@ async def send_tomorrow_plans():
             msg = "こんばんは！明日の予定はありません。\n@everyone"
 
         await channel.send(msg)
+
 
 async def send_today_plans():
     config_files = list_all_configs()
@@ -385,8 +387,13 @@ async def send_today_plans():
         if not channel:
             continue
 
+        # JST に固定
         jst = timezone("Asia/Tokyo")
         today = datetime.now(jst).strftime("%Y-%m-%d")
+
+        # ★ここが重要：today_plans より前に置く
+        plans = load_plans(guild_id)
+
         today_plans = [p for p in plans if p["date"] == today]
 
         if today_plans:
@@ -398,6 +405,7 @@ async def send_today_plans():
             msg = "おはようございます！今日の予定はありません。\n@everyone"
 
         await channel.send(msg)
+
 
 # ================================
 #  /edit
