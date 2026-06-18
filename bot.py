@@ -79,7 +79,7 @@ def save_config(guild_id: int, data: dict):
         payload["sha"] = sha
 
     requests.put(url, headers=headers, json=payload)
-ire
+
 
 
 # ================================
