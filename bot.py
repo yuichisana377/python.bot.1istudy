@@ -575,7 +575,7 @@ async def help_command(interaction: discord.Interaction):
 # ================================
 #  ★ add_job は on_ready の外（正しい）
 # ================================
-scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=45)
+scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=55)
 scheduler.add_job(send_today_plans, "cron", hour=6, minute=30)
 scheduler.add_job(cleanup_past_plans, "cron", hour=0, minute=0)
 
