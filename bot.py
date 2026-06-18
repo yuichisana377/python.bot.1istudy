@@ -44,16 +44,42 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 #  ギルドごとの設定
 # ================================
 def load_config(guild_id: int):
-    path = f"config_{guild_id}.json"
-    if not os.path.exists(path):
+    filename = f"config_{guild_id}.json"
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+
+    r = requests.get(url, headers=headers)
+
+    if r.status_code == 404:
         return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+
+    data = r.json()
+    content = base64.b64decode(data["content"]).decode()
+    return json.loads(content)
+
 
 def save_config(guild_id: int, data: dict):
-    path = f"config_{guild_id}.json"
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    filename = f"config_{guild_id}.json"
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+
+    r = requests.get(url, headers=headers)
+    sha = r.json()["sha"] if r.status_code != 404 else None
+
+    new_content = base64.b64encode(
+        json.dumps(data, ensure_ascii=False, indent=2).encode()
+    ).decode()
+
+    payload = {
+        "message": f"update {filename}",
+        "content": new_content
+    }
+
+    if sha:
+        payload["sha"] = sha
+
+    requests.put(url, headers=headers, json=payload)
+ire
 
 
 # ================================
@@ -536,7 +562,7 @@ async def help_command(interaction: discord.Interaction):
 # ================================
 #  ★ add_job は on_ready の外（正しい）
 # ================================
-scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=35)
+scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=45)
 scheduler.add_job(send_today_plans, "cron", hour=6, minute=30)
 scheduler.add_job(cleanup_past_plans, "cron", hour=0, minute=0)
 
