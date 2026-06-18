@@ -541,9 +541,12 @@ async def on_ready():
     print("Bot is ready!")
     await bot.tree.sync()
     print("Slash commands synced.")
+    scheduler.start()
+
+
 scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=15)
 scheduler.add_job(send_today_plans, "cron", hour=6, minute=30)
 scheduler.add_job(cleanup_past_plans, "cron", hour=0, minute=0)
-scheduler.start()
+
 keep_alive()
 bot.run(TOKEN)
