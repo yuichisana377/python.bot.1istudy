@@ -571,7 +571,7 @@ async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(msg, ephemeral=True)
 
 
-scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=0)
+scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=45)
 scheduler.add_job(send_today_plans, "cron", hour=7, minute=30)
 scheduler.add_job(cleanup_past_plans, "cron", hour=0, minute=0)
 
