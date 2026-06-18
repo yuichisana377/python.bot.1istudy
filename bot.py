@@ -80,7 +80,18 @@ def save_config(guild_id: int, data: dict):
 
     requests.put(url, headers=headers, json=payload)
 
+def list_all_configs():
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
+    r = requests.get(url, headers=headers)
+    files = r.json()
+
+    config_files = [
+        f["name"] for f in files
+        if f["name"].startswith("config_") and f["name"].endswith(".json")
+    ]
+    return config_files
 
 # ================================
 #  予定データ（ギルドごと）
@@ -331,9 +342,10 @@ async def cleanup_command(interaction: discord.Interaction):
 #  通知（全サーバー対応）
 # ================================
 async def send_tomorrow_plans():
-    for filename in os.listdir():
-        if filename.startswith("config_") and filename.endswith(".json"):
-            guild_id = int(filename.replace("config_", "").replace(".json", ""))
+    config_files = list_all_configs()
+
+    for filename in config_files:
+        guild_id = int(filename.replace("config_", "").replace(".json", ""))
 
             config = load_config(guild_id)
             channel_id = config.get("remind_channel_id")
@@ -359,10 +371,11 @@ async def send_tomorrow_plans():
             await channel.send(msg)
 
 
-async def send_today_plans():
-    for filename in os.listdir():
-        if filename.startswith("config_") and filename.endswith(".json"):
-            guild_id = int(filename.replace("config_", "").replace(".json", ""))
+async def send_tomorrow_plans():
+    config_files = list_all_configs()
+
+    for filename in config_files:
+        guild_id = int(filename.replace("config_", "").replace(".json", ""))
 
             config = load_config(guild_id)
             channel_id = config.get("remind_channel_id")
