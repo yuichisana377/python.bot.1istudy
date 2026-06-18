@@ -531,7 +531,7 @@ async def cleanup_past_plans():
         if len(new_plans) != len(plans):
             save_plans(guild_id, new_plans)
             print(f"{guild_id} の過去予定を削除しました。")
-ko
+
 
 # ================================
 #  /setchannel
