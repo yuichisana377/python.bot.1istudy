@@ -108,7 +108,7 @@ def save_plans(guild_id: int, plans: list):
 #  起動時
 # ================================
 
-scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=0)
+scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=15)
 scheduler.add_job(send_today_plans, "cron", hour=6, minute=30)
 scheduler.add_job(cleanup_past_plans, "cron", hour=0, minute=0)
 scheduler.start()
