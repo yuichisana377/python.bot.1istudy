@@ -353,8 +353,11 @@ async def send_tomorrow_plans():
         if not channel:
             continue
 
+       
+        jst = timezone("Asia/Tokyo")
+        tomorrow = (datetime.now(jst) + timedelta(days=1)).strftime("%Y-%m-%d")
+        
         plans = load_plans(guild_id)
-        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
         tomorrow_plans = [p for p in plans if p["date"] == tomorrow]
 
         if tomorrow_plans:
