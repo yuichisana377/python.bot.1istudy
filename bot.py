@@ -532,21 +532,28 @@ async def help_command(interaction: discord.Interaction):
 
 
 # ================================
-#  起動時
+#  ★ add_job は on_ready の外（正しい）
 # ================================
-
-
-@bot.event
-async def on_ready():
-    print("Bot is ready!")
-    await bot.tree.sync()
-    print("Slash commands synced.")
-    scheduler.start()
-
-
 scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=15)
 scheduler.add_job(send_today_plans, "cron", hour=6, minute=30)
 scheduler.add_job(cleanup_past_plans, "cron", hour=0, minute=0)
+
+# ================================
+#  ★ start() は on_ready の中（正しい）
+# ================================
+started = False
+
+@bot.event
+async def on_ready():
+    global started
+    print("Bot is ready!")
+    await bot.tree.sync()
+
+    if not started:
+        scheduler.start()
+        started = True
+        print("Scheduler started!")
+
 
 keep_alive()
 bot.run(TOKEN)
