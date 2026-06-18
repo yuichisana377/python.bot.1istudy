@@ -498,18 +498,20 @@ async def cleanup_past_plans():
 #  /setchannel
 # ================================
 @bot.tree.command(name="setchannel", description="通知を送るチャンネルを設定する")
-@app_commands.describe(channel="通知を送るチャンネル")
-async def setchannel(interaction: discord.Interaction, channel: discord.TextChannel):
+async def setchannel(interaction: discord.Interaction):
 
     guild_id = interaction.guild.id
     config = load_config(guild_id)
 
+    # 今いるチャンネルを通知先にする
+    channel = interaction.channel
     config["remind_channel_id"] = channel.id
     save_config(guild_id, config)
 
     await interaction.response.send_message(
         f"通知チャンネルを **#{channel.name}** に設定しました！"
     )
+
 
 
 # ================================
