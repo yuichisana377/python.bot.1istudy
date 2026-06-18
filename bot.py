@@ -382,8 +382,8 @@ async def send_today_plans():
         if not channel:
             continue
 
-        plans = load_plans(guild_id)
-        today = datetime.now().strftime("%Y-%m-%d")
+        jst = timezone("Asia/Tokyo")
+        today = datetime.now(jst).strftime("%Y-%m-%d")
         today_plans = [p for p in plans if p["date"] == today]
 
         if today_plans:
