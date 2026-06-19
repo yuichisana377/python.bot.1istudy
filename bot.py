@@ -11,13 +11,10 @@ from pytz import timezone
 import requests
 import base64
 
-GITHUB_REPO = "yuichisana377/python.bot.1istudy"  # ←あなたのリポジトリ名
-GITHUB_FILE = "plans.json"
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # Render の環境変数から読み込む
-
+GITHUB_REPO = "yuichisana377/python.bot.1istudy"
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 scheduler = AsyncIOScheduler(timezone=timezone("Asia/Tokyo"))
-
 
 app = Flask('')
 
@@ -32,16 +29,14 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-TOKEN = TOKEN = os.getenv("TOKEN")
-
+TOKEN = os.getenv("TOKEN")
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-
 # ================================
-#  ギルドごとの設定
+#  設定ファイル
 # ================================
 def load_config(guild_id: int):
     filename = f"config_{guild_id}.json"
@@ -49,7 +44,6 @@ def load_config(guild_id: int):
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
     r = requests.get(url, headers=headers)
-
     if r.status_code == 404:
         return {}
 
@@ -70,15 +64,12 @@ def save_config(guild_id: int, data: dict):
         json.dumps(data, ensure_ascii=False, indent=2).encode()
     ).decode()
 
-    payload = {
-        "message": f"update {filename}",
-        "content": new_content
-    }
-
+    payload = {"message": f"update {filename}", "content": new_content}
     if sha:
         payload["sha"] = sha
 
     requests.put(url, headers=headers, json=payload)
+
 
 def list_all_configs():
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
@@ -87,14 +78,13 @@ def list_all_configs():
     r = requests.get(url, headers=headers)
     files = r.json()
 
-    config_files = [
+    return [
         f["name"] for f in files
         if f["name"].startswith("config_") and f["name"].endswith(".json")
     ]
-    return config_files
 
 # ================================
-#  予定データ（ギルドごと）
+#  予定データ
 # ================================
 def load_plans(guild_id: int):
     filename = f"plans_{guild_id}.json"
@@ -102,8 +92,6 @@ def load_plans(guild_id: int):
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
     r = requests.get(url, headers=headers)
-
-    # ファイルが存在しない場合 → 空のリストを返す
     if r.status_code == 404:
         return []
 
@@ -117,39 +105,28 @@ def save_plans(guild_id: int, plans: list):
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
-    # まず現在のファイルの SHA を取得（新規の場合は None）
     r = requests.get(url, headers=headers)
-
-    if r.status_code == 404:
-        sha = None
-    else:
-        sha = r.json()["sha"]
+    sha = r.json()["sha"] if r.status_code != 404 else None
 
     new_content = base64.b64encode(
         json.dumps(plans, ensure_ascii=False, indent=2).encode()
     ).decode()
 
-    data = {
-        "message": f"update {filename}",
-        "content": new_content,
-    }
-
+    payload = {"message": f"update {filename}", "content": new_content}
     if sha:
-        data["sha"] = sha
+        payload["sha"] = sha
 
-    requests.put(url, headers=headers, json=data)
-
+    requests.put(url, headers=headers, json=payload)
 
 # ================================
-#  ログ保存（ギルドごと）
+#  ログ保存（edit だけ before/after）
 # ================================
-def write_log(guild_id: int, log_type: str, before: str, after: str):
+def write_log(guild_id: int, log_type: str, before=None, after=None, detail=None):
     filename = f"logs_{guild_id}.json"
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
     r = requests.get(url, headers=headers)
-
     if r.status_code == 404:
         logs = []
         sha = None
@@ -158,206 +135,121 @@ def write_log(guild_id: int, log_type: str, before: str, after: str):
         logs = json.loads(base64.b64decode(data["content"]).decode())
         sha = data["sha"]
 
-    # ★ JST に変更
     jst = timezone("Asia/Tokyo")
     now_jst = datetime.now(jst).strftime("%Y-%m-%d %H:%M:%S")
 
-    logs.append({
+    entry = {
         "time": now_jst,
-        "type": log_type,
-        "before": before,
-        "after": after
-    })
+        "type": log_type
+    }
+
+    if log_type == "edit":
+        entry["before"] = before
+        entry["after"] = after
+    else:
+        entry["detail"] = detail
+
+    logs.append(entry)
 
     new_content = base64.b64encode(
         json.dumps(logs, ensure_ascii=False, indent=2).encode()
     ).decode()
 
-    payload = {
-        "message": f"update {filename}",
-        "content": new_content
-    }
-
+    payload = {"message": f"update {filename}", "content": new_content}
     if sha:
         payload["sha"] = sha
 
     requests.put(url, headers=headers, json=payload)
 
 # ================================
-#  /add（category 自由入力 + 候補表示）
+#  /add
 # ================================
-@bot.tree.command(
-    name="add",
-    description="日にち・内容を登録する（科目名はチャンネル名）"
-)
+@bot.tree.command(name="add", description="予定を追加する")
 @app_commands.describe(
-    date="日付（例: 6-20, 06/20, 2026-06-20）",
-    category="分類（宿題・提出・持ち物など自由入力OK）",
-    content="内容（宿題など）"
+    date="日付（例: 6-20, 2026-06-20）",
+    category="分類（宿題・提出・持ち物など）",
+    content="内容"
 )
-async def add_plan(interaction: discord.Interaction, date: str, category: str, content: str):
+async def add_plan(interaction, date: str, category: str, content: str):
 
-    # --- 日付処理（年なし対応） ---
     try:
-        # 年あり（YYYY-MM-DD）
         if "-" in date and len(date.split("-")[0]) == 4:
             parsed = datetime.strptime(date, "%Y-%m-%d")
-
-        # 年なし（MM-DD, M-D, MM/DD, M/D）
         else:
             date = date.replace("/", "-")
-            month, day = date.split("-")
-            year = datetime.now().year
-            parsed = datetime.strptime(
-                f"{year}-{int(month):02d}-{int(day):02d}",
-                "%Y-%m-%d"
-            )
-
-    except ValueError:
-        await interaction.response.send_message(
-            "日付の形式が正しくありません（例: 6-20, 06/20, 2026-06-20）",
-            ephemeral=True
-        )
-        return
-
-    # YYYY-MM-DD に整形
-    date = parsed.strftime("%Y-%m-%d")
-
-    # --- 過去の日付は登録不可 ---
-    today = datetime.now().date()
-    input_date = datetime.strptime(date, "%Y-%m-%d").date()
-
-    if input_date < today:
-        await interaction.response.send_message(
-            "過去の日付は登録できません！",
-            ephemeral=True
-        )
-        return
-
-    # --- 科目名はチャンネル名 ---
-    subject = interaction.channel.name
-
-    # --- content にカテゴリタグを付ける ---
-    tagged_content = f"【{category}】{content}"
-
-    # --- 保存 ---
-    guild_id = interaction.guild.id
-    plans = load_plans(guild_id)
-
-    plans.append({
-        "date": date,
-        "subject": subject,
-        "content": tagged_content
-    })
-
-    save_plans(guild_id, plans)
-
-    # ログを保存
-    write_log(guild_id, "add", subject, tagged_content)
-
-    await interaction.response.send_message(
-        f"登録しました！\n**{date} / {subject} / {tagged_content}**"
-    )
-
-
-@add_plan.autocomplete("category")
-async def category_autocomplete(interaction: discord.Interaction, current: str):
-
-    candidates = ["宿題", "提出", "持ち物", "テスト", "その他"]
-
-    return [
-        app_commands.Choice(name=c, value=c)
-        for c in candidates
-        if current in c
-    ][:25]
-
-
-
-# ================================
-#  /list
-# ================================
-@bot.tree.command(name="list", description="予定一覧を表示する")
-@app_commands.describe(date="all または 日付（例: 6/15, 2026-06-15）")
-async def list_plans(interaction: discord.Interaction, date: str):
-
-    guild_id = interaction.guild.id
-    plans = load_plans(guild_id)
-
-    if date.lower() == "all":
-        if not plans:
-            await interaction.response.send_message("予定はありません。", ephemeral=True)
-            return
-
-        sorted_plans = sorted(plans, key=lambda p: p["date"])
-        msg = "📘 **すべての予定一覧**\n"
-        for p in sorted_plans:
-            msg += f"- {p['date']}：{p['subject']}{p['content']}\n"
-
-        await interaction.response.send_message(msg, ephemeral=True)
-        return
-
-    # 日付指定
-    try:
-        if "/" in date:
-            m, d = date.split("/")
+            m, d = date.split("-")
             y = datetime.now().year
-            date_str = f"{y}-{int(m):02d}-{int(d):02d}"
-        else:
-            datetime.strptime(date, "%Y-%m-%d")
-            date_str = date
+            parsed = datetime.strptime(f"{y}-{int(m):02d}-{int(d):02d}", "%Y-%m-%d")
     except:
         await interaction.response.send_message("日付の形式が正しくありません！", ephemeral=True)
         return
 
-    selected = [p for p in plans if p["date"] == date_str]
+    date = parsed.strftime("%Y-%m-%d")
 
-    if not selected:
-        await interaction.response.send_message(f"{date} の予定はありません。", ephemeral=True)
+    today = datetime.now().date()
+    if datetime.strptime(date, "%Y-%m-%d").date() < today:
+        await interaction.response.send_message("過去の日付は登録できません！", ephemeral=True)
         return
 
-    msg = f"📘 **{date} の予定**\n"
-    for p in selected:
-        msg += f"- {p['subject']}{p['content']}\n"
+    subject = interaction.channel.name
+    tagged = f"【{category}】{content}"
 
-    await interaction.response.send_message(msg, ephemeral=True)
+    guild_id = interaction.guild.id
+    plans = load_plans(guild_id)
 
+    plans.append({"date": date, "subject": subject, "content": tagged})
+    save_plans(guild_id, plans)
+
+    write_log(guild_id, "add", detail=f"{date} / {subject} / {tagged}")
+
+    await interaction.response.send_message(
+        f"登録しました！\n{date} / {subject} / {tagged}"
+    )
+
+@add_plan.autocomplete("category")
+async def category_autocomplete(interaction, current):
+    candidates = ["宿題", "提出", "持ち物", "テスト", "その他"]
+    return [
+        app_commands.Choice(name=c, value=c)
+        for c in candidates if current in c
+    ][:25]
 
 # ================================
 #  /delete
 # ================================
 @bot.tree.command(name="delete", description="予定を削除する")
-@app_commands.describe(target="削除したい予定を選んでください")
-async def delete(interaction: discord.Interaction, target: str):
+@app_commands.describe(target="削除したい予定")
+async def delete(interaction, target: str):
 
     guild_id = interaction.guild.id
     plans = load_plans(guild_id)
 
-    deleted_item = None
-
+    deleted = None
     new_plans = []
+
     for p in plans:
         label = f"{p['date']}/{p['subject']}{p['content']}"
         if label == target:
-            deleted_item = p
+            deleted = p
         else:
             new_plans.append(p)
 
-    if not deleted_item:
+    if not deleted:
         await interaction.response.send_message("その予定は見つかりませんでした。", ephemeral=True)
         return
 
     save_plans(guild_id, new_plans)
 
-    # ★ログ追加
-    write_log(guild_id, "delete", deleted_item["subject"], deleted_item["content"])
+    write_log(
+        guild_id,
+        "delete",
+        detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}"
+    )
 
     await interaction.response.send_message(f"削除しました！\n{target}")
 
-
-
 @delete.autocomplete("target")
-async def delete_autocomplete(interaction: discord.Interaction, current: str):
-
+async def delete_autocomplete(interaction, current):
     guild_id = interaction.guild.id
     plans = load_plans(guild_id)
 
@@ -369,122 +261,51 @@ async def delete_autocomplete(interaction: discord.Interaction, current: str):
 
     return choices[:25]
 
-
 # ================================
 #  /cleanup
 # ================================
 @bot.tree.command(name="cleanup", description="過去の予定を削除する")
-async def cleanup_command(interaction: discord.Interaction):
+async def cleanup_command(interaction):
 
     guild_id = interaction.guild.id
     plans = load_plans(guild_id)
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(timezone("Asia/Tokyo")).strftime("%Y-%m-%d")
+
+    deleted_dates = sorted({p["date"] for p in plans if p["date"] < today})
     new_plans = [p for p in plans if p["date"] >= today]
 
-    deleted = len(plans) - len(new_plans)
     save_plans(guild_id, new_plans)
 
-    if deleted > 0:
-        await interaction.response.send_message(f"🧹 {deleted} 件削除しました！", ephemeral=True)
+    if deleted_dates:
+        write_log(
+            guild_id,
+            "cleanup",
+            detail="削除した日付: " + ", ".join(deleted_dates)
+        )
+        await interaction.response.send_message(
+            f"🧹 {len(deleted_dates)}件削除しました！\n" +
+            "\n".join(deleted_dates),
+            ephemeral=True
+        )
     else:
         await interaction.response.send_message("削除する予定はありませんでした！", ephemeral=True)
-
-
-# ================================
-#  通知（全サーバー対応）
-# ================================
-async def send_tomorrow_plans():
-    config_files = list_all_configs()
-
-    for filename in config_files:
-        guild_id = int(filename.replace("config_", "").replace(".json", ""))
-
-        config = load_config(guild_id)
-        channel_id = config.get("remind_channel_id")
-        if not channel_id:
-            continue
-
-        channel = bot.get_channel(channel_id)
-        if not channel:
-            continue
-
-        jst = timezone("Asia/Tokyo")
-        tomorrow = (datetime.now(jst) + timedelta(days=1)).strftime("%Y-%m-%d")
-
-        # ★ここが重要
-        plans = load_plans(guild_id)
-
-        tomorrow_plans = [p for p in plans if p["date"] == tomorrow]
-
-        if tomorrow_plans:
-            msg = "こんばんは！明日の予定です。\n"
-            for p in tomorrow_plans:
-                msg += f"・{p['subject']} {p['content']}\n"
-            msg += "@everyone"
-        else:
-            msg = "こんばんは！明日の予定はありません。\n@everyone"
-
-        await channel.send(msg)
-
-
-async def send_today_plans():
-    config_files = list_all_configs()
-
-    for filename in config_files:
-        guild_id = int(filename.replace("config_", "").replace(".json", ""))
-
-        config = load_config(guild_id)
-        channel_id = config.get("remind_channel_id")
-        if not channel_id:
-            continue
-
-        channel = bot.get_channel(channel_id)
-        if not channel:
-            continue
-
-        # JST に固定
-        jst = timezone("Asia/Tokyo")
-        today = datetime.now(jst).strftime("%Y-%m-%d")
-
-        # ★ここが重要：today_plans より前に置く
-        plans = load_plans(guild_id)
-
-        today_plans = [p for p in plans if p["date"] == today]
-
-        if today_plans:
-            msg = "おはようございます！今日の予定です。\n"
-            for p in today_plans:
-                msg += f"・{p['subject']} {p['content']}\n"
-            msg += "@everyone"
-        else:
-            msg = "おはようございます！今日の予定はありません。\n@everyone"
-
-        await channel.send(msg)
-
 
 # ================================
 #  /edit
 # ================================
-@bot.tree.command(name="edit", description="登録済みの予定を編集する（変更したい部分だけ入力）")
+@bot.tree.command(name="edit", description="予定を編集する")
 @app_commands.describe(
-    target="編集したい予定を選んでください",
-    date="新しい日付（変更したい場合だけ）",
-    category="新しい分類（宿題・提出・持ち物など自由入力OK）",
-    content="新しい内容（変更したい場合だけ）"
+    target="編集したい予定",
+    date="新しい日付",
+    category="新しい分類",
+    content="新しい内容"
 )
-async def edit_plan(
-    interaction: discord.Interaction,
-    target: str,
-    date: str = None,
-    category: str = None,
-    content: str = None
-):
+async def edit_plan(interaction, target: str, date: str = None, category: str = None, content: str = None):
 
     guild_id = interaction.guild.id
     plans = load_plans(guild_id)
 
-    # 対象を検索
     found = None
     for p in plans:
         label = f"{p['date']}/{p['subject']}{p['content']}"
@@ -496,10 +317,8 @@ async def edit_plan(
         await interaction.response.send_message("その予定が見つかりませんでした。", ephemeral=True)
         return
 
-    # ★ 編集前の文字列を保存
     before_str = f"{found['date']} / {found['subject']} / {found['content']}"
 
-    # --- 日付変更 ---
     if date:
         try:
             if "-" in date and len(date.split("-")[0]) == 4:
@@ -514,45 +333,29 @@ async def edit_plan(
             await interaction.response.send_message("日付の形式が正しくありません！", ephemeral=True)
             return
 
-    # --- category + content ---
     if category and content:
         found["content"] = f"【{category}】{content}"
-
-    # --- category だけ ---
-    elif category and not content:
+    elif category:
         old = found["content"]
         body = old.split("】", 1)[1] if "】" in old else old
         found["content"] = f"【{category}】{body}"
-
-    # --- content だけ ---
-    elif content and not category:
+    elif content:
         old = found["content"]
         tag = old.split("】", 1)[0] + "】" if "】" in old else ""
         found["content"] = f"{tag}{content}"
 
     save_plans(guild_id, plans)
 
-    # ★ 編集後の文字列
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
 
-    # ★ ログに before / after を保存
-    write_log(guild_id, "edit", before_str, after_str)
+    write_log(guild_id, "edit", before=before_str, after=after_str)
 
-    # ★ 通知も before / after を表示
     await interaction.response.send_message(
-        f"編集しました！\n\n"
-        f"【編集前】\n{before_str}\n\n"
-        f"【編集後】\n{after_str}"
+        f"編集しました！\n\n【編集前】\n{before_str}\n\n【編集後】\n{after_str}"
     )
 
-
-
-
-#  autocomplete（予定選択）
-
 @edit_plan.autocomplete("target")
-async def edit_autocomplete(interaction: discord.Interaction, current: str):
-
+async def edit_autocomplete(interaction, current):
     guild_id = interaction.guild.id
     plans = load_plans(guild_id)
 
@@ -564,27 +367,16 @@ async def edit_autocomplete(interaction: discord.Interaction, current: str):
 
     return choices[:25]
 
-
-
-#  category の autocomplete（選択式 + 自由入力OK）
-
 @edit_plan.autocomplete("category")
-async def category_autocomplete(interaction: discord.Interaction, current: str):
-
+async def category_autocomplete(interaction, current):
     candidates = ["宿題", "提出", "持ち物", "テスト", "その他"]
-
     return [
         app_commands.Choice(name=c, value=c)
-        for c in candidates
-        if current in c
+        for c in candidates if current in c
     ][:25]
 
-
-
-
-
 # ================================
-#  自動 cleanup（全サーバー）
+#  自動 cleanup
 # ================================
 async def cleanup_past_plans():
     config_files = list_all_configs()
@@ -599,30 +391,25 @@ async def cleanup_past_plans():
         before_count = len(plans)
 
         deleted_dates = sorted({p["date"] for p in plans if p["date"] < today})
-
         new_plans = [p for p in plans if p["date"] >= today]
         after_count = len(new_plans)
 
         if before_count != after_count:
             save_plans(guild_id, new_plans)
 
-            before_str = f"{before_count}件 → {after_count}件"
-            after_str = "削除された日付: " + ", ".join(deleted_dates)
-
-            # ★ ログ書き込み
-            write_log(guild_id, "cleanup", before_str, after_str)
+            write_log(
+                guild_id,
+                "cleanup",
+                detail="削除した日付: " + ", ".join(deleted_dates)
+            )
 
             print(f"{guild_id} の過去予定を削除しました。")
-
-
-
 
 # ================================
 #  /setchannel
 # ================================
-@bot.tree.command(name="setchannel", description="通知を送るチャンネルを設定する")
-async def setchannel(interaction: discord.Interaction):
-
+@bot.tree.command(name="setchannel", description="通知チャンネルを設定する")
+async def setchannel(interaction):
     guild_id = interaction.guild.id
     config = load_config(guild_id)
 
@@ -634,14 +421,11 @@ async def setchannel(interaction: discord.Interaction):
         f"通知チャンネルを **#{channel.name}** に設定しました！"
     )
 
-
-
 # ================================
 #  /help
 # ================================
-@bot.tree.command(name="help", description="使えるコマンド一覧を表示します。")
-async def help_command(interaction: discord.Interaction):
-
+@bot.tree.command(name="help", description="使えるコマンド一覧")
+async def help_command(interaction):
     msg = (
         "📘 **使えるコマンド一覧**\n\n"
         "**/add** — 予定を登録する\n"
@@ -651,10 +435,11 @@ async def help_command(interaction: discord.Interaction):
         "**/cleanup** — 過去の予定を削除する\n"
         "**/setchannel** — 通知チャンネルを設定する\n"
     )
-
     await interaction.response.send_message(msg, ephemeral=True)
 
-
+# ================================
+#  スケジューラー
+# ================================
 scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=0)
 scheduler.add_job(send_today_plans, "cron", hour=5, minute=30)
 scheduler.add_job(cleanup_past_plans, "cron", hour=0, minute=0)
@@ -671,7 +456,6 @@ async def on_ready():
         scheduler.start()
         started = True
         print("Scheduler started!")
-
 
 keep_alive()
 bot.run(TOKEN)
