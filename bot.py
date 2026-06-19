@@ -456,6 +456,69 @@ async def on_ready():
         scheduler.start()
         started = True
         print("Scheduler started!")
+    
+async def send_tomorrow_plans():
+    config_files = list_all_configs()
+
+    for filename in config_files:
+        guild_id = int(filename.replace("config_", "").replace(".json", ""))
+
+        config = load_config(guild_id)
+        channel_id = config.get("remind_channel_id")
+        if not channel_id:
+            continue
+
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            continue
+
+        jst = timezone("Asia/Tokyo")
+        tomorrow = (datetime.now(jst) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        plans = load_plans(guild_id)
+        tomorrow_plans = [p for p in plans if p["date"] == tomorrow]
+
+        if tomorrow_plans:
+            msg = "こんばんは！明日の予定です。\n"
+            for p in tomorrow_plans:
+                msg += f"・{p['subject']} {p['content']}\n"
+            msg += "@everyone"
+        else:
+            msg = "こんばんは！明日の予定はありません。\n@everyone"
+
+        await channel.send(msg)
+
+async def send_today_plans():
+    config_files = list_all_configs()
+
+    for filename in config_files:
+        guild_id = int(filename.replace("config_", "").replace(".json", ""))
+
+        config = load_config(guild_id)
+        channel_id = config.get("remind_channel_id")
+        if not channel_id:
+            continue
+
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            continue
+
+        jst = timezone("Asia/Tokyo")
+        today = datetime.now(jst).strftime("%Y-%m-%d")
+
+        plans = load_plans(guild_id)
+        today_plans = [p for p in plans if p["date"] == today]
+
+        if today_plans:
+            msg = "おはようございます！今日の予定です。\n"
+            for p in today_plans:
+                msg += f"・{p['subject']} {p['content']}\n"
+            msg += "@everyone"
+        else:
+            msg = "おはようございます！今日の予定はありません。\n@everyone"
+
+        await channel.send(msg)
+
 
 keep_alive()
 bot.run(TOKEN)
