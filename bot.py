@@ -214,6 +214,57 @@ async def category_autocomplete(interaction, current):
         for c in candidates if current in c
     ][:25]
 
+
+# ================================
+#  /list
+# ================================
+@bot.tree.command(name="list", description="予定一覧を表示する")
+@app_commands.describe(date="all または 日付（例: 6/15, 2026-06-15）")
+async def list_plans(interaction: discord.Interaction, date: str):
+
+    guild_id = interaction.guild.id
+    plans = load_plans(guild_id)
+
+    # --- all の場合 ---
+    if date.lower() == "all":
+        if not plans:
+            await interaction.response.send_message("予定はありません。", ephemeral=True)
+            return
+
+        sorted_plans = sorted(plans, key=lambda p: p["date"])
+        msg = "📘 **すべての予定一覧**\n"
+        for p in sorted_plans:
+            msg += f"- {p['date']}：{p['subject']}{p['content']}\n"
+
+        await interaction.response.send_message(msg, ephemeral=True)
+        return
+
+    # --- 日付指定 ---
+    try:
+        if "/" in date:
+            m, d = date.split("/")
+            y = datetime.now().year
+            date_str = f"{y}-{int(m):02d}-{int(d):02d}"
+        else:
+            datetime.strptime(date, "%Y-%m-%d")
+            date_str = date
+    except:
+        await interaction.response.send_message("日付の形式が正しくありません！", ephemeral=True)
+        return
+
+    selected = [p for p in plans if p["date"] == date_str]
+
+    if not selected:
+        await interaction.response.send_message(f"{date} の予定はありません。", ephemeral=True)
+        return
+
+    msg = f"📘 **{date} の予定**\n"
+    for p in selected:
+        msg += f"- {p['subject']}{p['content']}\n"
+
+    await interaction.response.send_message(msg, ephemeral=True)
+
+
 # ================================
 #  /delete
 # ================================
