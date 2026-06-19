@@ -200,7 +200,13 @@ async def add_plan(interaction, date: str, category: str, content: str):
     plans.append({"date": date, "subject": subject, "content": tagged})
     save_plans(guild_id, plans)
 
-    write_log(guild_id, "add", detail=f"{date} / {subject} / {tagged}")
+    # ログを保存（新仕様）
+    write_log(
+        guild_id,
+        "add",
+        detail=f"{date} / {subject} / {tagged_content}"
+    )
+
 
     await interaction.response.send_message(
         f"登録しました！\n{date} / {subject} / {tagged}"
@@ -294,8 +300,9 @@ async def delete(interaction, target: str):
     write_log(
         guild_id,
         "delete",
-        detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}"
+        detail=f"{deleted_item['date']} / {deleted_item['subject']} / {deleted_item['content']}"
     )
+
 
     await interaction.response.send_message(f"削除しました！\n{target}")
 
