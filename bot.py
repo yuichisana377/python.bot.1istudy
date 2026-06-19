@@ -192,33 +192,31 @@ async def add_plan(interaction, date: str, category: str, content: str):
         return
 
     subject = interaction.channel.name
-    tagged = f"【{category}】{content}"
+
+    # ★ これが絶対必要（今あなたのコードから消えている）
+    tagged_content = f"【{category}】{content}"
 
     guild_id = interaction.guild.id
     plans = load_plans(guild_id)
 
-    plans.append({"date": date, "subject": subject, "content": tagged})
+    plans.append({
+        "date": date,
+        "subject": subject,
+        "content": tagged_content
+    })
+
     save_plans(guild_id, plans)
 
-    # ログを保存（新仕様）
+    # ★ 新仕様のログ
     write_log(
         guild_id,
         "add",
         detail=f"{date} / {subject} / {tagged_content}"
     )
 
-
     await interaction.response.send_message(
-        f"登録しました！\n{date} / {subject} / {tagged}"
+        f"登録しました！\n{date} / {subject} / {tagged_content}"
     )
-
-@add_plan.autocomplete("category")
-async def category_autocomplete(interaction, current):
-    candidates = ["宿題", "提出", "持ち物", "テスト", "その他"]
-    return [
-        app_commands.Choice(name=c, value=c)
-        for c in candidates if current in c
-    ][:25]
 
 
 # ================================
