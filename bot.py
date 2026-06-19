@@ -596,11 +596,24 @@ async def cleanup_past_plans():
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
 
         plans = load_plans(guild_id)
-        new_plans = [p for p in plans if p["date"] >= today]
+        before_count = len(plans)
 
-        if len(new_plans) != len(plans):
+        deleted_dates = sorted({p["date"] for p in plans if p["date"] < today})
+
+        new_plans = [p for p in plans if p["date"] >= today]
+        after_count = len(new_plans)
+
+        if before_count != after_count:
             save_plans(guild_id, new_plans)
+
+            before_str = f"{before_count}件 → {after_count}件"
+            after_str = "削除された日付: " + ", ".join(deleted_dates)
+
+            # ★ ログ書き込み
+            write_log(guild_id, "cleanup", before_str, after_str)
+
             print(f"{guild_id} の過去予定を削除しました。")
+
 
 
 
