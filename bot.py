@@ -528,17 +528,19 @@ async def category_autocomplete(interaction: discord.Interaction, current: str):
 async def cleanup_past_plans():
     config_files = list_all_configs()
 
+    jst = timezone("Asia/Tokyo")
+    today = datetime.now(jst).strftime("%Y-%m-%d")
+
     for filename in config_files:
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
 
         plans = load_plans(guild_id)
-        today = datetime.now().strftime("%Y-%m-%d")
-
         new_plans = [p for p in plans if p["date"] >= today]
 
         if len(new_plans) != len(plans):
             save_plans(guild_id, new_plans)
             print(f"{guild_id} の過去予定を削除しました。")
+
 
 
 # ================================
