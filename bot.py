@@ -143,12 +143,11 @@ def save_plans(guild_id: int, plans: list):
 # ================================
 #  ログ保存（ギルドごと）
 # ================================
-def write_log(guild_id: int, log_type: str, subject: str, content: str):
+def write_log(guild_id: int, log_type: str, before: str, after: str):
     filename = f"logs_{guild_id}.json"
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
-    # 既存ログを取得
     r = requests.get(url, headers=headers)
 
     if r.status_code == 404:
@@ -159,15 +158,13 @@ def write_log(guild_id: int, log_type: str, subject: str, content: str):
         logs = json.loads(base64.b64decode(data["content"]).decode())
         sha = data["sha"]
 
-    # 新しいログを追加
     logs.append({
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "type": log_type,
-        "subject": subject,
-        "content": content
+        "before": before,
+        "after": after
     })
 
-    # GitHub にアップロード
     new_content = base64.b64encode(
         json.dumps(logs, ensure_ascii=False, indent=2).encode()
     ).decode()
@@ -181,6 +178,7 @@ def write_log(guild_id: int, log_type: str, subject: str, content: str):
         payload["sha"] = sha
 
     requests.put(url, headers=headers, json=payload)
+
 
 # ================================
 #  /add（category 自由入力 + 候補表示）
@@ -495,9 +493,10 @@ async def edit_plan(
         await interaction.response.send_message("その予定が見つかりませんでした。", ephemeral=True)
         return
 
-    
-    #  日付変更
-    
+    # ★ 編集前の文字列を保存
+    before_str = f"{found['date']} / {found['subject']} / {found['content']}"
+
+    # --- 日付変更 ---
     if date:
         try:
             if "-" in date and len(date.split("-")[0]) == 4:
@@ -512,23 +511,17 @@ async def edit_plan(
             await interaction.response.send_message("日付の形式が正しくありません！", ephemeral=True)
             return
 
-    
-    #  category + content 変更
-    
+    # --- category + content ---
     if category and content:
         found["content"] = f"【{category}】{content}"
 
-    
-    #  category だけ変更
-    
+    # --- category だけ ---
     elif category and not content:
         old = found["content"]
         body = old.split("】", 1)[1] if "】" in old else old
         found["content"] = f"【{category}】{body}"
 
-    
-    #  content だけ変更
-    
+    # --- content だけ ---
     elif content and not category:
         old = found["content"]
         tag = old.split("】", 1)[0] + "】" if "】" in old else ""
@@ -536,11 +529,19 @@ async def edit_plan(
 
     save_plans(guild_id, plans)
 
-    write_log(guild_id, "edit", found["subject"], found["content"])
+    # ★ 編集後の文字列
+    after_str = f"{found['date']} / {found['subject']} / {found['content']}"
 
+    # ★ ログに before / after を保存
+    write_log(guild_id, "edit", before_str, after_str)
+
+    # ★ 通知も before / after を表示
     await interaction.response.send_message(
-        f"編集したよ！\n**{found['date']} / {found['subject']} / {found['content']}**"
+        f"編集しました！\n\n"
+        f"【編集前】\n{before_str}\n\n"
+        f"【編集後】\n{after_str}"
     )
+
 
 
 
