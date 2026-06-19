@@ -34,5 +34,11 @@
     "type": "edit",
     "before": "2026-06-30 / リマインダー / 【提出】zikken",
     "after": "2026-06-22 / リマインダー / 【提出】zikken"
+  },
+  {
+    "time": "2026-06-20 00:12:34",
+    "type": "add",
+    "before": "国語1甲a",
+    "after": "【テスト】kakunin"
   }
 ]
