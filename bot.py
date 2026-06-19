@@ -139,6 +139,49 @@ def save_plans(guild_id: int, plans: list):
 
     requests.put(url, headers=headers, json=data)
 
+
+# ================================
+#  ログ保存（ギルドごと）
+# ================================
+def write_log(guild_id: int, log_type: str, subject: str, content: str):
+    filename = f"logs_{guild_id}.json"
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+
+    # 既存ログを取得
+    r = requests.get(url, headers=headers)
+
+    if r.status_code == 404:
+        logs = []
+        sha = None
+    else:
+        data = r.json()
+        logs = json.loads(base64.b64decode(data["content"]).decode())
+        sha = data["sha"]
+
+    # 新しいログを追加
+    logs.append({
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "type": log_type,
+        "subject": subject,
+        "content": content
+    })
+
+    # GitHub にアップロード
+    new_content = base64.b64encode(
+        json.dumps(logs, ensure_ascii=False, indent=2).encode()
+    ).decode()
+
+    payload = {
+        "message": f"update {filename}",
+        "content": new_content
+    }
+
+    if sha:
+        payload["sha"] = sha
+
+    requests.put(url, headers=headers, json=payload)
+
 # ================================
 #  /add（category 自由入力 + 候補表示）
 # ================================
@@ -207,6 +250,9 @@ async def add_plan(interaction: discord.Interaction, date: str, category: str, c
     })
 
     save_plans(guild_id, plans)
+
+    # ログを保存
+    write_log(guild_id, "add", subject, tagged_content)
 
     await interaction.response.send_message(
         f"登録しました！\n**{date} / {subject} / {tagged_content}**"
@@ -285,18 +331,27 @@ async def delete(interaction: discord.Interaction, target: str):
     guild_id = interaction.guild.id
     plans = load_plans(guild_id)
 
-    new_plans = [
-        p for p in plans
-        if f"{p['date']}/{p['subject']}{p['content']}" != target
-    ]
+    deleted_item = None
 
-    if len(new_plans) == len(plans):
+    new_plans = []
+    for p in plans:
+        label = f"{p['date']}/{p['subject']}{p['content']}"
+        if label == target:
+            deleted_item = p
+        else:
+            new_plans.append(p)
+
+    if not deleted_item:
         await interaction.response.send_message("その予定は見つかりませんでした。", ephemeral=True)
         return
 
     save_plans(guild_id, new_plans)
 
+    # ★ログ追加
+    write_log(guild_id, "delete", deleted_item["subject"], deleted_item["content"])
+
     await interaction.response.send_message(f"削除しました！\n{target}")
+
 
 
 @delete.autocomplete("target")
@@ -480,6 +535,8 @@ async def edit_plan(
         found["content"] = f"{tag}{content}"
 
     save_plans(guild_id, plans)
+
+    write_log(guild_id, "edit", found["subject"], found["content"])
 
     await interaction.response.send_message(
         f"編集したよ！\n**{found['date']} / {found['subject']} / {found['content']}**"
