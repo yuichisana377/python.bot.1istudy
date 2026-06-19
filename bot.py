@@ -158,8 +158,12 @@ def write_log(guild_id: int, log_type: str, before: str, after: str):
         logs = json.loads(base64.b64decode(data["content"]).decode())
         sha = data["sha"]
 
+    # ★ JST に変更
+    jst = timezone("Asia/Tokyo")
+    now_jst = datetime.now(jst).strftime("%Y-%m-%d %H:%M:%S")
+
     logs.append({
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "time": now_jst,
         "type": log_type,
         "before": before,
         "after": after
@@ -178,7 +182,6 @@ def write_log(guild_id: int, log_type: str, before: str, after: str):
         payload["sha"] = sha
 
     requests.put(url, headers=headers, json=payload)
-
 
 # ================================
 #  /add（category 自由入力 + 候補表示）
