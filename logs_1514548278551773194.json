@@ -22,5 +22,11 @@
     "type": "edit",
     "subject": "国語1甲a",
     "content": "【持ち物】プリント"
+  },
+  {
+    "time": "2026-06-19 14:49:05",
+    "type": "delete",
+    "subject": "一般",
+    "content": "【その他】実験"
   }
 ]
