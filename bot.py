@@ -217,6 +217,15 @@ async def add_plan(interaction, date: str, category: str, content: str):
     await interaction.response.send_message(
         f"登録しました！\n{date} / {subject} / {tagged_content}"
     )
+@add_plan.autocomplete("category")
+async def add_category_autocomplete(interaction: discord.Interaction, current: str):
+    candidates = ["宿題", "提出", "持ち物", "テスト", "その他"]
+
+    return [
+        app_commands.Choice(name=c, value=c)
+        for c in candidates
+        if current in c
+    ][:25]
 
 
 # ================================
