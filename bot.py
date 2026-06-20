@@ -236,13 +236,20 @@ async def add_plan_internal(guild_id, channel, date: str, category: str, content
 )
 async def add_plan(interaction, date: str, category: str, content: str):
 
-    ok = await add_plan_internal(
-        interaction.guild.id,
-        interaction.channel,
-        date,
-        category,
-        content
+    # ★ まず即座に応答（これが autocomplete を復活させる）
+    await interaction.response.send_message("登録処理中です…", ephemeral=True)
+
+    # ★ 内部関数はバックグラウンドで実行
+    bot.loop.create_task(
+        add_plan_internal(
+            interaction.guild.id,
+            interaction.channel,
+            date,
+            category,
+            content
+        )
     )
+
 
     # slash command の応答（1回だけ）
     if ok:
