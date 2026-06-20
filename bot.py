@@ -207,12 +207,12 @@ async def add_plan(interaction, date: str, category: str, content: str):
 
     save_plans(guild_id, plans)
 
-    # ★ 新仕様のログ
     write_log(
         guild_id,
         "add",
-        detail=f"{date} / {subject} / {tagged_content}"
+        detail=f"{date}  {subject}  {tagged_content}"
     )
+
 
     await interaction.response.send_message(
         f"登録しました！\n{date} / {subject} / {tagged_content}"
@@ -307,8 +307,9 @@ async def delete(interaction, target: str):
     write_log(
         guild_id,
         "delete",
-        detail=f"{deleted_item['date']} / {deleted_item['subject']} / {deleted_item['content']}"
+        detail=f"{deleted_item['date']}  {deleted_item['subject']}  {deleted_item['content']}"
     )
+
 
 
     await interaction.response.send_message(f"削除しました！\n{target}")
@@ -355,6 +356,11 @@ async def cleanup_command(interaction):
         )
     else:
         await interaction.response.send_message("削除する予定はありませんでした！", ephemeral=True)
+    write_log(
+        guild_id,
+        "cleanup",
+        detail="削除した日付: " + ", ".join(deleted_dates) if deleted_dates else "削除なし"
+    )
 
 # ================================
 #  /edit
@@ -382,7 +388,7 @@ async def edit_plan(interaction, target: str, date: str = None, category: str = 
         await interaction.response.send_message("その予定が見つかりませんでした。", ephemeral=True)
         return
 
-    before_str = f"{found['date']} / {found['subject']} / {found['content']}"
+    before_str = f"{found['date']}  {found['subject']}  {found['content']}"
 
     if date:
         try:
@@ -413,7 +419,12 @@ async def edit_plan(interaction, target: str, date: str = None, category: str = 
 
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
 
-    write_log(guild_id, "edit", before=before_str, after=after_str)
+    write_log(
+    guild_id,
+    "edit",
+    detail=f"{before_str} → {after_str}"
+)
+
 
     await interaction.response.send_message(
         f"編集しました！\n\n【編集前】\n{before_str}\n\n【編集後】\n{after_str}"
