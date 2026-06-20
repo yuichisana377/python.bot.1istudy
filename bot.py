@@ -220,12 +220,7 @@ async def add_plan_internal(guild_id, channel, date: str, category: str, content
 
     return f"登録しました！\n{date} / {subject} / {tagged_content}"
 
-@bot.tree.command(name="add", description="予定を追加する")
-@app_commands.describe(
-    date="日付（例: 6-20, 2026-06-20）",
-    category="分類（宿題・提出・持ち物など）",
-    content="内容"
-)
+
 
 @bot.tree.command(name="add", description="予定を追加する")
 @app_commands.describe(
@@ -254,11 +249,7 @@ async def add_plan(interaction, date: str, category: str, content: str):
 
 
     # slash command の応答（1回だけ）
-    if ok:
-        await interaction.response.send_message("登録しました！", ephemeral=True)
-    else:
-        await interaction.response.send_message("エラーが発生しました。", ephemeral=True)
-
+   
 @add_plan.autocomplete("category")
 async def add_category_autocomplete(interaction: discord.Interaction, current: str):
     candidates = ["宿題", "提出", "持ち物", "テスト", "その他"]
