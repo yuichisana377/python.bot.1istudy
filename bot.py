@@ -184,7 +184,6 @@ def write_log(guild_id: int, log_type: str, before=None, after=None, detail=None
 #  /add
 # ================================
 async def add_plan_internal(guild_id, channel, date: str, category: str, content: str):
-    # --- 日付処理 ---
     try:
         if "-" in date and len(date.split("-")[0]) == 4:
             parsed = datetime.strptime(date, "%Y-%m-%d")
@@ -194,15 +193,13 @@ async def add_plan_internal(guild_id, channel, date: str, category: str, content
             y = datetime.now().year
             parsed = datetime.strptime(f"{y}-{int(m):02d}-{int(d):02d}", "%Y-%m-%d")
     except:
-        await channel.send("日付の形式が正しくありません！")
-        return False
+        return "日付の形式が正しくありません！"
 
     date = parsed.strftime("%Y-%m-%d")
 
     today = datetime.now().date()
     if datetime.strptime(date, "%Y-%m-%d").date() < today:
-        await channel.send("過去の日付は登録できません！")
-        return False
+        return "過去の日付は登録できません！"
 
     subject = channel.name
     tagged_content = f"【{category}】{content}"
@@ -221,12 +218,14 @@ async def add_plan_internal(guild_id, channel, date: str, category: str, content
         detail=f"{date}  {subject}  {tagged_content}"
     )
 
-    # ★ 旧Botが Discord に送るメッセージ
-    await channel.send(
-        f"登録しました！\n{date} / {subject} / {tagged_content}"
-    )
+    return f"登録しました！\n{date} / {subject} / {tagged_content}"
 
-    return True
+@bot.tree.command(name="add", description="予定を追加する")
+@app_commands.describe(
+    date="日付（例: 6-20, 2026-06-20）",
+    category="分類（宿題・提出・持ち物など）",
+    content="内容"
+)
 
 @bot.tree.command(name="add", description="予定を追加する")
 @app_commands.describe(
@@ -236,19 +235,21 @@ async def add_plan_internal(guild_id, channel, date: str, category: str, content
 )
 async def add_plan(interaction, date: str, category: str, content: str):
 
-    # ★ まず即応答（これが超重要）
+    # 即応答（autocomplete のため）
     await interaction.response.send_message("登録処理中です…", ephemeral=True)
 
-    # ★ 内部関数はバックグラウンドで実行（ここが修正点）
-    bot.loop.create_task(
-        add_plan_internal(
+    async def run():
+        result = await add_plan_internal(
             interaction.guild.id,
             interaction.channel,
             date,
             category,
             content
         )
-    )
+        # 内部関数の結果をチャンネルに送る
+        await interaction.channel.send(result)
+
+    bot.loop.create_task(run())
 
 
 
