@@ -183,14 +183,8 @@ def write_log(guild_id: int, log_type: str, before=None, after=None, detail=None
 # ================================
 #  /add
 # ================================
-@bot.tree.command(name="add", description="予定を追加する")
-@app_commands.describe(
-    date="日付（例: 6-20, 2026-06-20）",
-    category="分類（宿題・提出・持ち物など）",
-    content="内容"
-)
-async def add_plan(interaction, date: str, category: str, content: str):
-
+async def add_plan_internal(guild_id, channel, date: str, category: str, content: str):
+    # --- 日付処理 ---
     try:
         if "-" in date and len(date.split("-")[0]) == 4:
             parsed = datetime.strptime(date, "%Y-%m-%d")
@@ -200,30 +194,25 @@ async def add_plan(interaction, date: str, category: str, content: str):
             y = datetime.now().year
             parsed = datetime.strptime(f"{y}-{int(m):02d}-{int(d):02d}", "%Y-%m-%d")
     except:
-        await interaction.response.send_message("日付の形式が正しくありません！", ephemeral=True)
+        await channel.send("日付の形式が正しくありません！")
         return
 
     date = parsed.strftime("%Y-%m-%d")
 
     today = datetime.now().date()
     if datetime.strptime(date, "%Y-%m-%d").date() < today:
-        await interaction.response.send_message("過去の日付は登録できません！", ephemeral=True)
+        await channel.send("過去の日付は登録できません！")
         return
 
-    subject = interaction.channel.name
-
-    # ★ これが絶対必要（今あなたのコードから消えている）
+    subject = channel.name
     tagged_content = f"【{category}】{content}"
 
-    guild_id = interaction.guild.id
     plans = load_plans(guild_id)
-
     plans.append({
         "date": date,
         "subject": subject,
         "content": tagged_content
     })
-
     save_plans(guild_id, plans)
 
     write_log(
@@ -232,10 +221,31 @@ async def add_plan(interaction, date: str, category: str, content: str):
         detail=f"{date}  {subject}  {tagged_content}"
     )
 
-
-    await interaction.response.send_message(
+    await channel.send(
         f"登録しました！\n{date} / {subject} / {tagged_content}"
     )
+# ここまでは機械用
+
+@bot.tree.command(name="add", description="予定を追加する")
+@app_commands.describe(
+    date="日付（例: 6-20, 2026-06-20）",
+    category="分類（宿題・提出・持ち物など）",
+    content="内容"
+)
+async def add_plan(interaction, date: str, category: str, content: str):
+
+    await add_plan_internal(
+        interaction.guild.id,
+        interaction.channel,
+        date,
+        category,
+        content
+    )
+
+    # slash command の応答（人間用）
+    await interaction.response.send_message("登録しました！", ephemeral=True)
+
+
 @add_plan.autocomplete("category")
 async def add_category_autocomplete(interaction: discord.Interaction, current: str):
     candidates = ["宿題", "提出", "持ち物", "テスト", "その他"]
