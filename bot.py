@@ -195,14 +195,14 @@ async def add_plan_internal(guild_id, channel, date: str, category: str, content
             parsed = datetime.strptime(f"{y}-{int(m):02d}-{int(d):02d}", "%Y-%m-%d")
     except:
         await channel.send("日付の形式が正しくありません！")
-        return
+        return False
 
     date = parsed.strftime("%Y-%m-%d")
 
     today = datetime.now().date()
     if datetime.strptime(date, "%Y-%m-%d").date() < today:
         await channel.send("過去の日付は登録できません！")
-        return
+        return False
 
     subject = channel.name
     tagged_content = f"【{category}】{content}"
@@ -221,10 +221,12 @@ async def add_plan_internal(guild_id, channel, date: str, category: str, content
         detail=f"{date}  {subject}  {tagged_content}"
     )
 
+    # ★ 旧Botが Discord に送るメッセージ
     await channel.send(
         f"登録しました！\n{date} / {subject} / {tagged_content}"
     )
-# ここまでは機械用
+
+    return True
 
 @bot.tree.command(name="add", description="予定を追加する")
 @app_commands.describe(
@@ -234,7 +236,7 @@ async def add_plan_internal(guild_id, channel, date: str, category: str, content
 )
 async def add_plan(interaction, date: str, category: str, content: str):
 
-    await add_plan_internal(
+    ok = await add_plan_internal(
         interaction.guild.id,
         interaction.channel,
         date,
@@ -242,19 +244,12 @@ async def add_plan(interaction, date: str, category: str, content: str):
         content
     )
 
-    # slash command の応答（人間用）
-    await interaction.response.send_message("登録しました！", ephemeral=True)
+    # slash command の応答（1回だけ）
+    if ok:
+        await interaction.response.send_message("登録しました！", ephemeral=True)
+    else:
+        await interaction.response.send_message("エラーが発生しました。", ephemeral=True)
 
-
-@add_plan.autocomplete("category")
-async def add_category_autocomplete(interaction: discord.Interaction, current: str):
-    candidates = ["宿題", "提出", "持ち物", "テスト", "その他"]
-
-    return [
-        app_commands.Choice(name=c, value=c)
-        for c in candidates
-        if current in c
-    ][:25]
 
 
 # ================================
