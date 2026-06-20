@@ -126,6 +126,7 @@ def write_log(guild_id: int, log_type: str, before=None, after=None, detail=None
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
+    # GitHub から既存ログ取得
     r = requests.get(url, headers=headers)
     if r.status_code == 404:
         logs = []
@@ -135,22 +136,39 @@ def write_log(guild_id: int, log_type: str, before=None, after=None, detail=None
         logs = json.loads(base64.b64decode(data["content"]).decode())
         sha = data["sha"]
 
+    # 現在時刻（JST）
     jst = timezone("Asia/Tokyo")
-    now_jst = datetime.now(jst).strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(jst)
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
-    entry = {
-        "time": now_jst,
-        "type": log_type
-    }
+    # ★ 30日より古いログを削除
+    filtered = []
+    for log in logs:
+        try:
+            t = datetime.strptime(log["time"], "%Y-%m-%d %H:%M:%S")
+            if (now - t).days <= 30:
+                filtered.append(log)
+        except:
+            pass
+    logs = filtered
 
+    # ★ 新しいログ形式（edit だけ特別）
     if log_type == "edit":
-        entry["before"] = before
-        entry["after"] = after
+        entry = {
+            "time": now_str,
+            "type": log_type,
+            "detail": f"{before} → {after}"
+        }
     else:
-        entry["detail"] = detail
+        entry = {
+            "time": now_str,
+            "type": log_type,
+            "detail": detail
+        }
 
     logs.append(entry)
 
+    # GitHub に保存
     new_content = base64.b64encode(
         json.dumps(logs, ensure_ascii=False, indent=2).encode()
     ).decode()
@@ -160,6 +178,7 @@ def write_log(guild_id: int, log_type: str, before=None, after=None, detail=None
         payload["sha"] = sha
 
     requests.put(url, headers=headers, json=payload)
+
 
 # ================================
 #  /add
