@@ -699,7 +699,13 @@ async def on_ready():
     await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
 
     print("Guild commands cleared and resynced!")
-
+    # もし古いグローバルコマンド（例: /add）が残っている場合、グローバル側も完全にクリアして再同期する
+    try:
+        bot.tree.clear_commands()
+        await bot.tree.sync()
+        print("Global commands cleared and resynced!")
+    except Exception as e:
+        print("Failed clearing global commands:", e)
 
     if not started:
         scheduler.start()
