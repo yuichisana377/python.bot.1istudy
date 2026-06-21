@@ -692,7 +692,7 @@ async def on_ready():
     global started
     print(f"Bot is ready! {bot.user}")
 
-    # ★ ギルド強制同期（あなたのサーバーだけ即時反映）
+    # ★ あなたのサーバーだけ即時同期（これが超重要）
     GUILD_ID = 1509880344806162544
     await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
     print("Guild command sync forced!")
@@ -701,6 +701,7 @@ async def on_ready():
         scheduler.start()
         started = True
         print("Scheduler started!")
+
 
 def run_bot():
     bot.run(TOKEN)
