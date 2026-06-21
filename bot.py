@@ -15,11 +15,11 @@ import asyncio
 
 # ================================
 #  設定
-# ================================ 
+# ================================
+GITHUB_REPO    = os.getenv("GITHUB_REPO")       # 例: "yourname/yourrepo"
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
 TOKEN          = os.getenv("TOKEN")
 SUBJECT_CATEGORY = os.getenv("SUBJECT_CATEGORY") # 科目チャンネルが入っているカテゴリ名
-GITHUB_REPO    = os.getenv("GITHUB_REPO")       # 例: "yourname/yourrepo"
 JST = timezone("Asia/Tokyo")
 
 scheduler = AsyncIOScheduler(timezone=JST)
@@ -133,26 +133,12 @@ def write_log(guild_id: int, log_type: str, detail: str):
 # ================================
 def get_subject_channels(guild: discord.Guild) -> list[discord.TextChannel]:
     """SUBJECT_CATEGORY に属するテキストチャンネルを返す。"""
-
-    # SUBJECT_CATEGORY が ID の場合
-    try:
-        category_id = int(SUBJECT_CATEGORY)
-        cat = guild.get_channel(category_id)
-        if isinstance(cat, discord.CategoryChannel):
-            return cat.text_channels
-    except:
-        pass
-
-    # SUBJECT_CATEGORY が名前の場合
     if not SUBJECT_CATEGORY:
         return guild.text_channels
-
     for cat in guild.categories:
         if cat.name == SUBJECT_CATEGORY:
             return cat.text_channels
-
     return []
-
 
 def get_subject_channel_by_name(guild: discord.Guild, name: str):
     """科目名（チャンネル名）からチャンネルオブジェクトを返す。"""
@@ -213,7 +199,7 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
     category="分類（宿題・提出・持ち物など）",
     content="内容"
 )
-async def add_plan2(
+async def add_plan(
     interaction: discord.Interaction,
     date: str,
     category: str,
@@ -244,7 +230,7 @@ async def add_plan2(
 
     await interaction.followup.send("完了しました！", ephemeral=True)
 
-@add_plan2.autocomplete("subject")
+@add_plan.autocomplete("subject")
 async def add_subject_autocomplete(interaction: discord.Interaction, current: str):
     channels = get_subject_channels(interaction.guild)
     return [
@@ -252,7 +238,7 @@ async def add_subject_autocomplete(interaction: discord.Interaction, current: st
         for ch in channels if current.lower() in ch.name.lower()
     ][:25]
 
-@add_plan2.autocomplete("category")
+@add_plan.autocomplete("category")
 async def add_category_autocomplete(interaction: discord.Interaction, current: str):
     candidates = ["宿題", "提出", "持ち物", "テスト", "その他"]
     return [
@@ -319,7 +305,15 @@ async def delete_plan(interaction: discord.Interaction, target: str):
 
     save_plans(guild_id, new_plans)
     write_log(guild_id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
-    await interaction.response.send_message(f"削除しました！\n{target}")
+
+    # 削除した科目のチャンネルに通知
+    msg = f"削除しました！\n{deleted['date']} / {deleted['subject']} / {deleted['content']}"
+    target_channel = get_subject_channel_by_name(interaction.guild, deleted["subject"])
+    if target_channel:
+        await target_channel.send(msg)
+        await interaction.response.send_message("完了しました！", ephemeral=True)
+    else:
+        await interaction.response.send_message(msg)
 
 @delete_plan.autocomplete("target")
 async def delete_autocomplete(interaction: discord.Interaction, current: str):
@@ -681,6 +675,18 @@ def delete_schedule():
 
     save_plans(guild_id, new_plans)
     write_log(guild_id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
+
+    # 削除した科目のチャンネルに通知
+    guild = bot.get_guild(guild_id)
+    if guild:
+        target_channel = get_subject_channel_by_name(guild, deleted["subject"])
+        if target_channel:
+            notify_msg = f"削除しました！\n{deleted['date']} / {deleted['subject']} / {deleted['content']}"
+            asyncio.run_coroutine_threadsafe(
+                target_channel.send(notify_msg),
+                bot.loop
+            ).result(timeout=10)
+
     return jsonify({"ok": True, "message": "削除しました！"})
 
 @app.route("/list_logs", methods=["GET"])
@@ -705,60 +711,11 @@ started = False
 async def on_ready():
     global started
     print(f"Bot is ready! {bot.user}")
-
-    GUILD_ID = 1509880344806162544
-
-    # ★ 古いコマンドを完全削除
-    bot.tree.clear_commands(guild=discord.Object(id=GUILD_ID))
-    await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-
-    print("Guild commands cleared and resynced!")
-    # もし古いグローバルコマンド（例: /add）が残っている場合、グローバル側も完全にクリアして再同期する
-    try:
-        bot.tree.clear_commands()
-        await bot.tree.sync()
-        print("Global commands cleared and resynced!")
-    except Exception as e:
-        print("Failed clearing global commands:", e)
-
+    await bot.tree.sync()
     if not started:
         scheduler.start()
         started = True
         print("Scheduler started!")
 
-
-def run_bot():
-    bot.run(TOKEN)
-
-
-@bot.event
-async def on_app_command_error(interaction: discord.Interaction, error):
-    """アプリコマンド実行時の例外ハンドラ。
-    既に削除されたコマンド（例: 古い `/add`）が呼ばれた場合の `CommandNotFound` を穏やかに処理する。
-    """
-    try:
-        if isinstance(error, app_commands.CommandNotFound):
-            try:
-                await interaction.response.send_message(
-                    "そのコマンドは見つかりませんでした。コマンドが削除または変更された可能性があります。",
-                    ephemeral=True,
-                )
-            except Exception:
-                pass
-            return
-    except Exception:
-        # 型判定に失敗した場合はフォールバックしてログ出力
-        pass
-
-    # それ以外はログに出す
-    print("App command error:", error)
-
-# bot をスレッドで起動
-t = Thread(target=run_bot)
-t.daemon = True
-t.start()
-
-# Flask をメインで起動（Render がこれを監視）
-run_flask()
-
-
+keep_alive()
+bot.run(TOKEN)
