@@ -192,7 +192,7 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
 # ================================
 #  /add コマンド
 # ================================
-@bot.tree.command(name="add", description="予定を追加する")
+@bot.tree.command(name="add2", description="予定を追加する")
 @app_commands.describe(
     date="日付（例: 6-20, 2026-06-20）",
     subject="科目（省略するとこのチャンネル名を使用）",
