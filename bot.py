@@ -238,7 +238,7 @@ async def add_subject_autocomplete(interaction: discord.Interaction, current: st
         for ch in channels if current.lower() in ch.name.lower()
     ][:25]
 
-@add_plan.autocomplete("category")
+@add_plan2.autocomplete("category")
 async def add_category_autocomplete(interaction: discord.Interaction, current: str):
     candidates = ["宿題", "提出", "持ち物", "テスト", "その他"]
     return [
