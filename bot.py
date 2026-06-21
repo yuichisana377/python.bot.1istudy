@@ -458,7 +458,7 @@ async def setchannel(interaction: discord.Interaction):
 async def help_command(interaction: discord.Interaction):
     msg = (
         "📘 **使えるコマンド一覧**\n\n"
-        "**/add** — 予定を登録する\n"
+        "**/add2** — 予定を登録する\n"
         "**/list** — 予定を表示する\n"
         "**/delete** — 予定を削除する\n"
         "**/edit** — 予定を編集する\n"
@@ -689,6 +689,7 @@ started = False
 
 @bot.event
 async def on_ready():
+    global started
     print(f"Bot is ready! {bot.user}")
 
     GUILD_ID = 1509880344806162544
