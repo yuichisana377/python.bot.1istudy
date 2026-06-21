@@ -716,6 +716,29 @@ async def on_ready():
 def run_bot():
     bot.run(TOKEN)
 
+
+@bot.event
+async def on_app_command_error(interaction: discord.Interaction, error):
+    """アプリコマンド実行時の例外ハンドラ。
+    既に削除されたコマンド（例: 古い `/add`）が呼ばれた場合の `CommandNotFound` を穏やかに処理する。
+    """
+    try:
+        if isinstance(error, app_commands.CommandNotFound):
+            try:
+                await interaction.response.send_message(
+                    "そのコマンドは見つかりませんでした。コマンドが削除または変更された可能性があります。",
+                    ephemeral=True,
+                )
+            except Exception:
+                pass
+            return
+    except Exception:
+        # 型判定に失敗した場合はフォールバックしてログ出力
+        pass
+
+    # それ以外はログに出す
+    print("App command error:", error)
+
 # bot をスレッドで起動
 t = Thread(target=run_bot)
 t.daemon = True
