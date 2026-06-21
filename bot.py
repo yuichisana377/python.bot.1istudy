@@ -19,7 +19,8 @@ import asyncio
 GITHUB_REPO    = os.getenv("GITHUB_REPO")       # 例: "yourname/yourrepo"
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
 TOKEN          = os.getenv("TOKEN")
-SUBJECT_CATEGORY = os.getenv("SUBJECT_CATEGORY") # 科目チャンネルが入っているカテゴリ名
+SUBJECT_CATEGORY_ID = os.getenv("SUBJECT_CATEGORY_ID")  # カテゴリID（優先）
+SUBJECT_CATEGORY    = os.getenv("SUBJECT_CATEGORY")     # カテゴリ名（IDがない場合に使用）
 JST = timezone("Asia/Tokyo")
 
 scheduler = AsyncIOScheduler(timezone=JST)
@@ -132,13 +133,19 @@ def write_log(guild_id: int, log_type: str, detail: str):
 #  科目チャンネルユーティリティ
 # ================================
 def get_subject_channels(guild: discord.Guild) -> list[discord.TextChannel]:
-    """SUBJECT_CATEGORY に属するテキストチャンネルを返す。"""
-    if not SUBJECT_CATEGORY:
-        return guild.text_channels
-    for cat in guild.categories:
-        if cat.name == SUBJECT_CATEGORY:
-            return cat.text_channels
-    return []
+    """SUBJECT_CATEGORY_ID（優先）または SUBJECT_CATEGORY（名前）に属するチャンネルを返す。"""
+    # IDで検索（優先）
+    if SUBJECT_CATEGORY_ID:
+        for cat in guild.categories:
+            if cat.id == int(SUBJECT_CATEGORY_ID):
+                return list(cat.text_channels)
+    # 名前で検索（フォールバック）
+    if SUBJECT_CATEGORY:
+        for cat in guild.categories:
+            if cat.name == SUBJECT_CATEGORY:
+                return list(cat.text_channels)
+    # どちらも未設定ならサーバー全チャンネル
+    return list(guild.text_channels)
 
 def get_subject_channel_by_name(guild: discord.Guild, name: str):
     """科目名（チャンネル名）からチャンネルオブジェクトを返す。"""
