@@ -15,8 +15,7 @@ import asyncio
 
 # ================================
 #  設定
-# ================================
-GITHUB_REPO    = os.getenv("GITHUB_REPO")       # 例: "yourname/yourrepo"
+# ================================ 
 GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
 TOKEN          = os.getenv("TOKEN")
 SUBJECT_CATEGORY = os.getenv("SUBJECT_CATEGORY") # 科目チャンネルが入っているカテゴリ名
