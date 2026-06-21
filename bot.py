@@ -696,7 +696,15 @@ async def on_ready():
         scheduler.start()
         started = True
         print("Scheduler started!")
+def run_bot():
+    bot.run(TOKEN)
 
-keep_alive()
-bot.run(TOKEN)
+# bot をスレッドで起動
+t = Thread(target=run_bot)
+t.daemon = True
+t.start()
+
+# Flask をメインで起動（Render がこれを監視）
+run_flask()
+
 
