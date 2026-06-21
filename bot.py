@@ -230,7 +230,7 @@ async def add_plan2(
 
     await interaction.followup.send("完了しました！", ephemeral=True)
 
-@add_plan.autocomplete("subject")
+@add_plan2.autocomplete("subject")
 async def add_subject_autocomplete(interaction: discord.Interaction, current: str):
     channels = get_subject_channels(interaction.guild)
     return [
