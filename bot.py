@@ -697,5 +697,6 @@ async def on_ready():
         started = True
         print("Scheduler started!")
 
-bot.run(TOKEN)
 keep_alive()
+bot.run(TOKEN)
+
