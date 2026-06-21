@@ -192,7 +192,7 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
 # ================================
 #  /add コマンド
 # ================================
-@bot.tree.command(name="add2", description="予定を追加する")
+@bot.tree.command(name="add", description="予定を追加する")
 @app_commands.describe(
     date="日付（例: 6-20, 2026-06-20）",
     subject="科目（省略するとこのチャンネル名を使用）",
@@ -458,7 +458,7 @@ async def setchannel(interaction: discord.Interaction):
 async def help_command(interaction: discord.Interaction):
     msg = (
         "📘 **使えるコマンド一覧**\n\n"
-        "**/add2** — 予定を登録する\n"
+        "**/add** — 予定を登録する\n"
         "**/list** — 予定を表示する\n"
         "**/delete** — 予定を削除する\n"
         "**/edit** — 予定を編集する\n"
