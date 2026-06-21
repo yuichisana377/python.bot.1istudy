@@ -339,7 +339,8 @@ async def delete(interaction, target: str):
     write_log(
         guild_id,
         "delete",
-        detail=f"{deleted_item['date']}  {deleted_item['subject']}  {deleted_item['content']}"
+        detail=f"{deleted['date']}  {deleted['subject']}  {deleted['content']}"
+
     )
 
 
