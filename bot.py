@@ -689,13 +689,16 @@ started = False
 
 @bot.event
 async def on_ready():
-    global started
     print(f"Bot is ready! {bot.user}")
 
-    # ★ あなたのサーバーだけ即時同期（これが超重要）
     GUILD_ID = 1509880344806162544
+
+    # ★ 古いコマンドを完全削除
+    bot.tree.clear_commands(guild=discord.Object(id=GUILD_ID))
     await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-    print("Guild command sync forced!")
+
+    print("Guild commands cleared and resynced!")
+
 
     if not started:
         scheduler.start()
