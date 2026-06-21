@@ -199,7 +199,7 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
     category="分類（宿題・提出・持ち物など）",
     content="内容"
 )
-async def add_plan(
+async def add_plan2(
     interaction: discord.Interaction,
     date: str,
     category: str,
