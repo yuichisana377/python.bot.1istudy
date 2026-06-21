@@ -133,12 +133,26 @@ def write_log(guild_id: int, log_type: str, detail: str):
 # ================================
 def get_subject_channels(guild: discord.Guild) -> list[discord.TextChannel]:
     """SUBJECT_CATEGORY に属するテキストチャンネルを返す。"""
+
+    # SUBJECT_CATEGORY が ID の場合
+    try:
+        category_id = int(SUBJECT_CATEGORY)
+        cat = guild.get_channel(category_id)
+        if isinstance(cat, discord.CategoryChannel):
+            return cat.text_channels
+    except:
+        pass
+
+    # SUBJECT_CATEGORY が名前の場合
     if not SUBJECT_CATEGORY:
         return guild.text_channels
+
     for cat in guild.categories:
         if cat.name == SUBJECT_CATEGORY:
             return cat.text_channels
+
     return []
+
 
 def get_subject_channel_by_name(guild: discord.Guild, name: str):
     """科目名（チャンネル名）からチャンネルオブジェクトを返す。"""
