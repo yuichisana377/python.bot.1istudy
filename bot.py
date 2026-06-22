@@ -724,6 +724,7 @@ async def on_ready():
         started = True
         print("Scheduler started!")
 
+keep_alive()
 time.sleep(5)  # 再起動ループの緩和
 
 for attempt in range(5):
