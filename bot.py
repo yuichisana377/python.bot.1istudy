@@ -11,7 +11,7 @@ import json
 import os
 import requests
 import base64
-import asyncio
+import time
 
 # ================================
 #  設定
@@ -724,5 +724,17 @@ async def on_ready():
         started = True
         print("Scheduler started!")
 
-keep_alive()
-bot.run(TOKEN)
+time.sleep(5)  # 再起動ループの緩和
+
+for attempt in range(5):
+    try:
+        bot.run(TOKEN)
+        break
+    except discord.errors.HTTPException as e:
+        if e.status == 429:
+            wait = 2 ** attempt * 10  # 10秒, 20秒, 40秒...
+            print(f"レート制限中。{wait}秒待機します...")
+            time.sleep(wait)
+        else:
+            raise
+
