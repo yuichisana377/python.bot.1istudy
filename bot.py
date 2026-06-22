@@ -76,6 +76,15 @@ def github_put(filename, content_obj, sha=None):
         payload["sha"] = sha
     requests.put(url, headers=headers, json=payload)
 
+# GitHub APIを別スレッドで実行するasyncラッパー
+async def async_github_get(filename):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, github_get, filename)
+
+async def async_github_put(filename, content_obj, sha=None):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, github_put, filename, content_obj, sha)
+
 # ================================
 #  設定ファイル
 # ================================
@@ -86,6 +95,14 @@ def load_config(guild_id: int):
 def save_config(guild_id: int, data: dict):
     _, sha = github_get(f"config_{guild_id}.json")
     github_put(f"config_{guild_id}.json", data, sha)
+
+async def async_load_config(guild_id: int):
+    data, _ = await async_github_get(f"config_{guild_id}.json")
+    return data or {}
+
+async def async_save_config(guild_id: int, data: dict):
+    _, sha = await async_github_get(f"config_{guild_id}.json")
+    await async_github_put(f"config_{guild_id}.json", data, sha)
 
 def list_all_configs():
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
@@ -109,6 +126,14 @@ def load_plans(guild_id: int):
 def save_plans(guild_id: int, plans: list):
     _, sha = github_get(f"plans_{guild_id}.json")
     github_put(f"plans_{guild_id}.json", plans, sha)
+
+async def async_load_plans(guild_id: int):
+    data, _ = await async_github_get(f"plans_{guild_id}.json")
+    return data or []
+
+async def async_save_plans(guild_id: int, plans: list):
+    _, sha = await async_github_get(f"plans_{guild_id}.json")
+    await async_github_put(f"plans_{guild_id}.json", plans, sha)
 
 # ================================
 #  ログ
@@ -228,34 +253,35 @@ async def add_category_autocomplete(interaction: discord.Interaction, current: s
 @bot.tree.command(name="list", description="予定一覧を表示する")
 @app_commands.describe(date="all または 日付（例: 6/15, 2026-06-15）")
 async def list_plans(interaction: discord.Interaction, date: str):
+    await interaction.response.defer(ephemeral=True)
     guild_id = interaction.guild.id
-    plans = load_plans(guild_id)
+    plans = await async_load_plans(guild_id)
 
     if date.lower() == "all":
         if not plans:
-            await interaction.response.send_message("予定はありません。", ephemeral=True)
+            await interaction.followup.send("予定はありません。", ephemeral=True)
             return
         sorted_plans = sorted(plans, key=lambda p: p["date"])
         msg = "📘 **すべての予定一覧**\n"
         for p in sorted_plans:
             msg += f"- {p['date']}：{p['subject']} {p['content']}\n"
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.followup.send(msg, ephemeral=True)
         return
 
     date_str = parse_date(date)
     if not date_str:
-        await interaction.response.send_message("日付の形式が正しくありません！", ephemeral=True)
+        await interaction.followup.send("日付の形式が正しくありません！", ephemeral=True)
         return
 
     selected = [p for p in plans if p["date"] == date_str]
     if not selected:
-        await interaction.response.send_message(f"{date} の予定はありません。", ephemeral=True)
+        await interaction.followup.send(f"{date} の予定はありません。", ephemeral=True)
         return
 
     msg = f"📘 **{date_str} の予定**\n"
     for p in selected:
         msg += f"- {p['subject']} {p['content']}\n"
-    await interaction.response.send_message(msg, ephemeral=True)
+    await interaction.followup.send(msg, ephemeral=True)
 
 # ================================
 #  /delete
@@ -263,8 +289,9 @@ async def list_plans(interaction: discord.Interaction, date: str):
 @bot.tree.command(name="delete", description="予定を削除する")
 @app_commands.describe(target="削除したい予定")
 async def delete_plan(interaction: discord.Interaction, target: str):
+    await interaction.response.defer(ephemeral=True)
     guild = interaction.guild
-    plans = load_plans(guild.id)
+    plans = await async_load_plans(guild.id)
 
     deleted = None
     new_plans = []
@@ -276,7 +303,7 @@ async def delete_plan(interaction: discord.Interaction, target: str):
             new_plans.append(p)
 
     if not deleted:
-        await interaction.response.send_message("その予定は見つかりませんでした。", ephemeral=True)
+        await interaction.followup.send("その予定は見つかりませんでした。", ephemeral=True)
         return
 
     save_plans(guild.id, new_plans)
@@ -285,7 +312,7 @@ async def delete_plan(interaction: discord.Interaction, target: str):
     msg = f"削除しました！\n{target}"
     target_channel = get_subject_channel_by_name(guild, deleted["subject"])
     await (target_channel or interaction.channel).send(msg)
-    await interaction.response.send_message("完了しました！", ephemeral=True)
+    await interaction.followup.send("完了しました！", ephemeral=True)
 
 @delete_plan.autocomplete("target")
 async def delete_autocomplete(interaction: discord.Interaction, current: str):
@@ -309,8 +336,9 @@ async def delete_autocomplete(interaction: discord.Interaction, current: str):
     content="新しい内容"
 )
 async def edit_plan(interaction: discord.Interaction, target: str, date: str = None, subject: str = None, category: str = None, content: str = None):
+    await interaction.response.defer(ephemeral=True)
     guild = interaction.guild
-    plans = load_plans(guild.id)
+    plans = await async_load_plans(guild.id)
 
     found = None
     for p in plans:
@@ -320,7 +348,7 @@ async def edit_plan(interaction: discord.Interaction, target: str, date: str = N
             break
 
     if not found:
-        await interaction.response.send_message("その予定が見つかりませんでした。", ephemeral=True)
+        await interaction.followup.send("その予定が見つかりませんでした。", ephemeral=True)
         return
 
     before_str = f"{found['date']} / {found['subject']} / {found['content']}"
@@ -328,7 +356,7 @@ async def edit_plan(interaction: discord.Interaction, target: str, date: str = N
     if date:
         date_str = parse_date(date)
         if not date_str:
-            await interaction.response.send_message("日付の形式が正しくありません！", ephemeral=True)
+            await interaction.followup.send("日付の形式が正しくありません！", ephemeral=True)
             return
         found["date"] = date_str
 
@@ -344,14 +372,14 @@ async def edit_plan(interaction: discord.Interaction, target: str, date: str = N
         tag = found["content"].split("】", 1)[0] + "】" if "】" in found["content"] else ""
         found["content"] = f"{tag}{content}"
 
-    save_plans(guild.id, plans)
+    await async_save_plans(guild.id, plans)
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
-    write_log(guild.id, "edit", detail=f"{before_str} → {after_str}")
+    await async_write_log(guild.id, "edit", detail=f"{before_str} → {after_str}")
 
     msg = f"編集しました！\n\n【編集前】\n{before_str}\n\n【編集後】\n{after_str}"
     target_channel = get_subject_channel_by_name(guild, found["subject"])
     await (target_channel or interaction.channel).send(msg)
-    await interaction.response.send_message("完了しました！", ephemeral=True)
+    await interaction.followup.send("完了しました！", ephemeral=True)
 
 @edit_plan.autocomplete("target")
 async def edit_target_autocomplete(interaction: discord.Interaction, current: str):
@@ -381,33 +409,35 @@ async def edit_category_autocomplete(interaction: discord.Interaction, current: 
 # ================================
 @bot.tree.command(name="cleanup", description="過去の予定を削除する")
 async def cleanup_command(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     guild_id = interaction.guild.id
-    plans = load_plans(guild_id)
+    plans = await async_load_plans(guild_id)
     today = datetime.now(JST).strftime("%Y-%m-%d")
 
     deleted_dates = sorted({p["date"] for p in plans if p["date"] < today})
     new_plans = [p for p in plans if p["date"] >= today]
-    save_plans(guild_id, new_plans)
+    await async_save_plans(guild_id, new_plans)
 
     if deleted_dates:
-        write_log(guild_id, "cleanup", detail="削除した日付: " + ", ".join(deleted_dates))
-        await interaction.response.send_message(
+        await async_write_log(guild_id, "cleanup", detail="削除した日付: " + ", ".join(deleted_dates))
+        await interaction.followup.send(
             f"🧹 {len(deleted_dates)}件削除しました！\n" + "\n".join(deleted_dates),
             ephemeral=True
         )
     else:
-        await interaction.response.send_message("削除する予定はありませんでした！", ephemeral=True)
+        await interaction.followup.send("削除する予定はありませんでした！", ephemeral=True)
 
 # ================================
 #  /setchannel
 # ================================
 @bot.tree.command(name="setchannel", description="通知チャンネルを設定する")
 async def setchannel(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     guild_id = interaction.guild.id
-    config = load_config(guild_id)
+    config = await async_load_config(guild_id)
     config["remind_channel_id"] = interaction.channel.id
-    save_config(guild_id, config)
-    await interaction.response.send_message(
+    await async_save_config(guild_id, config)
+    await interaction.followup.send(
         f"通知チャンネルを **#{interaction.channel.name}** に設定しました！"
     )
 
@@ -425,7 +455,7 @@ async def help_command(interaction: discord.Interaction):
         "**/cleanup** — 過去の予定を削除する\n"
         "**/setchannel** — 通知チャンネルを設定する\n"
     )
-    await interaction.response.send_message(msg, ephemeral=True)
+    await interaction.response.send_message(msg, ephemeral=True)  # helpは即応答OK
 
 # ================================
 #  自動通知
@@ -617,8 +647,8 @@ def delete_schedule():
     if not deleted:
         return jsonify({"ok": False, "error": "plan not found"})
 
-    save_plans(guild_id, new_plans)
-    write_log(guild_id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
+    await async_save_plans(guild_id, new_plans)
+    await async_write_log(guild_id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
 
     if guild:
         target_channel = get_subject_channel_by_name(guild, deleted["subject"])
