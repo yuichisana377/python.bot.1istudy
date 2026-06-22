@@ -154,6 +154,10 @@ def write_log(guild_id: int, log_type: str, detail: str):
 
     logs.append({"time": now_str, "type": log_type, "detail": detail})
     github_put(filename, logs, sha)
+# 非同期版 write_log（async_write_log）
+async def async_write_log(guild_id: int, log_type: str, detail: str):
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, write_log, guild_id, log_type, detail)
 
 # ================================
 #  科目チャンネルユーティリティ
