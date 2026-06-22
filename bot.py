@@ -647,8 +647,8 @@ def delete_schedule():
     if not deleted:
         return jsonify({"ok": False, "error": "plan not found"})
 
-    await async_save_plans(guild_id, new_plans)
-    await async_write_log(guild_id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
+    save_plans(guild_id, new_plans)
+    write_log(guild_id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
 
     if guild:
         target_channel = get_subject_channel_by_name(guild, deleted["subject"])
