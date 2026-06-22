@@ -680,7 +680,7 @@ def list_logs():
 #  スケジューラー & 起動
 # ================================
 scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=0)
-scheduler.add_job(send_today_plans,    "cron", hour=5,  minute=30)
+scheduler.add_job(send_today_plans,    "cron", hour=7,  minute=20)
 scheduler.add_job(cleanup_past_plans,  "cron", hour=0,  minute=0)
 
 started = False
