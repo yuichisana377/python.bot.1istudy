@@ -689,9 +689,12 @@ async def on_ready():
 
 keep_alive()
 
+print(f"[INFO] TOKEN set: {bool(TOKEN)}, length: {len(TOKEN) if TOKEN else 0}")
+print(f"[INFO] Starting bot.run()...")
+
 # 429レート制限時は待機してから終了（Renderが自動再起動する）
 try:
-    bot.run(TOKEN)
+    bot.run(TOKEN, log_handler=None)
 except discord.errors.HTTPException as e:
     if e.status == 429:
         retry_after = e.response.headers.get('Retry-After', '120')
@@ -699,4 +702,8 @@ except discord.errors.HTTPException as e:
         print(f"[WARNING] Discord rate limited (429). Waiting {wait}s before exit...")
         time.sleep(wait)
         raise SystemExit(1)
+    print(f"[ERROR] HTTPException: {e.status} {e.text}")
+    raise
+except Exception as e:
+    print(f"[ERROR] bot.run failed: {type(e).__name__}: {e}")
     raise
