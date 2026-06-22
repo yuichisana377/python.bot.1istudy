@@ -38,12 +38,13 @@ def home():
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    # use_reloader=False が必須（Threadと競合するため）
+    app.run(host="0.0.0.0", port=port, use_reloader=False, threaded=True)
 
 def keep_alive():
-    t = Thread(target=run_flask)
-    t.daemon = True
+    t = Thread(target=run_flask, daemon=True)
     t.start()
+    print("[INFO] Flask thread started")
 
 # ================================
 #  Discord Bot
@@ -687,6 +688,8 @@ async def on_ready():
         started = True
         print("Scheduler started!")
 
+import time
+
 keep_alive()
 
 print(f"[INFO] TOKEN set: {bool(TOKEN)}, length: {len(TOKEN) if TOKEN else 0}")
@@ -694,7 +697,7 @@ print(f"[INFO] Starting bot.run()...")
 
 # 429レート制限時は待機してから終了（Renderが自動再起動する）
 try:
-    bot.run(TOKEN, log_handler=None)
+    bot.run(TOKEN)
 except discord.errors.HTTPException as e:
     if e.status == 429:
         retry_after = e.response.headers.get('Retry-After', '120')
