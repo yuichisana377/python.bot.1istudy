@@ -11,7 +11,7 @@ import json
 import os
 import requests
 import base64
-import time
+import asyncio
 
 # ================================
 #  設定
@@ -725,6 +725,25 @@ async def on_ready():
         print("Scheduler started!")
 
 keep_alive()
-time.sleep(30)  # レート制限解除を待つ
-bot.run(TOKEN)
 
+import time
+
+MAX_RETRIES = 5
+retry = 0
+wait = 60  # 最初は60秒待機
+
+while retry < MAX_RETRIES:
+    try:
+        bot.run(TOKEN)
+        break  # 正常終了したらループを抜ける
+    except discord.errors.HTTPException as e:
+        if e.status == 429:
+            retry += 1
+            print(f"[WARNING] Discord rate limited (429). retry {retry}/{MAX_RETRIES}, waiting {wait}s...")
+            time.sleep(wait)
+            wait = min(wait * 2, 600)  # 最大10分まで指数バックオフ
+        else:
+            raise
+    except Exception as e:
+        print(f"[ERROR] Unexpected error: {e}")
+        raise
