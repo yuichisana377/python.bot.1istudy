@@ -666,7 +666,82 @@ def delete_schedule():
             ).result(timeout=10)
 
     return jsonify({"ok": True, "message": "削除しました！"})
+# ================================
+#  時間割データ
+# ================================
+def load_timetable(guild_id: int):
+    data, _ = github_get(f"timetable_{guild_id}.json")
+    return data or {}
 
+def save_timetable(guild_id: int, data: dict):
+    _, sha = github_get(f"timetable_{guild_id}.json")
+    github_put(f"timetable_{guild_id}.json", data, sha)
+
+# ================================
+#  Flask API — 時間割
+# ================================
+@app.route("/list_timetable", methods=["GET"])
+def list_timetable():
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    data = load_timetable(int(guild_id))
+    overrides = [{"key": k, **v} for k, v in data.items()]
+    return jsonify({"ok": True, "overrides": overrides})
+
+@app.route("/update_timetable", methods=["POST"])
+def update_timetable():
+    data     = request.json
+    guild_id = data.get("guild_id")
+    key      = data.get("key")   # "change:YYYY-MM-DD:N"
+    if not all([guild_id, key]):
+        return jsonify({"ok": False, "error": "missing fields"})
+    tt = load_timetable(int(guild_id))
+    tt[key] = {
+        "key":     key,
+        "type":    "change",
+        "date":    data.get("date"),
+        "period":  data.get("period"),
+        "subject": data.get("subject"),
+        "items":   data.get("items", []),
+        "note":    data.get("note", ""),
+    }
+    save_timetable(int(guild_id), tt)
+    write_log(int(guild_id), "edit", detail=f"時間割変更: {key} → {data.get('subject')}")
+    return jsonify({"ok": True})
+
+@app.route("/set_holiday", methods=["POST"])
+def set_holiday():
+    data     = request.json
+    guild_id = data.get("guild_id")
+    key      = data.get("key")   # "holiday:YYYY-MM-DD"
+    if not all([guild_id, key]):
+        return jsonify({"ok": False, "error": "missing fields"})
+    tt = load_timetable(int(guild_id))
+    tt[key] = {
+        "key":    key,
+        "type":   "holiday",
+        "date":   data.get("date"),
+        "reason": data.get("reason", "休校"),
+        "note":   data.get("note", ""),
+    }
+    save_timetable(int(guild_id), tt)
+    write_log(int(guild_id), "edit", detail=f"休校設定: {data.get('date')} {data.get('reason')}")
+    return jsonify({"ok": True})
+
+@app.route("/delete_timetable", methods=["POST"])
+def delete_timetable():
+    data     = request.json
+    guild_id = data.get("guild_id")
+    key      = data.get("key")
+    if not all([guild_id, key]):
+        return jsonify({"ok": False, "error": "missing fields"})
+    tt = load_timetable(int(guild_id))
+    if key in tt:
+        del tt[key]
+        save_timetable(int(guild_id), tt)
+        write_log(int(guild_id), "edit", detail=f"時間割変更削除: {key}")
+    return jsonify({"ok": True})
 @app.route("/list_logs", methods=["GET"])
 def list_logs():
     guild_id = request.args.get("guild_id")
