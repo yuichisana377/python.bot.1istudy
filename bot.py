@@ -816,7 +816,7 @@ def generate_card_filename():
 
 @app.route("/list_cards", methods=["GET"])
 def list_cards():
-    """words/ フォルダの JSON 一覧と各セットの name・cards.length を返す"""
+    """words/ フォルダの JSON 一覧と各セットの name・cards・count を返す"""
     try:
         files = list_card_files()
         result = []
@@ -824,10 +824,12 @@ def list_cards():
             data, _ = github_get(f"{CARDS_DIR}/{f['name']}")
             if data is None:
                 continue
+            cards = data.get("cards", [])
             result.append({
                 "filename": f["name"],
                 "name":     data.get("name", f["name"]),
-                "count":    len(data.get("cards", [])),
+                "cards":    cards,           # ← カードの中身も返す
+                "count":    len(cards),
             })
         return jsonify({"ok": True, "sets": result})
     except Exception as e:
