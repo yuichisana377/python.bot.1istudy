@@ -774,6 +774,124 @@ async def on_ready():
         started = True
         print("Scheduler started!")
 
+# ================================
+#  単語カードデータ
+#  GitHubの words/ フォルダに JSON として保存
+# ================================
+
+CARDS_DIR = "words"   # リポジトリ内のフォルダ名
+
+def list_card_files():
+    """words/ フォルダのファイル一覧を返す"""
+    url     = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CARDS_DIR}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    r = requests.get(url, headers=headers)
+    if r.status_code == 404:
+        return []
+    files = r.json()
+    return [f for f in files if isinstance(f, dict) and f["name"].endswith(".json")]
+
+def get_card_file(filename):
+    """words/{filename} の内容と SHA を返す"""
+    data, sha = github_get(f"{CARDS_DIR}/{filename}")
+    return data, sha
+
+def put_card_file(filename, content_obj, sha=None):
+    """words/{filename} に書き込む（sha があれば上書き）"""
+    github_put(f"{CARDS_DIR}/{filename}", content_obj, sha)
+
+def generate_card_filename():
+    """set_YYYYMMDD_HHMM_xxxxxx.json 形式のファイル名を生成"""
+    import random, string
+    now    = datetime.now(JST)
+    date   = now.strftime("%Y%m%d")
+    time_  = now.strftime("%H%M")
+    rand   = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    return f"set_{date}_{time_}_{rand}.json"
+
+
+# ================================
+#  Flask API — 単語カード
+# ================================
+
+@app.route("/list_cards", methods=["GET"])
+def list_cards():
+    """words/ フォルダの JSON 一覧と各セットの name・cards.length を返す"""
+    try:
+        files = list_card_files()
+        result = []
+        for f in files:
+            data, _ = github_get(f"{CARDS_DIR}/{f['name']}")
+            if data is None:
+                continue
+            result.append({
+                "filename": f["name"],
+                "name":     data.get("name", f["name"]),
+                "count":    len(data.get("cards", [])),
+            })
+        return jsonify({"ok": True, "sets": result})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/save_cards", methods=["POST"])
+def save_cards():
+    """
+    新規作成・上書き保存
+    body: { "name": str, "cards": [...], "filename": str (上書き時のみ) }
+    """
+    data     = request.json
+    name     = data.get("name")
+    cards    = data.get("cards")
+    filename = data.get("filename")   # 上書きのときだけ送られてくる
+
+    if not name or not isinstance(cards, list):
+        return jsonify({"ok": False, "error": "name と cards は必須です"})
+
+    is_update = bool(filename)
+
+    # 新規のときはファイル名を自動生成
+    if not filename:
+        filename = generate_card_filename()
+
+    # 上書きのときは既存の SHA が必要
+    sha = None
+    if is_update:
+        _, sha = get_card_file(filename)
+
+    content = {"name": name, "cards": cards}
+    put_card_file(filename, content, sha)
+
+    return jsonify({"ok": True, "filename": filename, "is_update": is_update})
+
+
+@app.route("/delete_cards", methods=["POST"])
+def delete_cards():
+    """
+    ファイルを削除
+    body: { "filename": str }
+    """
+    data     = request.json
+    filename = data.get("filename")
+
+    if not filename:
+        return jsonify({"ok": False, "error": "filename は必須です"})
+
+    url     = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CARDS_DIR}/{filename}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+
+    # SHA を取得
+    r = requests.get(url, headers=headers)
+    if r.status_code == 404:
+        return jsonify({"ok": False, "error": "ファイルが見つかりません"})
+
+    sha = r.json().get("sha")
+    requests.delete(url, headers=headers, json={
+        "message": f"delete {filename}",
+        "sha":     sha,
+    })
+
+    return jsonify({"ok": True})
 
 import time
 
