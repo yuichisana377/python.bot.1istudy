@@ -1,0 +1,10 @@
+{
+  "name": "実験",
+  "cards": [
+    {
+      "question": "ping",
+      "answer": "pong！",
+      "explanation": ""
+    }
+  ]
+}
