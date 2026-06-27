@@ -420,10 +420,13 @@ async def cleanup_command(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     guild_id = interaction.guild.id
     plans = await async_load_plans(guild_id)
-    today = datetime.now(JST).strftime("%Y-%m-%d")
 
-    deleted_dates = sorted({p["date"] for p in plans if p["date"] < today})
-    new_plans = [p for p in plans if p["date"] >= today]
+    today = datetime.now(JST).date()
+    threshold = today - timedelta(days=7)  # ★ 1週間前
+
+    deleted_dates = sorted({p["date"] for p in plans if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold})
+    new_plans = [p for p in plans if datetime.strptime(p["date"], "%Y-%m-%d").date() >= threshold]
+
     await async_save_plans(guild_id, new_plans)
 
     if deleted_dates:
@@ -509,16 +512,28 @@ async def send_today_plans():
         await channel.send(msg + "@everyone")
 
 async def cleanup_past_plans():
-    today = datetime.now(JST).strftime("%Y-%m-%d")
+    today = datetime.now(JST).date()
+    threshold = today - timedelta(days=7)  # ★ 1週間前
+
     for filename in list_all_configs():
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
         plans = load_plans(guild_id)
-        deleted_dates = sorted({p["date"] for p in plans if p["date"] < today})
-        new_plans = [p for p in plans if p["date"] >= today]
+
+        deleted_dates = sorted({
+            p["date"] for p in plans
+            if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold
+        })
+
+        new_plans = [
+            p for p in plans
+            if datetime.strptime(p["date"], "%Y-%m-%d").date() >= threshold
+        ]
+
         if deleted_dates:
             save_plans(guild_id, new_plans)
             write_log(guild_id, "cleanup", detail="削除した日付: " + ", ".join(deleted_dates))
             print(f"{guild_id} の過去予定を削除しました。")
+
 
 # ================================
 #  Flask API（WebUI用）
