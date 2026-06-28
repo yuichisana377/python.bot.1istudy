@@ -455,12 +455,11 @@ await async_write_log(
     detail="削除した日付: " + ", ".join(deleted_dates)
 )
 
-        await interaction.followup.send(
-            f"🧹 {len(deleted_dates)}件削除しました！\n" + "\n".join(deleted_dates),
-            ephemeral=True
-        )
-    else:
-        await interaction.followup.send("削除する予定はありませんでした！", ephemeral=True)
+  await interaction.followup.send(
+      f"🧹 {len(deleted_dates)}件削除しました！\n" + "\n".join(deleted_dates),            ephemeral=True
+      )
+  else:
+       await interaction.followup.send("削除する予定はありませんでした！", ephemeral=True)
 
 # ================================
 #  /setchannel
