@@ -437,29 +437,33 @@ async def cleanup_command(interaction: discord.Interaction):
     today = datetime.now(JST).date()
     threshold = today - timedelta(days=7)  # ★ 1週間前
 
-    deleted_dates = sorted({p["date"] for p in plans if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold})
-    new_plans = [p for p in plans if datetime.strptime(p["date"], "%Y-%m-%d").date() >= threshold]
+    # 削除対象
+    deleted_dates = sorted({
+        p["date"] for p in plans
+        if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold
+    })
+
+    # 残す予定
+    new_plans = [
+        p for p in plans
+        if datetime.strptime(p["date"], "%Y-%m-%d").date() >= threshold
+    ]
 
     await async_save_plans(guild_id, new_plans)
 
     if deleted_dates:
-        threshold = today - timedelta(days=7)
-deleted_dates = sorted({
-    p["date"] for p in plans
-    if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold
-})
+        await async_write_log(
+            guild_id,
+            "cleanup",
+            detail="削除した日付: " + ", ".join(deleted_dates)
+        )
 
-await async_write_log(
-    guild_id,
-    "cleanup",
-    detail="削除した日付: " + ", ".join(deleted_dates)
-)
-
-  await interaction.followup.send(
-      f"🧹 {len(deleted_dates)}件削除しました！\n" + "\n".join(deleted_dates),            ephemeral=True
-      )
-  else:
-       await interaction.followup.send("削除する予定はありませんでした！", ephemeral=True)
+        await interaction.followup.send(
+            f"🧹 {len(deleted_dates)}件削除しました！\n" + "\n".join(deleted_dates),
+            ephemeral=True
+        )
+    else:
+        await interaction.followup.send("削除する予定はありませんでした！", ephemeral=True)
 
 # ================================
 #  /setchannel
