@@ -29,8 +29,21 @@ scheduler = AsyncIOScheduler(timezone=JST)
 # ================================
 #  Flask アプリ
 # ================================
+from flask import Flask, request, jsonify, make_response
+from flask_cors import CORS
+
 app = Flask("")
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
+
+# preflightリクエストを全ルートで明示許可
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        res = make_response()
+        res.headers["Access-Control-Allow-Origin"]  = "*"
+        res.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        res.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        return res, 200
 
 @app.route("/")
 def home():
