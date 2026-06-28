@@ -30,7 +30,7 @@ scheduler = AsyncIOScheduler(timezone=JST)
 #  Flask アプリ
 # ================================
 app = Flask("")
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
 @app.route("/")
 def home():
