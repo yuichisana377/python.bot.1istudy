@@ -430,7 +430,18 @@ async def cleanup_command(interaction: discord.Interaction):
     await async_save_plans(guild_id, new_plans)
 
     if deleted_dates:
-        await async_write_log(guild_id, "cleanup", detail="削除した日付: " + ", ".join(deleted_dates))
+        threshold = today - timedelta(days=7)
+deleted_dates = sorted({
+    p["date"] for p in plans
+    if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold
+})
+
+await async_write_log(
+    guild_id,
+    "cleanup",
+    detail="削除した日付: " + ", ".join(deleted_dates)
+)
+
         await interaction.followup.send(
             f"🧹 {len(deleted_dates)}件削除しました！\n" + "\n".join(deleted_dates),
             ephemeral=True
@@ -531,7 +542,18 @@ async def cleanup_past_plans():
 
         if deleted_dates:
             save_plans(guild_id, new_plans)
-            write_log(guild_id, "cleanup", detail="削除した日付: " + ", ".join(deleted_dates))
+            threshold = today - timedelta(days=7)
+deleted_dates = sorted({
+    p["date"] for p in plans
+    if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold
+})
+
+write_log(
+    guild_id,
+    "cleanup",
+    detail="削除した日付: " + ", ".join(deleted_dates)
+)
+
             print(f"{guild_id} の過去予定を削除しました。")
 
 
