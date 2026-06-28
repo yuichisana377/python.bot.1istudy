@@ -785,6 +785,76 @@ def delete_timetable():
         save_timetable(int(guild_id), tt)
         write_log(int(guild_id), "edit", detail=f"時間割変更削除: {key}")
     return jsonify({"ok": True})
+# ================================
+#  ユーザーデータ（users_{guild_id}.json）
+# ================================
+
+def load_users(guild_id: int):
+    """users_{guild_id}.json を読み込む。なければ空リストを返す。"""
+    data, _ = github_get(f"users_{guild_id}.json")
+    return data or []
+
+def save_users(guild_id: int, users: list):
+    """users_{guild_id}.json を保存する。"""
+    _, sha = github_get(f"users_{guild_id}.json")
+    github_put(f"users_{guild_id}.json", users, sha)
+
+
+# ================================
+#  Flask API — ユーザー認証
+# ================================
+
+@app.route("/get_users", methods=["GET"])
+def get_users():
+    """
+    GET /get_users?guild_id=...
+    → { "ok": true, "users": [ {"id":"1I001","nickname":"Yuki","created_at":"2026-06-25"}, ... ] }
+    """
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    try:
+        users = load_users(int(guild_id))
+        return jsonify({"ok": True, "users": users})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/add_user", methods=["POST"])
+def add_user():
+    """
+    POST /add_user
+    body: { "guild_id": "...", "id": "1I001", "nickname": "Yuki", "created_at": "2026-06-25" }
+    → 成功: { "ok": true }
+    → 重複: { "ok": false, "error": "already_exists" }
+    """
+    data     = request.json
+    guild_id = data.get("guild_id")
+    user_id  = data.get("id", "").strip().upper()
+    nickname = data.get("nickname", "").strip()
+    created  = data.get("created_at") or datetime.now(JST).strftime("%Y-%m-%d")
+
+    # バリデーション
+    if not all([guild_id, user_id, nickname]):
+        return jsonify({"ok": False, "error": "missing fields"})
+    if len(nickname) > 16:
+        return jsonify({"ok": False, "error": "nickname too long"})
+
+    try:
+        users = load_users(int(guild_id))
+
+        # 重複チェック
+        if any(u["id"] == user_id for u in users):
+            return jsonify({"ok": False, "error": "already_exists"})
+
+        users.append({"id": user_id, "nickname": nickname, "created_at": created})
+        save_users(int(guild_id), users)
+
+        write_log(int(guild_id), "add_user", detail=f"{user_id} / {nickname}")
+        return jsonify({"ok": True})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 @app.route("/list_logs", methods=["GET"])
 def list_logs():
     guild_id = request.args.get("guild_id")
