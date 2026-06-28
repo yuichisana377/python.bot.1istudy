@@ -524,36 +524,42 @@ async def send_today_plans():
 
 async def cleanup_past_plans():
     today = datetime.now(JST).date()
-    threshold = today - timedelta(days=7)  # ★ 1週間前
+    threshold = today - timedelta(days=7)
 
     for filename in list_all_configs():
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
         plans = load_plans(guild_id)
 
+        # 削除対象を計算
         deleted_dates = sorted({
             p["date"] for p in plans
             if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold
         })
 
+        # 新しい予定リスト
         new_plans = [
             p for p in plans
             if datetime.strptime(p["date"], "%Y-%m-%d").date() >= threshold
         ]
 
+        # 保存
+        save_plans(guild_id, new_plans)
+
+        # ★ 保存後に plans を読み直す（これが重要）
+        plans = load_plans(guild_id)
+
+        # ★ 再計算（ログ用）
+        deleted_dates = sorted({
+            p["date"] for p in plans
+            if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold
+        })
+
         if deleted_dates:
-            save_plans(guild_id, new_plans)
-            threshold = today - timedelta(days=7)
-deleted_dates = sorted({
-    p["date"] for p in plans
-    if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold
-})
-
-write_log(
-    guild_id,
-    "cleanup",
-    detail="削除した日付: " + ", ".join(deleted_dates)
-)
-
+            write_log(
+                guild_id,
+                "cleanup",
+                detail="削除した日付: " + ", ".join(deleted_dates)
+            )
             print(f"{guild_id} の過去予定を削除しました。")
 
 
