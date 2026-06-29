@@ -897,59 +897,6 @@ def list_study_logs():
     logs = sorted(logs, key=lambda l: l.get("date", ""))
     return jsonify({"ok": True, "logs": logs})
 
-@app.route("/add_study_log", methods=["POST"])
-def add_study_log():
-    """
-    勉強ログを追加し、ポイントを自動加算する（5分ごとに1pt）
-    Body: { guild_id, student_id, nickname, date, subject, minutes, memo }
-    Returns: { ok, earned, total }
-    """
-    data       = request.json
-    guild_id   = data.get("guild_id")
-    student_id = data.get("student_id")
-    nickname   = data.get("nickname")
-    date       = data.get("date")
-    subject    = data.get("subject")
-    minutes    = data.get("minutes")
-    memo       = data.get("memo", "")
-
-    if not all([guild_id, student_id, nickname, date, subject, minutes]):
-        return jsonify({"ok": False, "error": "missing fields"})
-
-    guild_id = int(guild_id)
-    minutes  = int(minutes)
-
-    # ── ログ保存（30日超の古いログは自動削除） ────────────
-    logs_file = f"study_logs_{guild_id}.json"
-    logs, sha_l = github_get(logs_file)
-    logs = logs or []
-    now_date = datetime.now(JST).date()
-    logs = [
-        l for l in logs
-        if (now_date - datetime.strptime(l["date"], "%Y-%m-%d").date()).days <= 30
-    ]
-    logs.append({
-        "date":       date,
-        "subject":    subject,
-        "minutes":    minutes,
-        "memo":       memo,
-        "student_id": student_id,
-        "nickname":   nickname,
-    })
-    github_put(logs_file, logs, sha_l)
-
-    # ── ポイント加算（5分ごとに1pt） ─────────────────────
-    earned     = minutes // 5
-    pts_file   = f"points_{guild_id}.json"
-    pts, sha_p = github_get(pts_file)
-    pts = pts or {}
-    pts[student_id] = pts.get(student_id, 0) + earned
-    github_put(pts_file, pts, sha_p)
-
-    write_log(guild_id, "study_log",
-              detail=f"{date} / {nickname}({student_id}) / {subject} {minutes}分 +{earned}pt")
-
-    return jsonify({"ok": True, "earned": earned, "total": pts[student_id]})
 
 # ================================
 #  Flask API — ポイント
