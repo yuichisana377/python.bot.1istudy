@@ -219,19 +219,94 @@ def save_completed_tasks(guild_id: int, tasks: dict, sha=None):
     if sha is None:
         _, sha = github_get(f"completed_tasks_{guild_id}.json")
     github_put(f"completed_tasks_{guild_id}.json", tasks, sha)
+
+# ============================================================
+#  サーバー側パッチ — 達成日を保存・返すように変更
+#  変更箇所: get_completed_tasks / complete_task の2エンドポイント
+# ============================================================
+
+# ── 変更前のデータ形式 ─────────────────────────────────────
+# completed_tasks_{guild_id}.json
+# {
+#   "1I001": ["task_id_1", "task_id_2"],
+#   "1I002": ["task_id_3"]
+# }
+
+# ── 変更後のデータ形式 ─────────────────────────────────────
+# {
+#   "1I001": [
+#     {"id": "task_id_1", "date": "2025-06-30"},
+#     {"id": "task_id_2", "date": "2025-06-28"}
+#   ],
+#   "1I002": [
+#     {"id": "task_id_3", "date": "2025-06-25"}
+#   ]
+# }
+#
+# ※ 既存の文字列エントリ（旧形式）も読み込み時に自動で
+#    {"id": "...", "date": null} に正規化するので
+#    データの移行作業は不要です。
+
+
+from datetime import date as _date
+
+
+def _normalize_task_entry(entry):
+    """旧形式（文字列）と新形式（dict）を統一する"""
+    if isinstance(entry, str):
+        return {"id": entry, "date": None}
+    return entry  # すでに dict の場合はそのまま
+
+
+@app.route("/get_completed_tasks", methods=["GET"])
+def get_completed_tasks():
+    """指定ユーザーの達成済み課題リストを返す（達成日付き）"""
+    guild_id   = request.args.get("guild_id")
+    student_id = request.args.get("student_id")
+    if not all([guild_id, student_id]):
+        return jsonify({"ok": False, "error": "missing params"})
+
+    tasks = load_completed_tasks(int(guild_id))
+    raw   = tasks.get(student_id, [])
+
+    # 旧形式（文字列リスト）を自動正規化
+    normalized = [_normalize_task_entry(e) for e in raw]
+
+    return jsonify({"ok": True, "done": normalized})
+    # レスポンス例:
+    # {
+    #   "ok": true,
+    #   "done": [
+    #     {"id": "2025-06-30_数学_p.30", "date": "2025-06-30"},
+    #     {"id": "2025-06-28_英語_単語",  "date": null}   ← 旧データは null
+    #   ]
+    # }
+
+
 @app.route("/complete_task", methods=["POST"])
 def complete_task():
-    data = request.json
-    guild_id = int(data.get("guild_id"))
+    data       = request.json
+    guild_id   = int(data.get("guild_id"))
     student_id = data.get("student_id")
-    task_id = data.get("task_id")
-    points = int(data.get("points"))
+    task_id    = data.get("task_id")
+    points     = int(data.get("points"))
 
-    # --- 達成済み課題保存 ---
+    # --- 達成済み課題保存（達成日付き） ---
     done = load_completed_tasks(guild_id)
     if student_id not in done:
         done[student_id] = []
-    done[student_id].append(task_id)
+
+    # 既存エントリを正規化したうえで重複チェック
+    normalized = [_normalize_task_entry(e) for e in done[student_id]]
+    existing_ids = [e["id"] for e in normalized]
+
+    if task_id not in existing_ids:
+        normalized.append({
+            "id":   task_id,
+            "date": str(_date.today()),   # 例: "2025-06-30"
+        })
+
+    done[student_id] = normalized
     save_completed_tasks(guild_id, done)
 
     # --- ポイント加算 ---
@@ -240,7 +315,6 @@ def complete_task():
     save_points(guild_id, pts)
 
     return jsonify({"ok": True, "total": pts[student_id]})
-
 # ================================
 #  ユーザーデータ
 # ================================
@@ -914,15 +988,31 @@ def get_points():
 # ================================
 
 
+from datetime import date as _date
+ 
+ 
+def _normalize_task_entry(entry):
+    """旧形式（文字列）と新形式（dict）を統一する"""
+    if isinstance(entry, str):
+        return {"id": entry, "date": None}
+    return entry  # すでに dict の場合はそのまま
+ 
+ 
 @app.route("/get_completed_tasks", methods=["GET"])
 def get_completed_tasks():
-    """指定ユーザーの達成済み課題IDリストを返す"""
+    """指定ユーザーの達成済み課題リストを返す（達成日付き）"""
     guild_id   = request.args.get("guild_id")
     student_id = request.args.get("student_id")
     if not all([guild_id, student_id]):
         return jsonify({"ok": False, "error": "missing params"})
+ 
     tasks = load_completed_tasks(int(guild_id))
-    return jsonify({"ok": True, "done": tasks.get(student_id, [])})
+    raw   = tasks.get(student_id, [])
+ 
+    # 旧形式（文字列リスト）を自動正規化
+    normalized = [_normalize_task_entry(e) for e in raw]
+ 
+    return jsonify({"ok": True, "done": normalized})
 
 # ================================
 #  Flask API — 単語カード
