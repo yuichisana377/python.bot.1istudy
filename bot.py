@@ -646,7 +646,13 @@ def add_study_log():
     logs.append(entry)
     save_study_logs(guild_id, logs)
 
-    return jsonify({"ok": True})
+    # --- ポイント加算（5分ごとに1pt） ---
+    earned = entry["minutes"] // 5
+    pts = load_points(guild_id)
+    pts[entry["student_id"]] = pts.get(entry["student_id"], 0) + earned
+    save_points(guild_id, pts)
+
+    return jsonify({"ok": True, "earned": earned, "total": pts[entry["student_id"]]})
 
 
 @app.route("/list_schedule", methods=["GET"])
