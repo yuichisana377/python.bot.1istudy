@@ -684,13 +684,6 @@ def list_schedule():
     plans = load_plans(int(guild_id))
     return jsonify({"ok": True, "plans": sorted(plans, key=lambda p: p["date"])})
 
-@app.route("/list_study_logs", methods=["GET"])
-def list_study_logs():
-    guild_id = request.args.get("guild_id")
-    if not guild_id:
-        return jsonify({"ok": False, "error": "missing guild_id"})
-    logs = load_study_logs(int(guild_id))
-    return jsonify({"ok": True, "logs": logs})
 
 
 @app.route("/edit_schedule", methods=["POST"])
