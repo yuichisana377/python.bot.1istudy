@@ -167,6 +167,25 @@ async def async_write_log(guild_id: int, log_type: str, detail: str):
     await loop.run_in_executor(None, write_log, guild_id, log_type, detail)
 
 # ================================
+#  勉強ログ（StudyLog）
+# ================================
+def load_study_logs(guild_id: int):
+    data, _ = github_get(f"study_logs_{guild_id}.json")
+    return data or []
+
+def save_study_logs(guild_id: int, logs: list):
+    _, sha = github_get(f"study_logs_{guild_id}.json")
+    github_put(f"study_logs_{guild_id}.json", logs, sha)
+
+async def async_load_study_logs(guild_id: int):
+    data, _ = await async_github_get(f"study_logs_{guild_id}.json")
+    return data or []
+
+async def async_save_study_logs(guild_id: int, logs: list):
+    _, sha = await async_github_get(f"study_logs_{guild_id}.json")
+    await async_github_put(f"study_logs_{guild_id}.json", logs, sha)
+
+# ================================
 #  勉強ログ データ
 # ================================
 def load_study_logs(guild_id: int):
