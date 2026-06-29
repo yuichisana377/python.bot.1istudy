@@ -620,6 +620,35 @@ def add_schedule():
             ).result(timeout=10)
     return jsonify({"ok": ok, "message": msg})
 
+@app.route("/add_study_log", methods=["POST"])
+def add_study_log():
+    data = request.json
+    guild_id = int(data.get("guild_id"))
+
+    entry = {
+        "date": data.get("date"),
+        "subject": data.get("subject"),
+        "minutes": data.get("minutes"),
+        "memo": data.get("memo"),
+        "student_id": data.get("student_id"),
+        "nickname": data.get("nickname")
+    }
+
+    logs = load_study_logs(guild_id)
+
+    # 30日以上前のログを削除
+    now = datetime.now(JST).date()
+    logs = [
+        l for l in logs
+        if (now - datetime.strptime(l["date"], "%Y-%m-%d").date()).days <= 30
+    ]
+
+    logs.append(entry)
+    save_study_logs(guild_id, logs)
+
+    return jsonify({"ok": True})
+
+
 @app.route("/list_schedule", methods=["GET"])
 def list_schedule():
     guild_id = request.args.get("guild_id")
@@ -627,6 +656,15 @@ def list_schedule():
         return jsonify({"ok": False, "error": "missing guild_id"})
     plans = load_plans(int(guild_id))
     return jsonify({"ok": True, "plans": sorted(plans, key=lambda p: p["date"])})
+
+@app.route("/list_study_logs", methods=["GET"])
+def list_study_logs():
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    logs = load_study_logs(int(guild_id))
+    return jsonify({"ok": True, "logs": logs})
+
 
 @app.route("/edit_schedule", methods=["POST"])
 def edit_schedule():
