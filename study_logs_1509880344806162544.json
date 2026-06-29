@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "date": "2026-06-29",
+    "subject": "その他",
+    "minutes": 5,
+    "memo": "実験",
+    "student_id": "32618",
+    "nickname": "Chiro"
+  }
+]
