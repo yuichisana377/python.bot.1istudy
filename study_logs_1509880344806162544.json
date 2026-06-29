@@ -6,5 +6,13 @@
     "memo": "実験！",
     "student_id": "32618",
     "nickname": "Chiro"
+  },
+  {
+    "date": "2026-06-29",
+    "subject": "基礎解析1a",
+    "minutes": 10,
+    "memo": "実験",
+    "student_id": "32618",
+    "nickname": "Chiro"
   }
 ]
