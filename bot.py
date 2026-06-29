@@ -1073,6 +1073,147 @@ def delete_cards():
 
     return jsonify({"ok": True})
 
+# ================================
+#  勉強ログ — 一覧取得
+# ================================
+@app.route("/list_study_logs", methods=["GET"])
+def list_study_logs():
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+ 
+    logs, _ = github_get(f"study_logs_{guild_id}.json")
+    logs = sorted(logs or [], key=lambda l: l.get("date", ""))
+    return jsonify({"ok": True, "logs": logs})
+ 
+ 
+# ================================
+#  勉強ログ — 追加 & ポイント自動加算
+# ================================
+@app.route("/add_study_log", methods=["POST"])
+def add_study_log():
+    data       = request.json
+    guild_id   = data.get("guild_id")
+    student_id = data.get("student_id")
+    nickname   = data.get("nickname")
+    date       = data.get("date")
+    subject    = data.get("subject")
+    minutes    = data.get("minutes")
+    memo       = data.get("memo", "")
+ 
+    if not all([guild_id, student_id, nickname, date, subject, minutes]):
+        return jsonify({"ok": False, "error": "missing fields"})
+ 
+    minutes = int(minutes)
+ 
+    # ── ログ保存 ──────────────────────────────────────────
+    logs_file = f"study_logs_{guild_id}.json"
+    logs, sha = github_get(logs_file)
+    logs = logs or []
+    logs.append({
+        "date":       date,
+        "subject":    subject,
+        "minutes":    minutes,
+        "memo":       memo,
+        "student_id": student_id,
+        "nickname":   nickname,
+    })
+    github_put(logs_file, logs, sha)
+ 
+    # ── ポイント加算（5分ごとに1pt） ─────────────────────
+    earned     = minutes // 5
+    pts_file   = f"points_{guild_id}.json"
+    pts, sha_p = github_get(pts_file)
+    pts = pts or {}
+    pts[student_id] = pts.get(student_id, 0) + earned
+    github_put(pts_file, pts, sha_p)
+ 
+    write_log(int(guild_id), "study_log",
+              detail=f"{date} / {nickname}({student_id}) / {subject} {minutes}分 +{earned}pt")
+ 
+    return jsonify({
+        "ok":      True,
+        "earned":  earned,
+        "total":   pts[student_id],
+    })
+ 
+ 
+# ================================
+#  ポイント — 全員分取得
+# ================================
+@app.route("/get_points", methods=["GET"])
+def get_points():
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+ 
+    pts, _ = github_get(f"points_{guild_id}.json")
+    return jsonify({"ok": True, "points": pts or {}})
+ 
+ 
+# ================================
+#  課題達成 — ポイント加算
+# ================================
+@app.route("/complete_task", methods=["POST"])
+def complete_task():
+    data       = request.json
+    guild_id   = data.get("guild_id")
+    student_id = data.get("student_id")
+    task_id    = data.get("task_id")
+    pts_add    = int(data.get("points", 5))
+ 
+    if not all([guild_id, student_id, task_id]):
+        return jsonify({"ok": False, "error": "missing fields"})
+ 
+    # ── 重複チェック（同じ課題を二重達成しない） ─────────
+    tasks_file = f"completed_tasks_{guild_id}.json"
+    tasks, sha_t = github_get(tasks_file)
+    tasks = tasks or {}
+    done_list = tasks.get(student_id, [])
+    if task_id in done_list:
+        # すでに達成済み → ポイントだけ返す
+        pts, _ = github_get(f"points_{guild_id}.json")
+        pts = pts or {}
+        return jsonify({"ok": True, "already": True, "total": pts.get(student_id, 0)})
+ 
+    # ── 達成記録を保存 ────────────────────────────────────
+    done_list.append(task_id)
+    tasks[student_id] = done_list
+    github_put(tasks_file, tasks, sha_t)
+ 
+    # ── ポイント加算 ──────────────────────────────────────
+    pts_file   = f"points_{guild_id}.json"
+    pts, sha_p = github_get(pts_file)
+    pts = pts or {}
+    pts[student_id] = pts.get(student_id, 0) + pts_add
+    github_put(pts_file, pts, sha_p)
+ 
+    write_log(int(guild_id), "task_complete",
+              detail=f"{student_id} / task:{task_id} +{pts_add}pt → 合計{pts[student_id]}pt")
+ 
+    return jsonify({
+        "ok":    True,
+        "total": pts[student_id],
+    })
+ 
+ 
+# ================================
+#  課題達成状況 — 取得（ページ読み込み時に使用）
+# ================================
+@app.route("/get_completed_tasks", methods=["GET"])
+def get_completed_tasks():
+    guild_id   = request.args.get("guild_id")
+    student_id = request.args.get("student_id")
+    if not all([guild_id, student_id]):
+        return jsonify({"ok": False, "error": "missing params"})
+ 
+    tasks, _ = github_get(f"completed_tasks_{guild_id}.json")
+    tasks = tasks or {}
+    return jsonify({
+        "ok":   True,
+        "done": tasks.get(student_id, []),
+    })
+
 import time
 
 keep_alive()
