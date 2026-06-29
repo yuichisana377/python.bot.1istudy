@@ -14,5 +14,13 @@
     "memo": "実験",
     "student_id": "32618",
     "nickname": "Chiro"
+  },
+  {
+    "date": "2026-06-29",
+    "subject": "情報基礎",
+    "minutes": 5,
+    "memo": "実験",
+    "student_id": "32618",
+    "nickname": "Chiro"
   }
 ]
