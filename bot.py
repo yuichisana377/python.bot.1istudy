@@ -889,13 +889,12 @@ def add_user():
 # ================================
 @app.route("/list_study_logs", methods=["GET"])
 def list_study_logs():
-    """全ユーザーの勉強ログを返す"""
     guild_id = request.args.get("guild_id")
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     logs = load_study_logs(int(guild_id))
-    logs = sorted(logs, key=lambda l: l.get("date", ""))
     return jsonify({"ok": True, "logs": logs})
+
 
 
 # ================================
