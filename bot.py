@@ -913,50 +913,7 @@ def get_points():
 # ================================
 #  Flask API — 課題達成
 # ================================
-@app.route("/complete_task", methods=["POST"])
-def complete_task():
-    """
-    課題を達成済みにしてポイントを加算する（重複達成防止付き）
-    Body: { guild_id, student_id, task_id, points }
-    Returns: { ok, already?, total }
-    """
-    data       = request.json
-    guild_id   = data.get("guild_id")
-    student_id = data.get("student_id")
-    task_id    = data.get("task_id")
-    pts_add    = int(data.get("points", 5))
 
-    if not all([guild_id, student_id, task_id]):
-        return jsonify({"ok": False, "error": "missing fields"})
-
-    guild_id = int(guild_id)
-
-    # ── 重複チェック ──────────────────────────────────────
-    tasks_file   = f"completed_tasks_{guild_id}.json"
-    tasks, sha_t = github_get(tasks_file)
-    tasks        = tasks or {}
-    done_list    = tasks.get(student_id, [])
-
-    if task_id in done_list:
-        pts = load_points(guild_id)
-        return jsonify({"ok": True, "already": True, "total": pts.get(student_id, 0)})
-
-    # ── 達成記録を保存 ────────────────────────────────────
-    done_list.append(task_id)
-    tasks[student_id] = done_list
-    github_put(tasks_file, tasks, sha_t)
-
-    # ── ポイント加算 ──────────────────────────────────────
-    pts_file   = f"points_{guild_id}.json"
-    pts, sha_p = github_get(pts_file)
-    pts        = pts or {}
-    pts[student_id] = pts.get(student_id, 0) + pts_add
-    github_put(pts_file, pts, sha_p)
-
-    write_log(guild_id, "task_complete",
-              detail=f"{student_id} / task:{task_id} +{pts_add}pt → 合計{pts[student_id]}pt")
-
-    return jsonify({"ok": True, "total": pts[student_id]})
 
 @app.route("/get_completed_tasks", methods=["GET"])
 def get_completed_tasks():
