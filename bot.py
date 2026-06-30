@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timedelta
+from datetime import date as _date
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from threading import Thread
@@ -167,7 +168,7 @@ async def async_write_log(guild_id: int, log_type: str, detail: str):
     await loop.run_in_executor(None, write_log, guild_id, log_type, detail)
 
 # ================================
-#  勉強ログ（StudyLog）
+#  勉強ログ データ
 # ================================
 def load_study_logs(guild_id: int):
     data, _ = github_get(f"study_logs_{guild_id}.json")
@@ -186,17 +187,6 @@ async def async_save_study_logs(guild_id: int, logs: list):
     await async_github_put(f"study_logs_{guild_id}.json", logs, sha)
 
 # ================================
-#  勉強ログ データ
-# ================================
-def load_study_logs(guild_id: int):
-    data, _ = github_get(f"study_logs_{guild_id}.json")
-    return data or []
-
-def save_study_logs(guild_id: int, logs: list):
-    _, sha = github_get(f"study_logs_{guild_id}.json")
-    github_put(f"study_logs_{guild_id}.json", logs, sha)
-
-# ================================
 #  ポイント データ
 # ================================
 def load_points(guild_id: int) -> dict:
@@ -208,9 +198,23 @@ def save_points(guild_id: int, pts: dict, sha=None):
         _, sha = github_get(f"points_{guild_id}.json")
     github_put(f"points_{guild_id}.json", pts, sha)
 
-# ================================
+# ============================================================
 #  課題達成データ
-# ================================
+#
+#  completed_tasks_{guild_id}.json の形式:
+#  {
+#    "1I001": [
+#      {"id": "task_id_1", "date": "2025-06-30", "points": 5},
+#      {"id": "task_id_2", "date": "2025-06-28", "points": 10}
+#    ],
+#    "1I002": [
+#      {"id": "task_id_3", "date": "2025-06-25", "points": 5}
+#    ]
+#  }
+#
+#  ※ 旧形式（文字列のみ／pointsキーなし）も読み込み時に自動正規化される。
+#     データの移行作業は不要。
+# ============================================================
 def load_completed_tasks(guild_id: int) -> dict:
     data, _ = github_get(f"completed_tasks_{guild_id}.json")
     return data or {}
@@ -220,101 +224,17 @@ def save_completed_tasks(guild_id: int, tasks: dict, sha=None):
         _, sha = github_get(f"completed_tasks_{guild_id}.json")
     github_put(f"completed_tasks_{guild_id}.json", tasks, sha)
 
-# ============================================================
-#  サーバー側パッチ — 達成日を保存・返すように変更
-#  変更箇所: get_completed_tasks / complete_task の2エンドポイント
-# ============================================================
-
-# ── 変更前のデータ形式 ─────────────────────────────────────
-# completed_tasks_{guild_id}.json
-# {
-#   "1I001": ["task_id_1", "task_id_2"],
-#   "1I002": ["task_id_3"]
-# }
-
-# ── 変更後のデータ形式 ─────────────────────────────────────
-# {
-#   "1I001": [
-#     {"id": "task_id_1", "date": "2025-06-30"},
-#     {"id": "task_id_2", "date": "2025-06-28"}
-#   ],
-#   "1I002": [
-#     {"id": "task_id_3", "date": "2025-06-25"}
-#   ]
-# }
-#
-# ※ 既存の文字列エントリ（旧形式）も読み込み時に自動で
-#    {"id": "...", "date": null} に正規化するので
-#    データの移行作業は不要です。
-
-
-from datetime import date as _date
-
 
 def _normalize_task_entry(entry):
-    """旧形式（文字列）と新形式（dict）を統一する"""
+    """旧形式（文字列）・旧dict形式（pointsなし）・新形式を統一する"""
     if isinstance(entry, str):
-        return {"id": entry, "date": None}
-    return entry  # すでに dict の場合はそのまま
+        return {"id": entry, "date": None, "points": None}
+    if "points" not in entry:
+        entry = dict(entry)
+        entry["points"] = None
+    return entry
 
 
-@app.route("/get_completed_tasks", methods=["GET"])
-def get_completed_tasks():
-    """指定ユーザーの達成済み課題リストを返す（達成日付き）"""
-    guild_id   = request.args.get("guild_id")
-    student_id = request.args.get("student_id")
-    if not all([guild_id, student_id]):
-        return jsonify({"ok": False, "error": "missing params"})
-
-    tasks = load_completed_tasks(int(guild_id))
-    raw   = tasks.get(student_id, [])
-
-    # 旧形式（文字列リスト）を自動正規化
-    normalized = [_normalize_task_entry(e) for e in raw]
-
-    return jsonify({"ok": True, "done": normalized})
-    # レスポンス例:
-    # {
-    #   "ok": true,
-    #   "done": [
-    #     {"id": "2025-06-30_数学_p.30", "date": "2025-06-30"},
-    #     {"id": "2025-06-28_英語_単語",  "date": null}   ← 旧データは null
-    #   ]
-    # }
-
-
-@app.route("/complete_task", methods=["POST"])
-def complete_task():
-    data       = request.json
-    guild_id   = int(data.get("guild_id"))
-    student_id = data.get("student_id")
-    task_id    = data.get("task_id")
-    points     = int(data.get("points"))
-
-    # --- 達成済み課題保存（達成日付き） ---
-    done = load_completed_tasks(guild_id)
-    if student_id not in done:
-        done[student_id] = []
-
-    # 既存エントリを正規化したうえで重複チェック
-    normalized = [_normalize_task_entry(e) for e in done[student_id]]
-    existing_ids = [e["id"] for e in normalized]
-
-    if task_id not in existing_ids:
-        normalized.append({
-            "id":   task_id,
-            "date": str(_date.today()),   # 例: "2025-06-30"
-        })
-
-    done[student_id] = normalized
-    save_completed_tasks(guild_id, done)
-
-    # --- ポイント加算 ---
-    pts = load_points(guild_id)
-    pts[student_id] = pts.get(student_id, 0) + points
-    save_points(guild_id, pts)
-
-    return jsonify({"ok": True, "total": pts[student_id]})
 # ================================
 #  ユーザーデータ
 # ================================
@@ -969,8 +889,6 @@ def list_study_logs():
     logs = load_study_logs(int(guild_id))
     return jsonify({"ok": True, "logs": logs})
 
-
-
 # ================================
 #  Flask API — ポイント
 # ================================
@@ -986,33 +904,68 @@ def get_points():
 # ================================
 #  Flask API — 課題達成
 # ================================
-
-
-from datetime import date as _date
- 
- 
-def _normalize_task_entry(entry):
-    """旧形式（文字列）と新形式（dict）を統一する"""
-    if isinstance(entry, str):
-        return {"id": entry, "date": None}
-    return entry  # すでに dict の場合はそのまま
- 
- 
 @app.route("/get_completed_tasks", methods=["GET"])
 def get_completed_tasks():
-    """指定ユーザーの達成済み課題リストを返す（達成日付き）"""
+    """
+    student_id を指定: そのユーザーの達成済み課題リストを返す（達成日・ポイント付き）
+    student_id を省略: 全ユーザー分を { student_id: [...] } の形でまとめて返す
+                        （週間ランキングで全員の課題達成ポイントを集計するために使用）
+    """
     guild_id   = request.args.get("guild_id")
-    student_id = request.args.get("student_id")
-    if not all([guild_id, student_id]):
+    student_id = request.args.get("student_id")  # 省略可
+    if not guild_id:
         return jsonify({"ok": False, "error": "missing params"})
- 
+
     tasks = load_completed_tasks(int(guild_id))
-    raw   = tasks.get(student_id, [])
- 
-    # 旧形式（文字列リスト）を自動正規化
-    normalized = [_normalize_task_entry(e) for e in raw]
- 
-    return jsonify({"ok": True, "done": normalized})
+
+    if student_id:
+        raw = tasks.get(student_id, [])
+        normalized = [_normalize_task_entry(e) for e in raw]
+        return jsonify({"ok": True, "done": normalized})
+
+    # student_id 省略 → 全員分をまとめて返す
+    all_normalized = {
+        sid: [_normalize_task_entry(e) for e in raw]
+        for sid, raw in tasks.items()
+    }
+    return jsonify({"ok": True, "done": all_normalized})
+
+
+@app.route("/complete_task", methods=["POST"])
+def complete_task():
+    data       = request.json
+    guild_id   = int(data.get("guild_id"))
+    student_id = data.get("student_id")
+    task_id    = data.get("task_id")
+    points     = int(data.get("points"))
+
+    # --- 達成済み課題保存（達成日・ポイント付き） ---
+    done = load_completed_tasks(guild_id)
+    if student_id not in done:
+        done[student_id] = []
+
+    # 既存エントリを正規化したうえで重複チェック
+    normalized = [_normalize_task_entry(e) for e in done[student_id]]
+    existing_ids = [e["id"] for e in normalized]
+
+    if task_id not in existing_ids:
+        normalized.append({
+            "id":     task_id,
+            "date":   str(_date.today()),   # 例: "2025-06-30"
+            "points": points,                # 達成時点のポイントを保存
+                                              # （後で課題自体が一覧から消えても
+                                              #   正確にランキング集計できるように）
+        })
+
+    done[student_id] = normalized
+    save_completed_tasks(guild_id, done)
+
+    # --- ポイント加算 ---
+    pts = load_points(guild_id)
+    pts[student_id] = pts.get(student_id, 0) + points
+    save_points(guild_id, pts)
+
+    return jsonify({"ok": True, "total": pts[student_id]})
 
 # ================================
 #  Flask API — 単語カード
