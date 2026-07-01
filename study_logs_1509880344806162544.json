@@ -70,5 +70,13 @@
     "memo": "レポート",
     "student_id": "32618",
     "nickname": "Chiro"
+  },
+  {
+    "date": "2026-07-01",
+    "subject": "国語1甲a",
+    "minutes": 54,
+    "memo": "",
+    "student_id": "32623",
+    "nickname": "たけのこども"
   }
 ]
