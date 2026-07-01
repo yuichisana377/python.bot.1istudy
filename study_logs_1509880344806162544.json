@@ -46,5 +46,13 @@
     "memo": "",
     "student_id": "32623",
     "nickname": "たけのこども"
+  },
+  {
+    "date": "2026-07-01",
+    "subject": "国語1甲a",
+    "minutes": 10,
+    "memo": "意味調べ",
+    "student_id": "32618",
+    "nickname": "Chiro"
   }
 ]
