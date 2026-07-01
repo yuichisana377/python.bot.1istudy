@@ -54,5 +54,13 @@
     "memo": "意味調べ",
     "student_id": "32618",
     "nickname": "Chiro"
+  },
+  {
+    "date": "2026-07-01",
+    "subject": "基礎解析1a",
+    "minutes": 24,
+    "memo": "課題",
+    "student_id": "32627",
+    "nickname": "レモンザメ"
   }
 ]
