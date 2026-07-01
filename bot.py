@@ -285,9 +285,15 @@ def parse_date(date: str):
         return None
 
 # ================================
+#  ポイントを付与すべきカテゴリかどうか
+# ================================
+POINT_CATEGORIES = ("提出", "宿題")
+DEFAULT_TASK_POINTS = 5
+
+# ================================
 #  add 内部関数
 # ================================
-async def add_plan_internal(guild_id: int, subject: str, date: str, category: str, content: str):
+async def add_plan_internal(guild_id: int, subject: str, date: str, category: str, content: str, points=None):
     date_str = parse_date(date)
     if not date_str:
         return False, "日付の形式が正しくありません！"
@@ -295,11 +301,24 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
     if datetime.strptime(date_str, "%Y-%m-%d").date() < today:
         return False, "過去の日付は登録できません！"
     tagged_content = f"【{category}】{content}"
+
+    plan = {"date": date_str, "subject": subject, "content": tagged_content}
+    if category in POINT_CATEGORIES:
+        plan["points"] = points if points is not None else DEFAULT_TASK_POINTS
+
     plans = load_plans(guild_id)
-    plans.append({"date": date_str, "subject": subject, "content": tagged_content})
+    plans.append(plan)
     save_plans(guild_id, plans)
-    write_log(guild_id, "add", detail=f"{date_str} / {subject} / {tagged_content}")
-    return True, f"登録しました！\n{date_str} / {subject} / {tagged_content}"
+
+    detail = f"{date_str} / {subject} / {tagged_content}"
+    if "points" in plan:
+        detail += f" ({plan['points']}pt)"
+    write_log(guild_id, "add", detail=detail)
+
+    msg = f"登録しました！\n{date_str} / {subject} / {tagged_content}"
+    if "points" in plan:
+        msg += f"\n⭐ {plan['points']}pt"
+    return True, msg
 
 # ================================
 #  /add
@@ -309,14 +328,15 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
     date="日付（例: 6-20, 2026-06-20）",
     subject="科目（省略するとこのチャンネル名を使用）",
     category="分類（宿題・提出・持ち物など）",
-    content="内容"
+    content="内容",
+    points="ポイント（提出・宿題のみ有効。省略時は5pt）"
 )
-async def add_plan(interaction: discord.Interaction, date: str, category: str, content: str, subject: str = None):
+async def add_plan(interaction: discord.Interaction, date: str, category: str, content: str, subject: str = None, points: int = None):
     await interaction.response.defer(ephemeral=True)
     guild = interaction.guild
     if not subject:
         subject = interaction.channel.name
-    ok, msg = await add_plan_internal(guild.id, subject, date, category, content)
+    ok, msg = await add_plan_internal(guild.id, subject, date, category, content, points)
     if ok:
         target_channel = get_subject_channel_by_name(guild, subject)
         await (target_channel or interaction.channel).send(msg)
@@ -354,7 +374,8 @@ async def list_plans(interaction: discord.Interaction, date: str):
         sorted_plans = sorted(plans, key=lambda p: p["date"])
         msg = "📘 **すべての予定一覧**\n"
         for p in sorted_plans:
-            msg += f"- {p['date']}：{p['subject']} {p['content']}\n"
+            pts_str = f" ⭐{p['points']}pt" if "points" in p else ""
+            msg += f"- {p['date']}：{p['subject']} {p['content']}{pts_str}\n"
         await interaction.followup.send(msg, ephemeral=True)
         return
     date_str = parse_date(date)
@@ -367,7 +388,8 @@ async def list_plans(interaction: discord.Interaction, date: str):
         return
     msg = f"📘 **{date_str} の予定**\n"
     for p in selected:
-        msg += f"- {p['subject']} {p['content']}\n"
+        pts_str = f" ⭐{p['points']}pt" if "points" in p else ""
+        msg += f"- {p['subject']} {p['content']}{pts_str}\n"
     await interaction.followup.send(msg, ephemeral=True)
 
 # ================================
@@ -416,9 +438,10 @@ async def delete_autocomplete(interaction: discord.Interaction, current: str):
     date="新しい日付",
     subject="新しい科目",
     category="新しい分類",
-    content="新しい内容"
+    content="新しい内容",
+    points="新しいポイント（提出・宿題のみ有効）"
 )
-async def edit_plan(interaction: discord.Interaction, target: str, date: str = None, subject: str = None, category: str = None, content: str = None):
+async def edit_plan(interaction: discord.Interaction, target: str, date: str = None, subject: str = None, category: str = None, content: str = None, points: int = None):
     await interaction.response.defer(ephemeral=True)
     guild = interaction.guild
     plans = await async_load_plans(guild.id)
@@ -448,10 +471,23 @@ async def edit_plan(interaction: discord.Interaction, target: str, date: str = N
     elif content:
         tag = found["content"].split("】", 1)[0] + "】" if "】" in found["content"] else ""
         found["content"] = f"{tag}{content}"
+
+    # ★ ポイント更新
+    current_category = found["content"].split("】", 1)[0].lstrip("【") if "】" in found["content"] else ""
+    if points is not None:
+        found["points"] = points
+    if current_category not in POINT_CATEGORIES and "points" in found:
+        # 提出・宿題以外に変更された場合はポイントを外す
+        del found["points"]
+    elif current_category in POINT_CATEGORIES and "points" not in found:
+        found["points"] = DEFAULT_TASK_POINTS
+
     await async_save_plans(guild.id, plans)
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
     await async_write_log(guild.id, "edit", detail=f"{before_str} → {after_str}")
     msg = f"編集しました！\n\n【編集前】\n{before_str}\n\n【編集後】\n{after_str}"
+    if "points" in found:
+        msg += f"\n⭐ {found['points']}pt"
     target_channel = get_subject_channel_by_name(guild, found["subject"])
     await (target_channel or interaction.channel).send(msg)
     await interaction.followup.send("完了しました！", ephemeral=True)
@@ -621,11 +657,20 @@ def add_schedule():
     subject  = data.get("subject")
     category = data.get("category")
     content  = data.get("content")
+    points   = data.get("points")  # ★ 追加（提出・宿題のみ有効。省略時は5pt）
+
     if not all([guild_id, date, subject, category, content]):
         return jsonify({"ok": False, "error": "missing fields"})
+
+    if points is not None:
+        try:
+            points = int(points)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "invalid points"})
+
     guild = bot.get_guild(int(guild_id))
     future = asyncio.run_coroutine_threadsafe(
-        add_plan_internal(int(guild_id), subject, date, category, content),
+        add_plan_internal(int(guild_id), subject, date, category, content, points),
         bot.loop
     )
     ok, msg = future.result(timeout=30)
@@ -691,6 +736,8 @@ def edit_schedule():
     new_subject  = data.get("subject")
     new_category = data.get("category")
     new_content  = data.get("content")
+    new_points   = data.get("points")  # ★ 追加
+
     if not all([guild_id, target]):
         return jsonify({"ok": False, "error": "missing fields"})
     guild_id = int(guild_id)
@@ -720,6 +767,21 @@ def edit_schedule():
     elif new_content:
         tag = found["content"].split("】", 1)[0] + "】" if "】" in found["content"] else ""
         found["content"] = f"{tag}{new_content}"
+
+    # ★ ポイント更新
+    if new_points is not None:
+        try:
+            found["points"] = int(new_points)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "invalid points"})
+
+    current_category = found["content"].split("】", 1)[0].lstrip("【") if "】" in found["content"] else ""
+    if current_category not in POINT_CATEGORIES and "points" in found:
+        # 提出・宿題以外に変更された場合はポイントを外す
+        del found["points"]
+    elif current_category in POINT_CATEGORIES and "points" not in found:
+        found["points"] = DEFAULT_TASK_POINTS
+
     save_plans(guild_id, plans)
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
     write_log(guild_id, "edit", detail=f"{before_str} → {after_str}")
@@ -727,6 +789,8 @@ def edit_schedule():
         target_channel = get_subject_channel_by_name(guild, found["subject"])
         if target_channel:
             msg = f"編集しました！\n\n【編集前】\n{before_str}\n\n【編集後】\n{after_str}"
+            if "points" in found:
+                msg += f"\n⭐ {found['points']}pt"
             asyncio.run_coroutine_threadsafe(
                 target_channel.send(msg), bot.loop
             ).result(timeout=10)
