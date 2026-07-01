@@ -204,15 +204,15 @@ def save_points(guild_id: int, pts: dict, sha=None):
 #  completed_tasks_{guild_id}.json の形式:
 #  {
 #    "1I001": [
-#      {"id": "task_id_1", "date": "2025-06-30", "points": 5},
-#      {"id": "task_id_2", "date": "2025-06-28", "points": 10}
+#      {"id": "task_id_1", "date": "2025-06-30", "points": 5, "nickname": "太郎"},
+#      {"id": "task_id_2", "date": "2025-06-28", "points": 10, "nickname": "太郎"}
 #    ],
 #    "1I002": [
-#      {"id": "task_id_3", "date": "2025-06-25", "points": 5}
+#      {"id": "task_id_3", "date": "2025-06-25", "points": 5, "nickname": "花子"}
 #    ]
 #  }
 #
-#  ※ 旧形式（文字列のみ／pointsキーなし）も読み込み時に自動正規化される。
+#  ※ 旧形式（文字列のみ／points・nicknameキーなし）も読み込み時に自動正規化される。
 #     データの移行作業は不要。
 # ============================================================
 def load_completed_tasks(guild_id: int) -> dict:
@@ -226,12 +226,14 @@ def save_completed_tasks(guild_id: int, tasks: dict, sha=None):
 
 
 def _normalize_task_entry(entry):
-    """旧形式（文字列）・旧dict形式（pointsなし）・新形式を統一する"""
+    """旧形式（文字列）・旧dict形式（points/nicknameなし）・新形式を統一する"""
     if isinstance(entry, str):
-        return {"id": entry, "date": None, "points": None}
+        return {"id": entry, "date": None, "points": None, "nickname": None}
+    entry = dict(entry)
     if "points" not in entry:
-        entry = dict(entry)
         entry["points"] = None
+    if "nickname" not in entry:
+        entry["nickname"] = None
     return entry
 
 
@@ -907,7 +909,7 @@ def get_points():
 @app.route("/get_completed_tasks", methods=["GET"])
 def get_completed_tasks():
     """
-    student_id を指定: そのユーザーの達成済み課題リストを返す（達成日・ポイント付き）
+    student_id を指定: そのユーザーの達成済み課題リストを返す（達成日・ポイント・ニックネーム付き）
     student_id を省略: 全ユーザー分を { student_id: [...] } の形でまとめて返す
                         （週間ランキングで全員の課題達成ポイントを集計するために使用）
     """
@@ -938,8 +940,9 @@ def complete_task():
     student_id = data.get("student_id")
     task_id    = data.get("task_id")
     points     = int(data.get("points"))
+    nickname   = data.get("nickname")  # ★ ニックネームを受け取る
 
-    # --- 達成済み課題保存（達成日・ポイント付き） ---
+    # --- 達成済み課題保存（達成日・ポイント・ニックネーム付き） ---
     done = load_completed_tasks(guild_id)
     if student_id not in done:
         done[student_id] = []
@@ -950,11 +953,10 @@ def complete_task():
 
     if task_id not in existing_ids:
         normalized.append({
-            "id":     task_id,
-            "date":   str(_date.today()),   # 例: "2025-06-30"
-            "points": points,                # 達成時点のポイントを保存
-                                              # （後で課題自体が一覧から消えても
-                                              #   正確にランキング集計できるように）
+            "id":       task_id,
+            "date":     str(_date.today()),
+            "points":   points,
+            "nickname": nickname,  # ★ ニックネームを保存
         })
 
     done[student_id] = normalized
