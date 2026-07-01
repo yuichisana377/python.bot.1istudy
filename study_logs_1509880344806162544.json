@@ -62,5 +62,13 @@
     "memo": "課題",
     "student_id": "32627",
     "nickname": "レモンザメ"
+  },
+  {
+    "date": "2026-07-01",
+    "subject": "情報工学ゼミ1",
+    "minutes": 24,
+    "memo": "レポート",
+    "student_id": "32618",
+    "nickname": "Chiro"
   }
 ]
