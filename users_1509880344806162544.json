@@ -1,29 +1,37 @@
 [
   {
-    "id": "32618", 
-    "nickname": "Chiro", 
+    "id": "32618",
+    "nickname": "Chiro",
     "created_at": "2026-06-28"
   },
-  {"id": "32623", 
-    "nickname": "たけのこども", 
+  {
+    "id": "32623",
+    "nickname": "たけのこども",
     "created_at": "2026-06-28"
   },
-  {"id": "32617", 
-    "nickname": "山田レットドラゴン太郎", 
+  {
+    "id": "32617",
+    "nickname": "山田レットドラゴン太郎",
     "created_at": "2026-06-30"
   },
   {
-    "id": "32632", 
-    "nickname": "ゆうらんせん", 
+    "id": "32632",
+    "nickname": "ゆうらんせん",
     "created_at": "2026-06-30"
   },
   {
-    "id": "32628", 
-    "nickname": "hara-Kirby", 
-    "created_at": "2026-06-30"},
+    "id": "32628",
+    "nickname": "hara-Kirby",
+    "created_at": "2026-06-30"
+  },
   {
-    "id": "32619", 
-    "nickname": "アン", 
+    "id": "32619",
+    "nickname": "アン",
+    "created_at": "2026-07-01"
+  },
+  {
+    "id": "32627",
+    "nickname": "レモンザメ",
     "created_at": "2026-07-01"
   }
 ]
