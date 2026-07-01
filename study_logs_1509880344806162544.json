@@ -94,5 +94,13 @@
     "memo": "ワーク",
     "student_id": "32618",
     "nickname": "Chiro"
+  },
+  {
+    "date": "2026-07-01",
+    "subject": "基礎解析1a",
+    "minutes": 191,
+    "memo": "",
+    "student_id": "32619",
+    "nickname": "アン"
   }
 ]
