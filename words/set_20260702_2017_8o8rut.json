@@ -1,5 +1,5 @@
 {
-  "name": "化学1a 第2回小テスト＿過去問2025_1I",
+  "name": "化学1a 化学1a 第2回小テスト＿過去問2025_1I",
   "cards": [
     {
       "id": "mr3cbef7wshb",
@@ -28,7 +28,7 @@
     {
       "id": "mr3ch55cikd3",
       "question": "【次のイオンや化合物の名称を答えなさい。】\nZnCO₃",
-      "answer": "炭酸亜鉛",
+      "answer": "炭酸亜鉛(II)",
       "explanation": ""
     },
     {
@@ -70,7 +70,7 @@
     {
       "id": "mr3cnub3dow5",
       "question": "【次の化合物の組成式（化学式）を答えなさい。】\n硫酸ナトリウム",
-      "answer": "MgSO₄",
+      "answer": "Na₂SO₄",
       "explanation": ""
     },
     {
@@ -214,7 +214,7 @@
   ],
   "subject": "化学1a",
   "published_by": {
-    "id": "32618",
-    "nickname": "Chiro"
+    "id": "32623",
+    "nickname": "たけのこども"
   }
 }
