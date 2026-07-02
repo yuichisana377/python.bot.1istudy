@@ -1091,9 +1091,10 @@ def save_cards():
     cards    = data.get("cards")
     filename = data.get("filename")
     guild_id = data.get("guild_id")
-    subject  = data.get("subject")  # ★ 科目（チャンネル振り分け用）
+    subject  = data.get("subject")
     publisher_id       = data.get("publisher_id")
     publisher_nickname = data.get("publisher_nickname") or "匿名"
+    silent   = data.get("silent", False)  # ★ 追加：trueなら通知しない
 
     if not name or not isinstance(cards, list):
         return jsonify({"ok": False, "error": "name と cards は必須です"})
@@ -1116,8 +1117,8 @@ def save_cards():
         },
     }, sha)
 
-    # --- Discord通知（科目チャンネルへ。無ければ /setchannel の通知先へフォールバック） ---
-    if guild_id:
+    # --- Discord通知（silentがtrueならスキップ） ---
+    if guild_id and not silent:
         try:
             guild_id_int = int(guild_id)
             guild = bot.get_guild(guild_id_int)
