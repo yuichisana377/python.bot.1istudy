@@ -1077,6 +1077,8 @@ def list_cards():
                 "name":     data.get("name", f["name"]),
                 "cards":    cards,
                 "count":    len(cards),
+                "subject":  data.get("subject"),
+                "published_by": (data.get("published_by") or {}).get("nickname"),
             })
         return jsonify({"ok": True, "sets": result})
     except Exception as e:
@@ -1088,15 +1090,54 @@ def save_cards():
     name     = data.get("name")
     cards    = data.get("cards")
     filename = data.get("filename")
+    guild_id = data.get("guild_id")
+    subject  = data.get("subject")  # ★ 科目（チャンネル振り分け用）
+    publisher_id       = data.get("publisher_id")
+    publisher_nickname = data.get("publisher_nickname") or "匿名"
+
     if not name or not isinstance(cards, list):
         return jsonify({"ok": False, "error": "name と cards は必須です"})
+
     is_update = bool(filename)
     if not filename:
         filename = generate_card_filename()
+
     sha = None
     if is_update:
         _, sha = get_card_file(filename)
-    put_card_file(filename, {"name": name, "cards": cards}, sha)
+
+    put_card_file(filename, {
+        "name": name,
+        "cards": cards,
+        "subject": subject,
+        "published_by": {
+            "id": publisher_id,
+            "nickname": publisher_nickname,
+        },
+    }, sha)
+
+    # --- Discord通知（科目チャンネルへ。無ければ /setchannel の通知先へフォールバック） ---
+    if guild_id:
+        try:
+            guild_id_int = int(guild_id)
+            guild = bot.get_guild(guild_id_int)
+            if guild:
+                action = "更新" if is_update else "公開"
+                msg = f"📇 単語カード「{name}」が{publisher_nickname}さんによって{action}されました！（{len(cards)}問）"
+
+                target_channel = get_subject_channel_by_name(guild, subject) if subject else None
+                if not target_channel:
+                    config = load_config(guild_id_int)
+                    channel_id = config.get("remind_channel_id")
+                    target_channel = bot.get_channel(channel_id) if channel_id else None
+
+                if target_channel:
+                    asyncio.run_coroutine_threadsafe(
+                        target_channel.send(msg), bot.loop
+                    ).result(timeout=10)
+        except Exception as e:
+            print(f"[WARN] save_cards notify failed: {e}")
+
     return jsonify({"ok": True, "filename": filename, "is_update": is_update})
 
 @app.route("/delete_cards", methods=["POST"])
