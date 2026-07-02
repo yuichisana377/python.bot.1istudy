@@ -1,0 +1,142 @@
+{
+  "name": "情報基礎 第2回小テスト[7~12]",
+  "cards": [
+    {
+      "id": "mr3iqyxmojfx",
+      "question": "音楽や文章、演劇、コンピューターのプログラム、製品の作り方、製品のデザインなどの、創造的な活動によって生みだされた情報。",
+      "answer": "知的財産",
+      "explanation": ""
+    },
+    {
+      "id": "mr3irbhkgn24",
+      "question": "知的財産の価値を守る権利",
+      "answer": "知的財産権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3ismc0q5gr",
+      "question": "芸術や学術などの創作活動に関するもので、文章、写真、絵画、音楽、映画、演劇、美術、プログラムなど。",
+      "answer": "著作物",
+      "explanation": ""
+    },
+    {
+      "id": "mr3isxep9zck",
+      "question": "著作物に関する権利。",
+      "answer": "著作権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3iunh2ogwd",
+      "question": "著作権には、著作者が持つ権利としての【　①　】と、伝達者がもつ【　②　】がある。",
+      "answer": "【①】著作権\n【②】著作隣接権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3ivio0182f",
+      "question": "おもに産業や工業製品の製造などに関する権利。",
+      "answer": "産業財産権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3iwcjj5q9n",
+      "question": "産業財産権の１つ。製品の発明に対する権利。",
+      "answer": "特許権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3ixeg3vook",
+      "question": "産業財産権の１つ。製品の形状や構造などについてのアイデアに対する権利。",
+      "answer": "実用新案権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3ixs86ms60",
+      "question": "産業財産権の１つ。製品のデザインに対する権利。",
+      "answer": "意匠権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3iyl5df1tj",
+      "question": "産業財産権の１つ。製品やサービスの名前、マークに対する権利。",
+      "answer": "商標権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3izhmf2crr",
+      "question": "知的財産の別名。",
+      "answer": "無体財産",
+      "explanation": ""
+    },
+    {
+      "id": "mr3j0a9yypr0",
+      "question": "知的財産権の別名、２つ。",
+      "answer": "無体財産権・知的所有権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3j29cxg39v",
+      "question": "産業財産権は、特許庁に申請書類を送り、審査が行われ、登録されて初めて権利が発生する。このように、登録して初めて権利が認められる制度。",
+      "answer": "法定主義",
+      "explanation": ""
+    },
+    {
+      "id": "mr3j43r7ukwb",
+      "question": "著作権は、作品がつくられた時点で発生し、特別に登録する必要はない。このように、登録しなくても権利が認められる制度。",
+      "answer": "無方式主義",
+      "explanation": ""
+    },
+    {
+      "id": "mr3j9ma2hwev",
+      "question": "保管期間がすぎた著作物や、著作者が著作権を放棄した著作物のこと。",
+      "answer": "パブリックドメイン",
+      "explanation": ""
+    },
+    {
+      "id": "mr3janovfwuk",
+      "question": "著作物を作った人（著作者）の権利を保護する法律",
+      "answer": "著作権法",
+      "explanation": ""
+    },
+    {
+      "id": "mr3jd5dpc45d",
+      "question": "著作者が持つ著作権は、著作者の経済的な利益を守る【　①　（　②　）】と、著作者の意思や名誉を守る（　③　）に分けられる。",
+      "answer": "【①】著作権（②）財産権\n【③】著作者人格権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3jettb5cst",
+      "question": "著作権のうち財産権であるもの。著作物を印刷、撮影、複写、録音、録画などの方法により複製する権利。",
+      "answer": "複製権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3jfs7506cs",
+      "question": "著作権のうち財産権であるもの。著作物を公に上映、演奏、上演する権利。",
+      "answer": "上映権・演奏権・上演権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3jg9d4udb2",
+      "question": "著作権のうち財産権であるもの。著作物を公衆送信する権利。",
+      "answer": "公衆送信権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3jgwi1uore",
+      "question": "著作権のうち財産権であるもの。言語の著作物を公に口頭で伝達する権利。",
+      "answer": "口述権",
+      "explanation": ""
+    },
+    {
+      "id": "mr3jilu9pj2z",
+      "question": "著作権のうち財産権であるもの。美術の著作物または未発表の写真の著作物を、原作品により公に展示する権利。",
+      "answer": "展示権",
+      "explanation": ""
+    }
+  ],
+  "subject": "情報基礎",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  }
+}
