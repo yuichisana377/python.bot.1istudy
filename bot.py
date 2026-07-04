@@ -577,6 +577,10 @@ async def help_command(interaction: discord.Interaction):
 #  自動通知
 # ================================
 async def send_tomorrow_plans():
+    # 実行日が金曜(4)・土曜(5) の場合は「金曜夜」「土曜夜」の通知にあたるため、
+    # 予定が無ければ通知自体をスキップする
+    now = datetime.now(JST)
+    quiet_if_empty = now.weekday() in (4, 5)  # 4=金, 5=土
     for filename in list_all_configs():
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
         config = load_config(guild_id)
@@ -586,17 +590,23 @@ async def send_tomorrow_plans():
         channel = bot.get_channel(channel_id)
         if not channel:
             continue
-        tomorrow = (datetime.now(JST) + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
         plans = [p for p in load_plans(guild_id) if p["date"] == tomorrow]
         if plans:
             msg = "こんばんは！明日の予定です。\n"
             for p in plans:
                 msg += f"・{p['subject']} {p['content']}\n"
         else:
+            if quiet_if_empty:
+                continue
             msg = "こんばんは！明日の予定はありません。\n"
         await channel.send(msg + "@everyone")
 
 async def send_today_plans():
+    # 実行日が土曜(5)・日曜(6) の場合は「土曜朝」「日曜朝」の通知にあたるため、
+    # 予定が無ければ通知自体をスキップする
+    now = datetime.now(JST)
+    quiet_if_empty = now.weekday() in (5, 6)  # 5=土, 6=日
     for filename in list_all_configs():
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
         config = load_config(guild_id)
@@ -606,13 +616,15 @@ async def send_today_plans():
         channel = bot.get_channel(channel_id)
         if not channel:
             continue
-        today = datetime.now(JST).strftime("%Y-%m-%d")
+        today = now.strftime("%Y-%m-%d")
         plans = [p for p in load_plans(guild_id) if p["date"] == today]
         if plans:
             msg = "おはようございます！今日の予定です。\n"
             for p in plans:
                 msg += f"・{p['subject']} {p['content']}\n"
         else:
+            if quiet_if_empty:
+                continue
             msg = "おはようございます！今日の予定はありません。\n"
         await channel.send(msg + "@everyone")
 
