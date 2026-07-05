@@ -110,5 +110,13 @@
     "memo": "課題",
     "student_id": "32619",
     "nickname": "アン"
+  },
+  {
+    "date": "2026-07-05",
+    "subject": "化学1a",
+    "minutes": 60,
+    "memo": "",
+    "student_id": "32632",
+    "nickname": "ゆうらんせん"
   }
 ]
