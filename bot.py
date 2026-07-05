@@ -547,14 +547,27 @@ async def cleanup_command(interaction: discord.Interaction):
 #  /setchannel
 # ================================
 @bot.tree.command(name="setchannel", description="通知チャンネルを設定する")
-async def setchannel(interaction: discord.Interaction):
+@app_commands.describe(type="どちらの朝通知に使うチャンネルか（省略時は通生）")
+@app_commands.choices(type=[
+    app_commands.Choice(name="通生（現行：朝5:30 / 夜20:00）", value="commute"),
+    app_commands.Choice(name="寮生（朝7:20）", value="dorm"),
+])
+async def setchannel(interaction: discord.Interaction, type: app_commands.Choice[str] = None):
     await interaction.response.defer(ephemeral=True)
     guild_id = interaction.guild.id
     config = await async_load_config(guild_id)
-    config["remind_channel_id"] = interaction.channel.id
+
+    kind = type.value if type else "commute"
+    if kind == "dorm":
+        config["remind_channel_id_dorm"] = interaction.channel.id
+        label = "寮生（朝7:20）"
+    else:
+        config["remind_channel_id"] = interaction.channel.id
+        label = "通生（朝5:30・夜20:00）"
+
     await async_save_config(guild_id, config)
     await interaction.followup.send(
-        f"通知チャンネルを **#{interaction.channel.name}** に設定しました！"
+        f"{label} の通知チャンネルを **#{interaction.channel.name}** に設定しました！"
     )
 
 # ================================
@@ -569,13 +582,15 @@ async def help_command(interaction: discord.Interaction):
         "**/delete** — 予定を削除する\n"
         "**/edit** — 予定を編集する\n"
         "**/cleanup** — 過去の予定を削除する\n"
-        "**/setchannel** — 通知チャンネルを設定する\n"
+        "**/setchannel** — 通知チャンネルを設定する（通生／寮生を選択可）\n"
     )
     await interaction.response.send_message(msg, ephemeral=True)
 
 # ================================
 #  自動通知
 # ================================
+TOMORROW_NOTIFY_CHANNEL_KEYS = ("remind_channel_id", "remind_channel_id_dorm")  # 通生・寮生 両方に送信
+
 async def send_tomorrow_plans():
     # 実行日が金曜(4)・土曜(5) の場合は「金曜夜」「土曜夜」の通知にあたるため、
     # 予定が無ければ通知自体をスキップする
@@ -584,12 +599,6 @@ async def send_tomorrow_plans():
     for filename in list_all_configs():
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
         config = load_config(guild_id)
-        channel_id = config.get("remind_channel_id")
-        if not channel_id:
-            continue
-        channel = bot.get_channel(channel_id)
-        if not channel:
-            continue
         tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
         plans = [p for p in load_plans(guild_id) if p["date"] == tomorrow]
         if plans:
@@ -600,17 +609,30 @@ async def send_tomorrow_plans():
             if quiet_if_empty:
                 continue
             msg = "こんばんは！明日の予定はありません。\n"
-        await channel.send(msg + "@everyone")
 
-async def send_today_plans():
+        # 通生用・寮生用の両チャンネルへ、それぞれ設定されていれば送信
+        for config_key in TOMORROW_NOTIFY_CHANNEL_KEYS:
+            channel_id = config.get(config_key)
+            if not channel_id:
+                continue
+            channel = bot.get_channel(channel_id)
+            if not channel:
+                continue
+            await channel.send(msg + "@everyone")
+
+async def send_today_plans_for(config_key: str):
+    """
+    朝の「今日の予定」通知を config_key で指定したチャンネル宛に送る。
+    config_key: "remind_channel_id"（通生） または "remind_channel_id_dorm"（寮生）
+    """
+    now = datetime.now(JST)
     # 実行日が土曜(5)・日曜(6) の場合は「土曜朝」「日曜朝」の通知にあたるため、
     # 予定が無ければ通知自体をスキップする
-    now = datetime.now(JST)
     quiet_if_empty = now.weekday() in (5, 6)  # 5=土, 6=日
     for filename in list_all_configs():
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
         config = load_config(guild_id)
-        channel_id = config.get("remind_channel_id")
+        channel_id = config.get(config_key)
         if not channel_id:
             continue
         channel = bot.get_channel(channel_id)
@@ -627,6 +649,14 @@ async def send_today_plans():
                 continue
             msg = "おはようございます！今日の予定はありません。\n"
         await channel.send(msg + "@everyone")
+
+async def send_today_plans_commute():
+    """通生向け：朝5:30の通知（既存のremind_channel_idを使用）"""
+    await send_today_plans_for("remind_channel_id")
+
+async def send_today_plans_dorm():
+    """寮生向け：朝7:20の通知（remind_channel_id_dormを使用）"""
+    await send_today_plans_for("remind_channel_id_dorm")
 
 async def cleanup_past_plans():
     today = datetime.now(JST).date()
@@ -1171,9 +1201,10 @@ def delete_cards():
 # ================================
 #  スケジューラー & 起動
 # ================================
-scheduler.add_job(send_tomorrow_plans, "cron", hour=20, minute=0)
-scheduler.add_job(send_today_plans,    "cron", hour=5,  minute=30)
-scheduler.add_job(cleanup_past_plans,  "cron", hour=0,  minute=0)
+scheduler.add_job(send_tomorrow_plans,     "cron", hour=20, minute=0)
+scheduler.add_job(send_today_plans_commute, "cron", hour=5,  minute=30)  # 通生（現行時間）
+scheduler.add_job(send_today_plans_dorm,    "cron", hour=7,  minute=20)  # 寮生
+scheduler.add_job(cleanup_past_plans,       "cron", hour=0,  minute=0)
 
 started = False
 
