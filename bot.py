@@ -549,8 +549,8 @@ async def cleanup_command(interaction: discord.Interaction):
 @bot.tree.command(name="setchannel", description="通知チャンネルを設定する")
 @app_commands.describe(type="どちらの朝通知に使うチャンネルか（省略時は通生）")
 @app_commands.choices(type=[
-    app_commands.Choice(name="通生（現行：朝5:30 / 夜20:00）", value="commute"),
-    app_commands.Choice(name="寮生（朝7:20）", value="dorm"),
+    app_commands.Choice(name="通生（朝5:30 / 夜20:00）", value="commute"),
+    app_commands.Choice(name="寮生（朝7:20 / 夜20:00）", value="dorm"),
 ])
 async def setchannel(interaction: discord.Interaction, type: app_commands.Choice[str] = None):
     await interaction.response.defer(ephemeral=True)
