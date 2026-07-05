@@ -132,6 +132,372 @@
       "question": "著作権のうち財産権であるもの。美術の著作物または未発表の写真の著作物を、原作品により公に展示する権利。",
       "answer": "展示権",
       "explanation": ""
+    },
+    {
+      "id": "mr78zcd5ue3m",
+      "question": "著作権のうち財産権であるもの。映画の著作物の複製物を公衆に頒布（有償・無償を問わず譲渡または貸与）する権利。",
+      "answer": "頒布権",
+      "explanation": ""
+    },
+    {
+      "id": "mr790c77ohrg",
+      "question": "著作権のうち財産権であるもの。著作物（映画を除く）を公衆に譲ったり、貸したりする権利。",
+      "answer": "譲渡権・貸与権",
+      "explanation": ""
+    },
+    {
+      "id": "mr7929byn6i4",
+      "question": "著作権のうち財産権であるもの。翻訳・編曲など、著作物を二次的著作物に作り替える権利。",
+      "answer": "翻訳権・翻案権",
+      "explanation": ""
+    },
+    {
+      "id": "mr797bmpwszy",
+      "question": "著作権のうち著作者人格権であるもの。著作物を公表するかしないか、公表するとすればどのように公表するかを決める権利。",
+      "answer": "公表権",
+      "explanation": ""
+    },
+    {
+      "id": "mr79b4sdhje3",
+      "question": "著作権のうち著作者人格権であるもの。著作者の氏名を表示するかしないか、表示する場合に本名を表示するかペンネームを表示するかなどを決める権利。",
+      "answer": "氏名表示権",
+      "explanation": ""
+    },
+    {
+      "id": "mr79cq3lnqiz",
+      "question": "著作権のうち著作者人格権であるもの。著作物の改変、変更、切除などを認めない権利。",
+      "answer": "同一性保持権",
+      "explanation": ""
+    },
+    {
+      "id": "mr79didsrcmj",
+      "question": "公表された他人の著作物の一部を、自分の著作物に用いること",
+      "answer": "引用",
+      "explanation": ""
+    },
+    {
+      "id": "mr79f4pxct60",
+      "question": "出典などの表示を行わずに、他人の著作物をあたかも自分の著作物のように利用すること。２つ。",
+      "answer": "剽窃、盗用",
+      "explanation": ""
+    },
+    {
+      "id": "mr79jn3yh5at",
+      "question": "著作者が自らの著作物の再利用を許可する意思表示をするための契約。",
+      "answer": "オープンライセンス",
+      "explanation": ""
+    },
+    {
+      "id": "mr79mrl8ybe3",
+      "question": "不正アクセスやコンピューターウイルスによるデータの破壊や改ざん、突発的な事故などから、コンピューターを守り、安全で円滑な活用を維持すること。",
+      "answer": "情報セキュリティ",
+      "explanation": ""
+    },
+    {
+      "id": "mr79nqwv9rsu",
+      "question": "情報セキュリティの性質の一つ。情報が破壊されていたり、改ざんされていたりしないこと。",
+      "answer": "完全性",
+      "explanation": ""
+    },
+    {
+      "id": "mr79oj8s3e6u",
+      "question": "情報セキュリティの性質の一つ。情報を使いたいときいつでも使えること。",
+      "answer": "可用性",
+      "explanation": ""
+    },
+    {
+      "id": "mr79p97nhzee",
+      "question": "情報セキュリティの性質の一つ。許可された人だけが情報にアクセスできること。",
+      "answer": "機密性",
+      "explanation": ""
+    },
+    {
+      "id": "mr79qybozj8p",
+      "question": "企業などの組織では、情報セキュリティの方針や基準、具体的な手順をまとめ、組織全体で統一して実施する必要。",
+      "answer": "情報セキュリティポリシー",
+      "explanation": ""
+    },
+    {
+      "id": "mr79rq21ha55",
+      "question": "ネットワークを通じた破壊的な活動。社会問題となっている。",
+      "answer": "サイバー攻撃",
+      "explanation": ""
+    },
+    {
+      "id": "mr79tfbjyz3i",
+      "question": "特定のサーバに大量の接続要求を送りつけて、故意にアクセス集中を起こし、サーバをダウンさせたり、正当な接続を妨害したりするサイバー攻撃。",
+      "answer": "DoS攻撃",
+      "explanation": ""
+    },
+    {
+      "id": "mr79u8a0xx38",
+      "question": "ネットワークやコンピュータを悪用した犯罪",
+      "answer": "サイバー犯罪",
+      "explanation": ""
+    },
+    {
+      "id": "mr79vshezd7q",
+      "question": "サイバー攻撃の別の言い方。",
+      "answer": "サイバーテロ",
+      "explanation": ""
+    },
+    {
+      "id": "mr79xxd9lmxh",
+      "question": "オンラインゲームで多数の人が同時にアクセスしたり、年明けと同時に多数の人が「おめでとう」のメッセージを送りあったりすると、サーバや携帯電話がつながらなくなる状態。",
+      "answer": "アクセス集中",
+      "explanation": ""
+    },
+    {
+      "id": "mr79zhy55mmn",
+      "question": "システムにアクセスすることが許可された正規のユーザかどうかを判定すること。",
+      "answer": "ユーザ認証",
+      "explanation": ""
+    },
+    {
+      "id": "mr79zv53e7bq",
+      "question": "利用者を識別する名前",
+      "answer": "ユーザID",
+      "explanation": ""
+    },
+    {
+      "id": "mr7a0p0b8f37",
+      "question": "ユーザIDの利用者が本人であることを確認するための文字列。",
+      "answer": "パスワード",
+      "explanation": ""
+    },
+    {
+      "id": "mr7a2s26lz7m",
+      "question": "ユーザIDとパスワードを合わせて○○という。",
+      "answer": "アカウント",
+      "explanation": ""
+    },
+    {
+      "id": "mr7a3g2slb4v",
+      "question": "アプリなどに表示する１回しか使えないパスワードを用いる認証方法。",
+      "answer": "ワンタイムパスワード",
+      "explanation": ""
+    },
+    {
+      "id": "mr7a52vjfv2z",
+      "question": "画面上に表示された画像を読み取って何かしらの入力をさせる認証方法。悪意あるプログラムによる自動的な認証を防ぐ。",
+      "answer": "画像認証",
+      "explanation": ""
+    },
+    {
+      "id": "mr7a64ea9ddn",
+      "question": "二段階で行う認証方法。",
+      "answer": "二段階認証",
+      "explanation": ""
+    },
+    {
+      "id": "mr7a7882wxgh",
+      "question": "顔や指紋、声などの身体・動作の特徴を用いて行う認証方法。",
+      "answer": "バイオメトリクス認証",
+      "explanation": "生体認証ともいう。"
+    },
+    {
+      "id": "mr7aa4tu5nhn",
+      "question": "ユーザ認証によって特定した利用者の、コンピュータシステムやデータに対してできる操作を制限すること。",
+      "answer": "アクセス制御",
+      "explanation": ""
+    },
+    {
+      "id": "mr7ab3vbssva",
+      "question": "ユーザにデータを利用する権限",
+      "answer": "アクセス権",
+      "explanation": ""
+    },
+    {
+      "id": "mr7abp1jinlo",
+      "question": "ユーザになりすまして不正にシステムを利用する行為",
+      "answer": "不正アクセス",
+      "explanation": ""
+    },
+    {
+      "id": "mr7ac6v7oqzg",
+      "question": "不正アクセスを禁止する法律",
+      "answer": "不正アクセス禁止法",
+      "explanation": ""
+    },
+    {
+      "id": "mr7ad5c79u1w",
+      "question": "外部からの不正アクセスを防ぐために、ネットワークの出入り口に設けられる仕組み。",
+      "answer": "ファイヤーウォール",
+      "explanation": ""
+    },
+    {
+      "id": "mr7aedma5hwv",
+      "question": "ファイヤーウォールのうち個人のパソコンを保護するもの。",
+      "answer": "パーソナルファイヤーウォール",
+      "explanation": ""
+    },
+    {
+      "id": "mr7afxd9wpp7",
+      "question": "内容に問題のあるウェブページなどへのアクセスを制御する機能。",
+      "answer": "フィルタリング",
+      "explanation": ""
+    },
+    {
+      "id": "mr7ah7w3yfks",
+      "question": "フィルタリングのうち、あらかじめアクセスできないウェブページやカテゴリを指定する方式。",
+      "answer": "ブラックリスト方式",
+      "explanation": ""
+    },
+    {
+      "id": "mr7aikgwrjqh",
+      "question": "フィルタリングのうち、指定したウェブページにしかアクセスできない方式。",
+      "answer": "ホワイトリスト方式",
+      "explanation": ""
+    },
+    {
+      "id": "mr7alck44rip",
+      "question": "不正にコンピュータに侵入し、データを盗み出したり、破壊・改ざん・消去したりする行為",
+      "answer": "クラッキング",
+      "explanation": ""
+    },
+    {
+      "id": "mr7alva824qw",
+      "question": "クラッキングを行う人",
+      "answer": "クラッカー",
+      "explanation": ""
+    },
+    {
+      "id": "mr7anad0264y",
+      "question": "クラッカーと同じ意味で使われることもある言葉。しかし、本来の意味は「コンピュータについて高度な技術をもつ人」のこと。",
+      "answer": "ハッカー",
+      "explanation": ""
+    },
+    {
+      "id": "mr7ap1aph965",
+      "question": "データにパスワードをかけたり、システムを利用不可にしたりするなどの制限をかけ、制御を解除するための身代金を要求するソフトウェア。",
+      "answer": "ランサムウェア",
+      "explanation": "身代金＝ランサム"
+    },
+    {
+      "id": "mr7aq5d0iptg",
+      "question": "使用者が気が付かないうちに、個人情報などを収集し、第三者に送信するソフトウェア。",
+      "answer": "スパイウェア",
+      "explanation": ""
+    },
+    {
+      "id": "mr7as6qafxbm",
+      "question": "キーボードからの入力を監視して記録するソフトウェア。スパイウェアとして悪用されることがある。",
+      "answer": "キーロガー",
+      "explanation": ""
+    },
+    {
+      "id": "mr7av9q3e3u9",
+      "question": "ウェブサイトを利用したときに、利用者が入力した情報をパソコンに保存させておき、次にそのウェブサイトを訪れた際に、それまで入力された情報を読み出す仕組み。",
+      "answer": "クッキー",
+      "explanation": ""
+    },
+    {
+      "id": "mr7awxnj3dp1",
+      "question": "悪意あるソフトウェアの総称。",
+      "answer": "マルウェア",
+      "explanation": ""
+    },
+    {
+      "id": "mr7axpeihg7p",
+      "question": "マルウェアのうち、他のコンピュータに感染し被害を及ぼすように作られた不正なプログラム。",
+      "answer": "コンピュータウイルス",
+      "explanation": ""
+    },
+    {
+      "id": "mr7az1rskea5",
+      "question": "ソフトウェアのセキュリティ上の弱点のこと。２つ",
+      "answer": "ぜい弱性、セキュリティホール",
+      "explanation": ""
+    },
+    {
+      "id": "mr7b035jdwp1",
+      "question": "ぜい弱性を修正する最新のプログラムのこと。",
+      "answer": "セキュリティパッチ",
+      "explanation": ""
+    },
+    {
+      "id": "mr7b1iyyyj48",
+      "question": "ウイルスの感染予防とウイルス駆除のためのプログラム。",
+      "answer": "ウイルス対策ソフトウェア。",
+      "explanation": "アンチウイルスソフトウェア、ワクチンプログラムとも呼ばれる。"
+    },
+    {
+      "id": "mr7b2kmjrqwi",
+      "question": "データを複製して別の場所に保存すること",
+      "answer": "バックアップ",
+      "explanation": ""
+    },
+    {
+      "id": "mr7b3tmktxnz",
+      "question": "入会していないサイトの入会金や会費、身に覚えのない架空の利用料を請求する詐欺の手口。",
+      "answer": "架空請求",
+      "explanation": ""
+    },
+    {
+      "id": "mr7b6n6r4lwl",
+      "question": "電話や手紙で親族や公共機関の職員を装い、現金を振り込ませたり、受け取り役に手渡しさせたりする手口の詐欺。",
+      "answer": "特殊詐欺",
+      "explanation": ""
+    },
+    {
+      "id": "mr7b8zy4wis7",
+      "question": "架空請求の一種。メールやウェブページをのリンクをクリックしたとたんに有料のウェブサイトへの入会が完了したとして、料金を請求する詐欺。",
+      "answer": "ワンクリック詐欺",
+      "explanation": ""
+    },
+    {
+      "id": "mr7b9w8ymh0j",
+      "question": "信頼できる第三者が取引を仲介するサービス。",
+      "answer": "エスクローサービス",
+      "explanation": ""
+    },
+    {
+      "id": "mr7bbz3h28a3",
+      "question": "預金を引き出したり、個人情報を売買したりするために、銀行や有名なサービスを装って情報を不正に入手する詐欺。",
+      "answer": "フィッシング詐欺",
+      "explanation": "phishing"
+    },
+    {
+      "id": "mr7bdqg872s8",
+      "question": "コンピュータの技術を用いず、メモを盗み見るなどの方法でパスワードなどの重要な情報を手に入れる行為。",
+      "answer": "ソーシャルエンジニアリング",
+      "explanation": ""
+    },
+    {
+      "id": "mr7bewofpfcq",
+      "question": "クレジットカードやキャッシュカードの磁気情報を機械で読み取り、カードを複製する不正。",
+      "answer": "スキミング",
+      "explanation": "skimming"
+    },
+    {
+      "id": "mr7bfw3jjkao",
+      "question": "本人や知人になりすまして電話するなどして、情報を入手する。",
+      "answer": "なりすまし",
+      "explanation": ""
+    },
+    {
+      "id": "mr7bglw7ln35",
+      "question": "関係者を装って建物などに侵入する。",
+      "answer": "ピギーバック",
+      "explanation": ""
+    },
+    {
+      "id": "mr7bhdljf85f",
+      "question": "操作している人の肩越しにパソコンやスマートフォンを覗き見る。",
+      "answer": "ショルダーハッキング",
+      "explanation": ""
+    },
+    {
+      "id": "mr7bicx09ign",
+      "question": "ゴミ箱をあさって、捨てられた機密情報を探し出す。",
+      "answer": "トラッシング",
+      "explanation": ""
+    },
+    {
+      "id": "mr7bjdmoxi02",
+      "question": "偽の警告画面を表示して恐怖心をあおり、金銭などを不正に入手する。",
+      "answer": "スケアウェア",
+      "explanation": ""
     }
   ],
   "subject": "情報基礎",
