@@ -1,0 +1,70 @@
+{
+  "name": "化学1a イオン式",
+  "cards": [
+    {
+      "id": "mr98v6msq1xn",
+      "question": "硫化物イオン",
+      "answer": "S²⁻",
+      "explanation": ""
+    },
+    {
+      "id": "mr98vuw2e8oh",
+      "question": "硝酸イオン",
+      "answer": "NO₃⁻",
+      "explanation": ""
+    },
+    {
+      "id": "mr98wc9nhf8j",
+      "question": "アンモニウムイオン",
+      "answer": "NH₄⁺",
+      "explanation": ""
+    },
+    {
+      "id": "mr98x12rfmza",
+      "question": "炭酸水素イオン",
+      "answer": "HCO₃⁻",
+      "explanation": ""
+    },
+    {
+      "id": "mr990r158kgt",
+      "question": "酢酸イオン",
+      "answer": "CH₃COO⁻",
+      "explanation": ""
+    },
+    {
+      "id": "mr9915xo0ej3",
+      "question": "リン酸イオン",
+      "answer": "PO₄³⁻",
+      "explanation": ""
+    },
+    {
+      "id": "mr991jmqp6gl",
+      "question": "硫酸イオン",
+      "answer": "SO₄²⁻",
+      "explanation": ""
+    },
+    {
+      "id": "mr991ytw63g4",
+      "question": "炭酸イオン",
+      "answer": "CO₃²⁻",
+      "explanation": ""
+    },
+    {
+      "id": "mr992c18slul",
+      "question": "水酸化物イオン",
+      "answer": "OH⁻",
+      "explanation": ""
+    },
+    {
+      "id": "mr9947eqbksa",
+      "question": "シュウ酸イオン",
+      "answer": "C₂O₄²⁻",
+      "explanation": ""
+    }
+  ],
+  "subject": "化学1a",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  }
+}
