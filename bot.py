@@ -1352,23 +1352,4 @@ print(f"[INFO] Starting bot.run()...")
 #  ★ 429対策：プロセスを終了させず、同じプロセス内で
 #     待ってから再ログインするループに変更
 # ================================
-while True:
-    try:
-        bot.run(TOKEN)
-        # bot.run() が例外なく正常終了した場合（通常は起きない想定）はループを抜ける
-        print("[INFO] bot.run() returned normally. Exiting loop.")
-        break
-    except discord.errors.HTTPException as e:
-        if e.status == 429:
-            retry_after = e.response.headers.get('Retry-After', '120')
-            # 待ち時間に少し余裕を持たせる（+10秒）
-            wait = max(int(float(retry_after)), 60) + 10
-            print(f"[WARNING] Discord rate limited (429). Waiting {wait}s before retrying (process will NOT exit)...")
-            time.sleep(wait)
-            print("[INFO] Retrying bot.run()...")
-            continue
-        print(f"[ERROR] HTTPException: {e.status} {e.text}")
-        raise
-    except Exception as e:
-        print(f"[ERROR] bot.run failed: {type(e).__name__}: {e}")
-        raise
+bot.run(TOKEN)
