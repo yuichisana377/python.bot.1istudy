@@ -1,0 +1,208 @@
+{
+  "name": "公共a 小テスト⑤",
+  "cards": [
+    {
+      "id": "mralrgvofg8g",
+      "question": "総人口に対して65歳以上の高齢者人口の占める割合（高齢化率）が高くなること。",
+      "answer": "高齢化",
+      "explanation": ""
+    },
+    {
+      "id": "mralsgbp9zm4",
+      "question": "高齢化率が７％以上になった社会",
+      "answer": "高齢化社会",
+      "explanation": "aging society"
+    },
+    {
+      "id": "mralt7pxq0vo",
+      "question": "高齢化率が14％以上になった社会。",
+      "answer": "高齢社会",
+      "explanation": "aged society"
+    },
+    {
+      "id": "mralu9nlqfps",
+      "question": "高齢化率が21％以上になった社会。",
+      "answer": "超高齢社会",
+      "explanation": "super aged(aging) society"
+    },
+    {
+      "id": "mraluvspazyj",
+      "question": "出生時に、あと何年生きられるかを算出したもの",
+      "answer": "平均寿命",
+      "explanation": ""
+    },
+    {
+      "id": "mralv8pefhsl",
+      "question": "平均寿命の延び",
+      "answer": "長寿化",
+      "explanation": ""
+    },
+    {
+      "id": "mralvpa9rh0d",
+      "question": "子どもの出生率が低下していること。",
+      "answer": "少子化",
+      "explanation": ""
+    },
+    {
+      "id": "mralwm1sua6w",
+      "question": "一人の女性が、一生の間に平均何人の子どもを産むかという推計率",
+      "answer": "合計特殊出生率",
+      "explanation": ""
+    },
+    {
+      "id": "mralx1zc34ok",
+      "question": "年をとってから結婚する傾向",
+      "answer": "晩婚化",
+      "explanation": ""
+    },
+    {
+      "id": "mralxhf4ow49",
+      "question": "未婚率の上昇",
+      "answer": "非婚化",
+      "explanation": ""
+    },
+    {
+      "id": "mraly8o8w5au",
+      "question": "夫婦と未婚の子どもから構成されている家族",
+      "answer": "核家族",
+      "explanation": ""
+    },
+    {
+      "id": "mralywuzu7ak",
+      "question": "高齢者を介助・保護すること",
+      "answer": "介護",
+      "explanation": ""
+    },
+    {
+      "id": "mralzw0pujk7",
+      "question": "労働力の中核をなす15～64歳の人口",
+      "answer": "生産年齢人口",
+      "explanation": ""
+    },
+    {
+      "id": "mram0ji9736w",
+      "question": "老齢・障害・死亡などに対し、お金を給付する制度",
+      "answer": "年金",
+      "explanation": ""
+    },
+    {
+      "id": "mram1qmyt710",
+      "question": "活力ある高齢社会を目指す高齢者保健福祉施策",
+      "answer": "ゴールドプラン２１",
+      "explanation": ""
+    },
+    {
+      "id": "mram2m2xhkb9",
+      "question": "身体的な理由などで、居宅での生活が困難になった高齢者が入る施設",
+      "answer": "老人ホーム",
+      "explanation": ""
+    },
+    {
+      "id": "mram3r9ukiv0",
+      "question": "寝たきり高齢者らを、居宅において介護すること",
+      "answer": "在宅介護",
+      "explanation": "ホームヘルパー・デイサービス・ショートステイなど"
+    },
+    {
+      "id": "mram5zy0v1fa",
+      "question": "満1歳未満の子どもがいる労働者は子どもが満1歳になるまで、介護を必要とする家族がいる労働者は3カ月休業できることを定めた法律。",
+      "answer": "育児・介護休業法",
+      "explanation": "1995年"
+    },
+    {
+      "id": "mram6ujk6ozn",
+      "question": "保険料を徴収して、高齢者に介護サービスを提供する社会保険制度。",
+      "answer": "介護保険制度",
+      "explanation": "2000年"
+    },
+    {
+      "id": "mraniejt17u5",
+      "question": "男性にも育児休業を保証",
+      "answer": "育児・介護休業法",
+      "explanation": ""
+    },
+    {
+      "id": "mranjs1686ww",
+      "question": "文化的・社会的に作られる性・性別・性差；生物学的な性（sex）とは区別される。",
+      "answer": "ジェンダー",
+      "explanation": "gender"
+    },
+    {
+      "id": "mranklc2jm1a",
+      "question": "「男は仕事、女は家庭」のような性差による役割分担の意識",
+      "answer": "性別役割分担",
+      "explanation": ""
+    },
+    {
+      "id": "mranlipore6o",
+      "question": "男女平等を主張して、男性中心の社会構造変革しようとする考え方・運動",
+      "answer": "フェミニズム",
+      "explanation": ""
+    },
+    {
+      "id": "mrann0iinppp",
+      "question": "各国の男女間格差を示す指標で、経済・教育・健康・政治の各分野の値を総合して算出したもの",
+      "answer": "ジェンダーギャップ指数",
+      "explanation": "１は完全平等・０は完全不平等"
+    },
+    {
+      "id": "mrannvgdfpb4",
+      "question": "性別による差別にとらわれずに、性別役割分担の見直しをはかること",
+      "answer": "ジェンダーフリー",
+      "explanation": ""
+    },
+    {
+      "id": "mranoipn47rj",
+      "question": "特別な措置を設けることによって、男女格差を解消する取り組み",
+      "answer": "ポジティブ・アクション",
+      "explanation": ""
+    },
+    {
+      "id": "mranqz21uqo4",
+      "question": "企業の職場や教育機関で、昇進などの見返りに性的な要求をしたり、身体的接触、卑猥な言葉により相手に不快な思いをさせたりすること。",
+      "answer": "セクシャル・ハラスメント",
+      "explanation": ""
+    },
+    {
+      "id": "mranu2tpwobl",
+      "question": "善い生活を意味し、多くの人が健康で幸せに暮らすこと、あるいはそのようにすること",
+      "answer": "福祉",
+      "explanation": ""
+    },
+    {
+      "id": "mranvsw8ra7z",
+      "question": "高齢者や障碍者といった社会的弱者がハンディを持ったまま共に暮らせる社会、つまり町や社会において特別視されることなく、健常者とともに生活する社会こそが普通であるという考え方。",
+      "answer": "ノーマライゼーション",
+      "explanation": ""
+    },
+    {
+      "id": "mranw4lao9ib",
+      "question": "福祉社会＝？",
+      "answer": "共生社会",
+      "explanation": ""
+    },
+    {
+      "id": "mranx8rrk2hi",
+      "question": "道路の段差や階段、、幅の狭い出入り口など生活において障壁となるものをとり除き、誰もが不自由なく日常生活を送れるようにすること。",
+      "answer": "バリアフリー",
+      "explanation": ""
+    },
+    {
+      "id": "mranyo8y0dh5",
+      "question": "普通の人も使う製品の設計自体の中に最初から高齢者や障碍者への配慮も組み込んでおくことで、高齢者や障碍者との分断を避けようとする考え方。",
+      "answer": "ユニバーサルデザイン",
+      "explanation": ""
+    },
+    {
+      "id": "mranyu89d8ey",
+      "question": "共に生きること",
+      "answer": "共生",
+      "explanation": ""
+    }
+  ],
+  "subject": "公共a",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  }
+}
