@@ -1172,6 +1172,9 @@ def complete_task():
     points     = int(data.get("points"))
     nickname   = data.get("nickname")  # ★ ニックネームを受け取る
 
+    if not student_id or not task_id:
+        return jsonify({"ok": False, "error": "missing fields"})
+
     # --- 達成済み課題保存（達成日・ポイント・ニックネーム付き） ---
     done = load_completed_tasks(guild_id)
     if student_id not in done:
@@ -1195,6 +1198,44 @@ def complete_task():
     # --- ポイント加算 ---
     pts = load_points(guild_id)
     pts[student_id] = pts.get(student_id, 0) + points
+    save_points(guild_id, pts)
+
+    return jsonify({"ok": True, "total": pts[student_id]})
+
+
+@app.route("/uncomplete_task", methods=["POST"])
+def uncomplete_task():
+    """
+    /complete_task の逆操作。
+    指定 student_id の達成済みリストから task_id を取り除き、
+    そのタスクに付与されていたポイント分を累計ポイントから減算する。
+    （ポイントが0未満にならないようガードする）
+    """
+    data       = request.json
+    guild_id   = int(data.get("guild_id"))
+    student_id = data.get("student_id")
+    task_id    = data.get("task_id")
+
+    if not student_id or not task_id:
+        return jsonify({"ok": False, "error": "missing fields"})
+
+    done = load_completed_tasks(guild_id)
+    if student_id not in done:
+        return jsonify({"ok": False, "error": "not completed"})
+
+    normalized = [_normalize_task_entry(e) for e in done[student_id]]
+    target = next((e for e in normalized if e["id"] == task_id), None)
+    if target is None:
+        return jsonify({"ok": False, "error": "task not found in completed list"})
+
+    normalized = [e for e in normalized if e["id"] != task_id]
+    done[student_id] = normalized
+    save_completed_tasks(guild_id, done)
+
+    # --- ポイント減算（0未満にはしない） ---
+    removed_points = target.get("points") or 0
+    pts = load_points(guild_id)
+    pts[student_id] = max(0, pts.get(student_id, 0) - removed_points)
     save_points(guild_id, pts)
 
     return jsonify({"ok": True, "total": pts[student_id]})
