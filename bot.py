@@ -14,11 +14,6 @@ import requests
 import base64
 import asyncio
 import time
-import logging
-logging.basicConfig(level=logging.INFO)
-discord_logger = logging.getLogger("discord")
-discord_logger.setLevel(logging.DEBUG)
-
 
 # ================================
 #  設定
@@ -50,22 +45,6 @@ def handle_preflight():
         res.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         res.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         return res, 200
-
-@app.route("/debug_discord")
-def debug_discord():
-    import time
-    result = {}
-    try:
-        start = time.time()
-        r = requests.get("https://discord.com/api/v10/gateway", timeout=8)
-        result["ok"] = True
-        result["status_code"] = r.status_code
-        result["elapsed_sec"] = round(time.time() - start, 2)
-        result["body"] = r.text[:200]
-    except Exception as e:
-        result["ok"] = False
-        result["error"] = f"{type(e).__name__}: {e}"
-    return jsonify(result)
 
 @app.route("/")
 def home():
