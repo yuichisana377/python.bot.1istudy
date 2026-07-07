@@ -14,6 +14,11 @@ import requests
 import base64
 import asyncio
 import time
+import logging
+logging.basicConfig(level=logging.INFO)
+discord_logger = logging.getLogger("discord")
+discord_logger.setLevel(logging.DEBUG)
+
 
 # ================================
 #  設定
