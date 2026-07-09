@@ -707,6 +707,7 @@ async def help_command(interaction: discord.Interaction):
         "**/cleanup** — 過去の予定を削除する\n"
         "**/setchannel** — 通知チャンネルを設定する（通生／寮生を選択可）\n"
         "**/setup_roles** — 通生/寮生 振り分けパネルを投稿する\n"
+        "**webページ** - https://1istudyweb.pages.dev/\n"
     )
     await interaction.response.send_message(msg, ephemeral=True)
 
