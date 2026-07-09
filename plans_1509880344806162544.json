@@ -229,5 +229,11 @@
     "subject": "国語1甲a",
     "content": "【宿題】プリント",
     "points": 5
+  },
+  {
+    "date": "2026-07-16",
+    "subject": "情報工学ゼミ1",
+    "content": "【提出】レポート",
+    "points": 5
   }
 ]
