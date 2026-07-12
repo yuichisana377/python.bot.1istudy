@@ -106,12 +106,12 @@
     {
       "id": "mrhdecc1ixpk",
       "question": "現金が不要な支払方法。",
-      "answer": "キャッシュレス決済",
+      "answer": "キャッシュレス経済",
       "explanation": ""
     },
     {
       "id": "mrhdeyvocbj0",
-      "question": "キャッシュレス決済の例（２つ）。",
+      "question": "キャッシュレス経済の例（２つ）。",
       "answer": "電子マネー\n二次元コード決済",
       "explanation": ""
     },
@@ -177,7 +177,7 @@
     },
     {
       "id": "mrhfg2yd3fwd",
-      "question": "ブログやSNSなどで議論が過熱しすぎたり、投降した内容に批判のコメントが殺到したりする状況。",
+      "question": "ブログやSNSなどで議論が過熱しすぎたり、投稿した内容に批判のコメントが殺到したりする状況。",
       "answer": "炎上",
       "explanation": ""
     },
@@ -538,7 +538,7 @@
   ],
   "subject": "情報基礎",
   "published_by": {
-    "id": "32628",
+    "id": null,
     "nickname": "小鷹"
   }
 }
