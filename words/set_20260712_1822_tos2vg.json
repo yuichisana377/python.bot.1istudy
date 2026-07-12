@@ -106,7 +106,7 @@
     {
       "id": "mrhdecc1ixpk",
       "question": "現金が不要な支払方法。",
-      "answer": "キャッシュレス経済",
+      "answer": "キャッシュレス決済",
       "explanation": ""
     },
     {
@@ -538,7 +538,7 @@
   ],
   "subject": "情報基礎",
   "published_by": {
-    "id": "32615",
+    "id": "32628",
     "nickname": "小鷹"
   }
 }
