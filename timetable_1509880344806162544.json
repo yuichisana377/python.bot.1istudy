@@ -6,17 +6,6 @@
     "reason": "祝日",
     "note": "海の日"
   },
-  "change:2026-07-23:1": {
-    "key": "change:2026-07-23:1",
-    "type": "change",
-    "date": "2026-07-23",
-    "period": 1,
-    "subject": "コンピュータリテラシ",
-    "items": [
-      "教科書"
-    ],
-    "note": ""
-  },
   "change:2026-07-23:3": {
     "key": "change:2026-07-23:3",
     "type": "change",
