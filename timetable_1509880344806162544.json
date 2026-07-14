@@ -380,5 +380,12 @@
     "date": "2026-09-21",
     "reason": "祝日",
     "note": "敬老の日"
+  },
+  "holiday:2026-09-22": {
+    "key": "holiday:2026-09-22",
+    "type": "holiday",
+    "date": "2026-09-22",
+    "reason": "祝日",
+    "note": ""
   }
 }
