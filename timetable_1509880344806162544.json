@@ -457,5 +457,14 @@
     "subject": "地理a",
     "items": [],
     "note": "定期テスト"
+  },
+  "change:2026-07-30:2": {
+    "key": "change:2026-07-30:2",
+    "type": "change",
+    "date": "2026-07-30",
+    "period": 2,
+    "subject": "情報技術概論",
+    "items": [],
+    "note": "定期テスト"
   }
 }
