@@ -403,5 +403,14 @@
     "subject": "化学1a",
     "items": [],
     "note": "定期テスト"
+  },
+  "change:2026-07-27:2": {
+    "key": "change:2026-07-27:2",
+    "type": "change",
+    "date": "2026-07-27",
+    "period": 2,
+    "subject": "公共a",
+    "items": [],
+    "note": "定期テスト"
   }
 }
