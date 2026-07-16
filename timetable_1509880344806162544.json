@@ -412,5 +412,14 @@
     "subject": "公共a",
     "items": [],
     "note": "定期テスト"
+  },
+  "change:2026-07-28:1": {
+    "key": "change:2026-07-28:1",
+    "type": "change",
+    "date": "2026-07-28",
+    "period": 1,
+    "subject": "国語1乙a",
+    "items": [],
+    "note": "定期テスト"
   }
 }
