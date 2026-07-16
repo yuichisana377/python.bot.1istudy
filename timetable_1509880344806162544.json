@@ -484,5 +484,14 @@
     "subject": "基礎解析1a",
     "items": [],
     "note": "定期テスト"
+  },
+  "change:2026-08-03:1": {
+    "key": "change:2026-08-03:1",
+    "type": "change",
+    "date": "2026-08-03",
+    "period": 1,
+    "subject": "英語コミュニケーション1a",
+    "items": [],
+    "note": "定期テスト"
   }
 }
