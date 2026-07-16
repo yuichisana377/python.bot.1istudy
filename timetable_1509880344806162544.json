@@ -448,5 +448,14 @@
     "subject": "物理1a",
     "items": [],
     "note": "定期テスト"
+  },
+  "change:2026-07-30:1": {
+    "key": "change:2026-07-30:1",
+    "type": "change",
+    "date": "2026-07-30",
+    "period": 1,
+    "subject": "地理a",
+    "items": [],
+    "note": "定期テスト"
   }
 }
