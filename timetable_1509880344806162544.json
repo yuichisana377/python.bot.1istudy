@@ -421,5 +421,14 @@
     "subject": "国語1乙a",
     "items": [],
     "note": "定期テスト"
+  },
+  "change:2026-07-28:2": {
+    "key": "change:2026-07-28:2",
+    "type": "change",
+    "date": "2026-07-28",
+    "period": 2,
+    "subject": "線形数学1a",
+    "items": [],
+    "note": "定期テスト"
   }
 }
