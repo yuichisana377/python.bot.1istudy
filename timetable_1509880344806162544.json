@@ -430,5 +430,14 @@
     "subject": "線形数学1a",
     "items": [],
     "note": "定期テスト"
+  },
+  "change:2026-07-29:1": {
+    "key": "change:2026-07-29:1",
+    "type": "change",
+    "date": "2026-07-29",
+    "period": 1,
+    "subject": "英語表現基礎a",
+    "items": [],
+    "note": "定期テスト"
   }
 }
