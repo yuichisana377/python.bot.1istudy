@@ -475,5 +475,14 @@
     "subject": "国語1甲a",
     "items": [],
     "note": "定期テスト"
+  },
+  "change:2026-07-31:2": {
+    "key": "change:2026-07-31:2",
+    "type": "change",
+    "date": "2026-07-31",
+    "period": 2,
+    "subject": "基礎解析1a",
+    "items": [],
+    "note": "定期テスト"
   }
 }
