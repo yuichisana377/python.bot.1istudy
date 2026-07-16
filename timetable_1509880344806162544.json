@@ -439,5 +439,14 @@
     "subject": "英語表現基礎a",
     "items": [],
     "note": "定期テスト"
+  },
+  "change:2026-07-29:2": {
+    "key": "change:2026-07-29:2",
+    "type": "change",
+    "date": "2026-07-29",
+    "period": 2,
+    "subject": "物理1a",
+    "items": [],
+    "note": "定期テスト"
   }
 }
