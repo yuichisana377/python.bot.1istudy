@@ -297,7 +297,7 @@
     },
     {
       "id": "mrrin1x2tjmx",
-      "question": "インターネットプロトコルの別名",
+      "question": "インターネットプロトコルスイートの別名",
       "answer": "TCP/IPプロトコル",
       "explanation": ""
     },
@@ -370,7 +370,7 @@
   ],
   "subject": "情報基礎",
   "published_by": {
-    "id": "32615",
+    "id": null,
     "nickname": "小鷹"
   }
 }
