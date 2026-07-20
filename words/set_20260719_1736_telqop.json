@@ -219,7 +219,7 @@
     },
     {
       "id": "mrriahlvgquw",
-      "question": "接続性が保証された機器",
+      "question": "無線LANの接続性が保証された機器",
       "answer": "Wi-Fi",
       "explanation": ""
     },
@@ -370,7 +370,7 @@
   ],
   "subject": "情報基礎",
   "published_by": {
-    "id": null,
+    "id": "32618",
     "nickname": "小鷹"
   }
 }
