@@ -1,0 +1,172 @@
+{
+  "name": "地理a 前期定期テスト",
+  "cards": [
+    {
+      "id": "mrnh6zlgvmgq",
+      "question": "現代世界では【　　】を単位として構成される。",
+      "answer": "国家",
+      "explanation": ""
+    },
+    {
+      "id": "mrni5mubmm5u",
+      "question": "国家とは、一定の【　①　】及び、そこに住む【　②　】と、それらを【　③　】によって統治する組織をもった【　④　】のこと。",
+      "answer": "① 領土　② 人々　③ 権力　④ 社会",
+      "explanation": ""
+    },
+    {
+      "id": "mrni67kt8opz",
+      "question": "国家を成立させる3要素",
+      "answer": "主権・領域・国民",
+      "explanation": ""
+    },
+    {
+      "id": "mrni7usjk9iv",
+      "question": "国内の政治と外交についての意思決定を他国からの干渉を受けずに独立して行う権利。",
+      "answer": "主権",
+      "explanation": ""
+    },
+    {
+      "id": "mrni9yzak5uf",
+      "question": "領海：沿岸（干潮時の海岸線）から【　　】までの範囲",
+      "answer": "１２海里",
+      "explanation": ""
+    },
+    {
+      "id": "mrnic8a9og9w",
+      "question": "沿岸国の主権が及ぶ範囲",
+      "answer": "領海",
+      "explanation": ""
+    },
+    {
+      "id": "mrnjib9xbva9",
+      "question": "Exclusive Economic Zoneを日本語で？",
+      "answer": "排他的経済水域",
+      "explanation": ""
+    },
+    {
+      "id": "mrnjllbhzr2w",
+      "question": "沿岸から200海里までの範囲のうち、領海を除いた部分。",
+      "answer": "排他的経済水域",
+      "explanation": ""
+    },
+    {
+      "id": "mrnjms5j8row",
+      "question": "水深130m程度の比較的平坦な海底。",
+      "answer": "大陸棚",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9atwb4mkz",
+      "question": "領海や排他的水域に属さず、どこの国の船も自由に航行可能。漁業などの経済活動も自由に行える水域。",
+      "answer": "公海",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9b9g0jwam",
+      "question": "国家間の境界線",
+      "answer": "国境",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9f81rgm4r",
+      "question": "河川・湖沼・海洋・山脈などの自然物を利用する国境",
+      "answer": "自然的国境",
+      "explanation": "隔離性が高い"
+    },
+    {
+      "id": "mrt9h7k2lsjr",
+      "question": "経線・緯線や人工的建造物などを利用した国境",
+      "answer": "人為的国境",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9k617suyg",
+      "question": "中国北部に位置する世界最大級の人工的建造物。人為的国境の建造物の例。",
+      "answer": "万里の長城",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9lnnuooxe",
+      "question": "人為的国境のうち、緯線・経線を利用したもの。",
+      "answer": "数理的国境",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9n3spfbud",
+      "question": "日本の最北端",
+      "answer": "択捉島",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9ndmzpert",
+      "question": "日本の最東端",
+      "answer": "南鳥島",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9nplca5mm",
+      "question": "日本の最南端",
+      "answer": "沖ノ鳥島",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9oi5cz7yf",
+      "question": "日本の最西端",
+      "answer": "与那国島",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9q5msmv5g",
+      "question": "北方領土４つ。",
+      "answer": "歯舞群島・色丹島・国後島・択捉島",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9ti6mgsmk",
+      "question": "日本は19世紀初めに北方島の実効支配を確立。樺太は雑居地とし、日本ロシアの人々が暮らした。",
+      "answer": "日露通好条約",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9vjtx3pm5",
+      "question": "明治政府はロシアとの関係や国内情勢に鑑み、樺太の放棄をロシアに提案して千島列島をえることで合意が成立。",
+      "answer": "樺太・千島交換条約",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9xedmlw05",
+      "question": "第二次世界大戦の連合国と日本の講和条約。",
+      "answer": "サンフランシスコ平和条約",
+      "explanation": ""
+    },
+    {
+      "id": "mrt9zhi0y1kw",
+      "question": "竹島や尖閣諸島を含む日本の領土が定められた。日本は【　①　】と【　②　】に対するすべての権利を放棄。",
+      "answer": "① 樺太南部　② 千島列島",
+      "explanation": ""
+    },
+    {
+      "id": "mrta0quwthez",
+      "question": "日本が放棄した中に【　　】は含まれていない。ロシアは不法占拠であり、日本は返還を求めている。",
+      "answer": "北方四島",
+      "explanation": ""
+    },
+    {
+      "id": "mrta1l18043z",
+      "question": "島根県隠岐郡隠岐の島町に属する島。",
+      "answer": "竹島",
+      "explanation": "日本と韓国が領有権を主張している。韓国が不法占拠中。"
+    },
+    {
+      "id": "mrta7iqpsxr9",
+      "question": "沖縄県石垣市に属する無人島で、1895年に領土に編入。",
+      "answer": "尖閣諸島",
+      "explanation": "周辺に海底油田が存在する可能性が判明し、1970年代以降、中国や台湾が領有権を主張。"
+    }
+  ],
+  "subject": "地理a",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  }
+}
