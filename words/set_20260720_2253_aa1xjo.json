@@ -162,6 +162,36 @@
       "question": "沖縄県石垣市に属する無人島で、1895年に領土に編入。",
       "answer": "尖閣諸島",
       "explanation": "周辺に海底油田が存在する可能性が判明し、1970年代以降、中国や台湾が領有権を主張。"
+    },
+    {
+      "id": "mrtazh3lupf4",
+      "question": "世襲的な君主が当時する国家",
+      "answer": "君主制",
+      "explanation": ""
+    },
+    {
+      "id": "mrtb0zndxoxn",
+      "question": "君主国の多くは、憲法によって君主の権力が一定の制約を受ける【　　】を採用。",
+      "answer": "立憲君主制",
+      "explanation": ""
+    },
+    {
+      "id": "mrtb23mpjx8v",
+      "question": "国民から選ばれた代表者（大統領など）が統治する国家。",
+      "answer": "共和国",
+      "explanation": ""
+    },
+    {
+      "id": "mrtb7z3l877o",
+      "question": "中央政府が全国民と領域を直接支配する国家",
+      "answer": "単一国家",
+      "explanation": "日本、フランスなど"
+    },
+    {
+      "id": "mrtb8y3928in",
+      "question": "複数の州などが中央政府のもとに結合してできた国家。",
+      "answer": "連邦国家",
+      "explanation": "アメリカ、ブラジル"
     }
   ],
   "subject": "地理a",
