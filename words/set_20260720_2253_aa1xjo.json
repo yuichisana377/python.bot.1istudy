@@ -192,6 +192,102 @@
       "question": "複数の州などが中央政府のもとに結合してできた国家。",
       "answer": "連邦国家",
       "explanation": "アメリカ、ブラジル"
+    },
+    {
+      "id": "mrulrz6oip8t",
+      "question": "人種とは、【　①　】な特徴で区分した人類の集団。【　②　】の色、毛髪の【　③　】や【　④　】、【　⑤　】などを基準とする。",
+      "answer": "① 生物学的　② 皮膚　③ 色　④ 形　⑤ 骨格",
+      "explanation": ""
+    },
+    {
+      "id": "mrum91hhxs06",
+      "question": "日本人、中国人、ネイティブアメリカン、イヌイットなどの人種",
+      "answer": "モンゴロイド（東ユーラシア人）",
+      "explanation": ""
+    },
+    {
+      "id": "mrum9ouj5f4k",
+      "question": "ヨーロッパ、アラブ人、インド人など",
+      "answer": "コーカソイド（西ユーラシア）",
+      "explanation": ""
+    },
+    {
+      "id": "mrumbbd8brcv",
+      "question": "中東阿アフリカの人々など",
+      "answer": "ネグロイド（アフリカ人）",
+      "explanation": ""
+    },
+    {
+      "id": "mrumdk0zft55",
+      "question": "オーストラリア先住民のアボリジニ",
+      "answer": "オーストラリアロイド（サフール人）",
+      "explanation": ""
+    },
+    {
+      "id": "mrumgobt0361",
+      "question": "【　①　】的特色によって分類された人類の集団。【　②　】や【　③　】などを基準とする。",
+      "answer": "① 文化　② 言語　③ 宗教",
+      "explanation": "②と③は順不同"
+    },
+    {
+      "id": "mrumizprrf6p",
+      "question": "英語、ドイツ語、オランダ語など。アメリカ北西部、北アメリカ、オーストラリアに分布",
+      "answer": "ゲルマン語派",
+      "explanation": "インド・ヨーロッパ語族"
+    },
+    {
+      "id": "mrumk6r65daq",
+      "question": "フランス語、スペイン語、イタリア語など。ヨーロッパ南部やラテンアメリカに分布",
+      "answer": "ラテン語派",
+      "explanation": "インド・ヨーロッパ語族"
+    },
+    {
+      "id": "mrun1mzq7304",
+      "question": "ロシア語、ウクライナ語、ポーランド語など。ロシア、アメリカ東部に分布",
+      "answer": "スラブ語派",
+      "explanation": "インド・ヨーロッパ語族"
+    },
+    {
+      "id": "mrunaclppai7",
+      "question": "アラビア語、ヘブライ語など、西アジア～北アフリカに分布する語族",
+      "answer": "アフリカ・アジア語族",
+      "explanation": ""
+    },
+    {
+      "id": "mruo622k5t5z",
+      "question": "フィンランド語、ハンガリー語。ヨーロッパの一部に分布",
+      "answer": "ウラル語族",
+      "explanation": ""
+    },
+    {
+      "id": "mruobi81ej49",
+      "question": "トルコ語、モンゴル語など。トルコ～中央アジア、シベリア～モンゴルに分布している諸語。",
+      "answer": "アルタイ諸語",
+      "explanation": ""
+    },
+    {
+      "id": "mruog0x2ddrb",
+      "question": "中国語、チベット語、タイ語など。中国～インドシナ半島に分布する諸語",
+      "answer": "シナ・チベット諸語",
+      "explanation": ""
+    },
+    {
+      "id": "mruommryb6we",
+      "question": "マレー語、インドネシア語、、フィリピノ語、マダガスカル語、マオリ語など。東南アジア島嶼部、マダガスカル、ポリネシアに分布する語族。",
+      "answer": "オーストロネシア語族",
+      "explanation": ""
+    },
+    {
+      "id": "mruosa9pvhsc",
+      "question": "スワヒリ語など。サハラ砂漠以南の中南アフリカに分布している諸語",
+      "answer": "ニジェール・コルドファン諸語",
+      "explanation": ""
+    },
+    {
+      "id": "mruot2xyy7gm",
+      "question": "言語別人口TOP3",
+      "answer": "中国語・スペイン語・アラビア語",
+      "explanation": ""
     }
   ],
   "subject": "地理a",
