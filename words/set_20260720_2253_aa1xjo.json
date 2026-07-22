@@ -288,11 +288,113 @@
       "question": "言語別人口TOP3",
       "answer": "中国語・スペイン語・アラビア語",
       "explanation": ""
+    },
+    {
+      "id": "mrw2040sehwt",
+      "question": "スペイン語の分布している諸国",
+      "answer": "ラテンアメリカ諸国",
+      "explanation": ""
+    },
+    {
+      "id": "mrw247wd6lum",
+      "question": "スペイン語を話すらラテン系の人々。",
+      "answer": "ヒスパニック",
+      "explanation": ""
+    },
+    {
+      "id": "mrw2842hmg94",
+      "question": "イギリス、イングランド人、スコットランド人、アイルランド人、ウェールズ人、インド系、アフリカ系、カリブ系、アラブ系など",
+      "answer": "英語",
+      "explanation": ""
+    },
+    {
+      "id": "mrw28zs4dbzz",
+      "question": "サウジアラビア、アラビア系、東アフリカ系、インド系、パキスタン系など。",
+      "answer": "アラビア語",
+      "explanation": ""
+    },
+    {
+      "id": "mrw2bo0fvzm3",
+      "question": "イラン、ペルシア人、アゼルバイジャン人、クルド人、ロル族",
+      "answer": "ペルシア語",
+      "explanation": ""
+    },
+    {
+      "id": "mrw2egxju2ax",
+      "question": "スイスの公用語４つ。",
+      "answer": "ドイツ語、フランス語、イタリア語、ロマンシュ語",
+      "explanation": ""
+    },
+    {
+      "id": "mrw2f18u2f8f",
+      "question": "ベルギーの公用語３つ。",
+      "answer": "フランス語、オランダ語、ドイツ語",
+      "explanation": ""
+    },
+    {
+      "id": "mrw2fo0xx1n8",
+      "question": "カナダの公用語２つ。",
+      "answer": "英語、フランス語",
+      "explanation": ""
+    },
+    {
+      "id": "mrw2gx2726vq",
+      "question": "シンガポールの公用語４つ。",
+      "answer": "マレー語、中国語、タミル語、英語",
+      "explanation": ""
+    },
+    {
+      "id": "mrw2kce0im4w",
+      "question": "旧宗主国の言語を公用語とする国。ブラジルの公用語。",
+      "answer": "ポルトガル語",
+      "explanation": ""
+    },
+    {
+      "id": "mrw2lecsjtvy",
+      "question": "旧宗主国の言語を公用語とする国。アルゼンチンの公用語。",
+      "answer": "スペイン語",
+      "explanation": ""
+    },
+    {
+      "id": "mrw2q2nn83bs",
+      "question": "旧宗主国の言語を公用語とする国。ガーナ、ナイジェリアの公用語。",
+      "answer": "英語",
+      "explanation": ""
+    },
+    {
+      "id": "mrw2yvgzvdx1",
+      "question": "古代ヨーロッパの先住民。アイルランド、イギリスのスコットランドなど。",
+      "answer": "ケルト系民族",
+      "explanation": ""
+    },
+    {
+      "id": "mrw359b09ga5",
+      "question": "カトリックを信仰している。スペインからフランスにかけてのバスク地方に分布。",
+      "answer": "バスク人",
+      "explanation": ""
+    },
+    {
+      "id": "mrw35uk7pi82",
+      "question": "スペインでは自治が認められているが、【　】が盛んである。",
+      "answer": "分離独立運動",
+      "explanation": ""
+    },
+    {
+      "id": "mrw398kqe1jj",
+      "question": "世界三大宗教",
+      "answer": "キリスト教、イスラーム、仏教",
+      "explanation": ""
+    },
+    {
+      "id": "mrw3po8e7zul",
+      "question": "聖地：エルサレム（イスラエル）\n創始者：イエス\n聖典：聖書\n分布：ヨーロッパを中心に普及。",
+      "answer": "キリスト教",
+      "explanation": ""
     }
   ],
   "subject": "地理a",
   "published_by": {
-    "id": null,
+    "id": "32618",
     "nickname": "Chiro"
   }
 }
