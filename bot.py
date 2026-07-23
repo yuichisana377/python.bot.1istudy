@@ -1287,6 +1287,11 @@ def list_cards():
                 "count":    len(cards),
                 "subject":  data.get("subject"),
                 "folder_id": data.get("folder_id"),
+                # ★ このカードセットのJSONに folder_id キー自体が存在するかどうか。
+                #   古いデータ（フォルダ機能追加前に保存されたもの）には無いので、
+                #   クライアント側で「サーバーが明示的にルートだと言っている」のか
+                #   「まだこの機能に未対応のデータ」なのかを区別できるようにする。
+                "has_folder_id": "folder_id" in data,
                 "published_by": (data.get("published_by") or {}).get("nickname"),
             })
         return jsonify({"ok": True, "sets": result})
