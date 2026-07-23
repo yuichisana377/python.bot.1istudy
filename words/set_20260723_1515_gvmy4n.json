@@ -5,71 +5,104 @@
       "id": "mrx2xv9mc5kb",
       "question": "書き出しについて。本文の書き出しはどうするか、",
       "answer": "一マス開ける。",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx2yu07rk47",
       "question": "かっこについて。書名や雑誌名を示すときに使われるのは？",
       "answer": "『』二重かぎかっこ",
-      "explanation": "「」のなかに「」を入れたいときにも使われる。"
+      "explanation": "「」のなかに「」を入れたいときにも使われる。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx30rqgbw5t",
       "question": "かっこについて。会話文や語句の引用、強調などに使われるのは？",
       "answer": "「」かぎかっこ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx33cfokw8a",
       "question": "かっこについて。他と区別するときや、文や語句の次に特に注記するときに使われるのは？",
       "answer": "（）かっこ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx3sf8c2o54",
       "question": "、。」』）が行頭に来る時はどうするか。",
       "answer": "前行の最後のマスに文字と一緒に入れるか、欄外につける。",
-      "explanation": "文章全体でどちらかに統一する。"
+      "explanation": "文章全体でどちらかに統一する。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx3vtkdkaa9",
       "question": "「『（が行の最後に来る時はどうするか。",
       "answer": "一字あけ、次の行からはじめる。",
-      "explanation": "っ、ょなどが行頭に来る場合、そのまま書いて良い。"
+      "explanation": "っ、ょなどが行頭に来る場合、そのまま書いて良い。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx3yan27u9h",
       "question": "縦書きにおける書き方について。半角英数字はどのように書くか。",
       "answer": "一マスに二字入れ、スペースも同じようにする。",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx3yxgig32w",
       "question": "だ、である調の文をなんというか。",
       "answer": "常体",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx3zifdxita",
       "question": "です、ます調の文章をなんというか。",
       "answer": "敬体",
-      "explanation": "志望理由書にはこれが多い。"
+      "explanation": "志望理由書にはこれが多い。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx44a4csat4",
       "question": "書籍の出典表記の方法は？",
       "answer": "著者名『書名』出版社名、発行年、ページ数",
-      "explanation": "例）小松和彦『鬼と日本人』KADOKAWA、二〇一八年、一〇五頁"
+      "explanation": "例）小松和彦『鬼と日本人』KADOKAWA、二〇一八年、一〇五頁",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx4akkr8z7b",
       "question": "論文の出典表記の方法は？",
       "answer": "著者名「論文名」『掲載誌名』巻・号、（出版社名）、発行年（雑誌論文の場合は発行何月）、ページ数",
-      "explanation": "例）小川剛生「卜部兼好伝批判ー「兼好法師」から「吉田兼好」へ」『国語文学研究』四九、二〇一四年三月、一一三 - 一三〇ページ"
+      "explanation": "例）小川剛生「卜部兼好伝批判ー「兼好法師」から「吉田兼好」へ」『国語文学研究』四九、二〇一四年三月、一一三 - 一三〇ページ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "国語1乙a",
-  "folder_id": "05aaqyfmyi",
+  "folder_id": null,
   "published_by": {
     "id": "32618",
     "nickname": "たけのこども"
