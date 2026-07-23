@@ -1286,6 +1286,7 @@ def list_cards():
                 "cards":    cards,
                 "count":    len(cards),
                 "subject":  data.get("subject"),
+                "folder_id": data.get("folder_id"),
                 "published_by": (data.get("published_by") or {}).get("nickname"),
             })
         return jsonify({"ok": True, "sets": result})
@@ -1300,6 +1301,7 @@ def save_cards():
     filename = data.get("filename")
     guild_id = data.get("guild_id")
     subject  = data.get("subject")
+    folder_id = data.get("folder_id")
     publisher_id       = data.get("publisher_id")
     publisher_nickname = data.get("publisher_nickname") or "匿名"
     silent   = data.get("silent", False)  # ★ 追加：trueなら通知しない
@@ -1319,6 +1321,7 @@ def save_cards():
         "name": name,
         "cards": cards,
         "subject": subject,
+        "folder_id": folder_id,
         "published_by": {
             "id": publisher_id,
             "nickname": publisher_nickname,
@@ -1363,6 +1366,125 @@ def delete_cards():
     sha = r.json().get("sha")
     requests.delete(url, headers=headers, json={"message": f"delete {filename}", "sha": sha})
     return jsonify({"ok": True})
+
+# ================================
+#  Flask API — カードのフォルダ（みんなで共有）
+#
+#  folders.json に以下の形式で1ファイルにまとめて保存する。
+#  [
+#    {"id": "abc123", "name": "数学", "parent_id": null},
+#    {"id": "def456", "name": "定期試験", "parent_id": "abc123"}
+#  ]
+#  parent_id が null のものがルート直下のフォルダ。
+#  最大3階層（ルート > フォルダ > フォルダ > フォルダ）まで作成できる。
+# ================================
+FOLDERS_FILE = "folders.json"
+MAX_FOLDER_DEPTH = 3
+
+def load_card_folders():
+    data, sha = github_get(FOLDERS_FILE)
+    return (data or []), sha
+
+def save_card_folders(folders, sha=None):
+    if sha is None:
+        _, sha = github_get(FOLDERS_FILE)
+    github_put(FOLDERS_FILE, folders, sha)
+
+def _folder_level(folders, folder_id):
+    lvl = 0
+    cur = next((f for f in folders if f["id"] == folder_id), None)
+    while cur:
+        lvl += 1
+        cur = next((f for f in folders if f["id"] == cur.get("parent_id")), None)
+    return lvl
+
+def _folder_descendants(folders, folder_id):
+    direct = [f for f in folders if f.get("parent_id") == folder_id]
+    all_desc = list(direct)
+    for f in direct:
+        all_desc += _folder_descendants(folders, f["id"])
+    return all_desc
+
+def _max_level_in_subtree(folders, folder_id):
+    desc = _folder_descendants(folders, folder_id)
+    levels = [_folder_level(folders, folder_id)] + [_folder_level(folders, f["id"]) for f in desc]
+    return max(levels)
+
+def _can_move_folder_to(folders, folder_id, new_parent_id):
+    if folder_id == new_parent_id:
+        return False
+    desc_ids = [f["id"] for f in _folder_descendants(folders, folder_id)]
+    if new_parent_id and new_parent_id in desc_ids:
+        return False
+    old_level = _folder_level(folders, folder_id)
+    new_level = _folder_level(folders, new_parent_id) + 1
+    shift = new_level - old_level
+    return (_max_level_in_subtree(folders, folder_id) + shift) <= MAX_FOLDER_DEPTH
+
+def generate_folder_id():
+    import random, string
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+
+@app.route("/list_folders", methods=["GET"])
+def list_folders():
+    try:
+        folders, _ = load_card_folders()
+        return jsonify({"ok": True, "folders": folders})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/save_folder", methods=["POST"])
+def save_folder():
+    """
+    新規作成: { name, parent_id }
+    改名／移動: { id, name, parent_id }
+    """
+    data      = request.json or {}
+    folder_id = data.get("id")
+    name      = (data.get("name") or "").strip()
+    parent_id = data.get("parent_id")
+
+    if not name:
+        return jsonify({"ok": False, "error": "name は必須です"})
+
+    try:
+        folders, sha = load_card_folders()
+
+        if folder_id:
+            target = next((f for f in folders if f["id"] == folder_id), None)
+            if not target:
+                return jsonify({"ok": False, "error": "folder not found"})
+            if parent_id != target.get("parent_id"):
+                if not _can_move_folder_to(folders, folder_id, parent_id):
+                    return jsonify({"ok": False, "error": "移動できません（3階層を超える、または循環参照）"})
+                target["parent_id"] = parent_id
+            target["name"] = name
+        else:
+            if _folder_level(folders, parent_id) >= MAX_FOLDER_DEPTH:
+                return jsonify({"ok": False, "error": f"フォルダは{MAX_FOLDER_DEPTH}階層までしか作成できません"})
+            folder_id = generate_folder_id()
+            folders.append({"id": folder_id, "name": name, "parent_id": parent_id})
+
+        save_card_folders(folders, sha)
+        return jsonify({"ok": True, "id": folder_id})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/delete_folder", methods=["POST"])
+def delete_folder():
+    data      = request.json or {}
+    folder_id = data.get("id")
+    if not folder_id:
+        return jsonify({"ok": False, "error": "id は必須です"})
+    try:
+        folders, sha = load_card_folders()
+        desc_ids   = [f["id"] for f in _folder_descendants(folders, folder_id)]
+        remove_ids = set([folder_id] + desc_ids)
+        new_folders = [f for f in folders if f["id"] not in remove_ids]
+        save_card_folders(new_folders, sha)
+        return jsonify({"ok": True, "deleted_ids": list(remove_ids)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 # ================================
 #  スケジューラー & 起動
