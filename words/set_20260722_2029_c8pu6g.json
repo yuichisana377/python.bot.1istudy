@@ -5,281 +5,419 @@
       "id": "mrv6qmv2y4x2",
       "question": "目上の者が目下の者に許可を与えるor与えないときのみ使われる，May I 〜？/Can I 〜？に対する返答",
       "answer": "Yes, you may./No, you may not.",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvyogx0q1ox",
       "question": "話し手が主観的に感じている義務・必要を表す表現はmustとhave toのどちらか？",
       "answer": "must",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvyp9bwakli",
       "question": "状況から客観的に判断した義務・必要を表す表現はmustとhave toのどちらか？",
       "answer": "have to",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvyqdez6svr",
       "question": "ought to doの否定形",
       "answer": "ought not to do",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvyr7jsc0if",
       "question": "had better doの否定形",
       "answer": "had better not do",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvyskjjb0ar",
       "question": "「今ごろ」という意味の熟語",
       "answer": "by now",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvyw8zqcbfm",
       "question": "「〜した可能性がある，だった可能性がある」という意味の表現（肯定文）",
       "answer": "could have 過去分詞",
-      "explanation": "肯定文ではcanが使えないが，否定分や疑問文では使える。"
+      "explanation": "肯定文ではcanが使えないが，否定分や疑問文では使える。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvz0c48h207",
       "question": "「〜が欲しいのですが」という意味の表現",
       "answer": "would like 〜",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvz0rssnyw4",
       "question": "「〜したいのですが」という意味の表現",
       "answer": "would like to do",
-      "explanation": "would likeの後に動名詞は不可。"
+      "explanation": "would likeの後に動名詞は不可。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvz4n2drm0j",
       "question": "「（…するよりも）むしろ〜したい」という意味の表現",
       "answer": "would rather do 〜（than do …）",
-      "explanation": "would rather do 〜（than do …）"
+      "explanation": "would rather do 〜（than do …）",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvz5ls2wbza",
       "question": "would rather doの否定形",
       "answer": "would rather not do",
-      "explanation": "would notとはならない。"
+      "explanation": "would notとはならない。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvz8dq850rg",
       "question": "「おそらく〜するだろう」という意味の表現",
       "answer": "may［might］well do",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvz9e3cr0oj",
       "question": "「（気は進まないが）〜したほうがいい」という意味の表現",
       "answer": "may［might］as well do",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzamnm8the",
       "question": "「…するくらいなら〜するほうがましだ」という意味の表現",
       "answer": "may［might］as well do 〜 as do …",
-      "explanation": "思い切り無意味な選択肢と比べる，火力がとても高い表現"
+      "explanation": "思い切り無意味な選択肢と比べる，火力がとても高い表現",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzcr0i4ge3",
       "question": "「〜しさえすればよい（ほかのことはしなくてもよい）」という意味の表現",
       "answer": "only have to do",
-      "explanation": "have only to doの語順になることもある。"
+      "explanation": "have only to doの語順になることもある。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzerssffjt",
       "question": "「いくら〜してもしすぎることはない」という意味の表現",
       "answer": "can’t 〜 too …",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzgmh4tr0g",
       "question": "「〜せずにはいられない（〜せざるを得ない）」という意味の表現（do含め3語）",
       "answer": "can’t help doing",
-      "explanation": "helpは「避ける」という意味。"
+      "explanation": "helpは「避ける」という意味。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzhiurdovj",
       "question": "「〜せずにはいられない（〜せざるを得ない）」という意味の表現（do含め4語）",
       "answer": "can’t help but do",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzkolx13dt",
       "question": "「〜で覆われている」という意味の表現",
       "answer": "be covered with",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzl6ys463i",
       "question": "「〜でいっぱいである」という意味の表現",
       "answer": "be filled with",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzm1ecrwe1",
       "question": "「〜に知られている」という意味の表現",
       "answer": "be known to",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzmqeyycny",
       "question": "「〜［雨など］にあう」という意味の表現",
       "answer": "be caught in",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzndemzii3",
       "question": "「〜に関係している」という意味の表現",
       "answer": "be concerned with",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzo4sh4z0y",
       "question": "「〜に関心がある，〜について心配する」という意味の表現",
       "answer": "be concerned about",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzoy37lpft",
       "question": "「〜に驚く」という意味の表現",
       "answer": "be surprised at",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzpddtwslm",
       "question": "「〜にひどく驚く」という意味の表現",
       "answer": "be amazed at",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzpui70ng8",
       "question": "「〜にショックを受ける」という意味の表現",
       "answer": "be shocked at",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzqhq1ivix",
       "question": "「〜に喜ぶ」という意味の表現",
       "answer": "be pleased with［at］",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzr6avkvzl",
       "question": "「〜に満足する」という意味の表現",
       "answer": "be satisfied with",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzrvuzhadt",
       "question": "「〜に大喜びする」という意味の表現",
       "answer": "be delighted with［at］",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzt115u3sv",
       "question": "「〜にがっかりする」という意味の表現",
       "answer": "be disappointed at［in，with］",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzu6owwe9y",
       "question": "「〜に興奮する」という意味の表現",
       "answer": "be excited at［about］",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzv127mdse",
       "question": "「〜を怖がる」という意味の表現",
       "answer": "be frightened of",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzvfe2motm",
       "question": "「〜を心配する」という意味の表現",
       "answer": "be worried about",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzvwiv8sll",
       "question": "「〜に興味がある」という意味の表現",
       "answer": "be interested in",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzwvicd28d",
       "question": "「傷つく」という意味の表現",
       "answer": "be hurt",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzx67nxh7u",
       "question": "「怪我をする」という意味の表現",
       "answer": "be injured",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzxkupsj1r",
       "question": "「負傷する」という意味の表現",
       "answer": "be wounded",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzy39tgtpi",
       "question": "「［戦争や事故で］死ぬ」という意味の表現",
       "answer": "be killed",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzyh0rhk08",
       "question": "「遅れる」という意味の表現",
       "answer": "be delayed",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzzkbk5qm0",
       "question": "「〜と結婚している」という意味の表現",
       "answer": "be married to",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrvzzxc5opy7",
       "question": "「生まれる」という意味の表現",
       "answer": "be born",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw00g46g8ps",
       "question": "「〜で混んでいる」という意味の表現",
       "answer": "be crowded with",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw00si1ra82",
       "question": "「育つ」という意味の表現",
       "answer": "be raised",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw01dk2yg61",
       "question": "「〜を着ている」という意味の表現",
       "answer": "be dressed in",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw01xzdmf8m",
       "question": "「座る」という意味の表現",
       "answer": "be seated",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "英語表現基礎a",
-  "folder_id": "05aaqyfmyi",
+  "folder_id": null,
   "published_by": {
     "id": "32618",
     "nickname": "小鷹"
