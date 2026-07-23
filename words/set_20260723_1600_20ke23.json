@@ -5,119 +5,176 @@
       "id": "mrx4x54eu0z1",
       "question": "愛嬌",
       "answer": "人の心を和ませる要素となるもの",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx4xgqi22nl",
       "question": "気怠さ",
       "answer": "なんとなくだるい感じ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx4yacplzor",
       "question": "くぐもった",
       "answer": "声などの音が内にこもった",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx4z7xqwhxk",
       "question": "徒労",
       "answer": "苦労したことが報われないこと",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx4ziw4lkix",
       "question": "静寂",
       "answer": "静かで寂しいこと",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx51i9ccx9x",
       "question": "弥が上にも（いやがうえにも）",
       "answer": "すでに，そうであるのに，そのうえ",
-      "explanation": "弥→ますます"
+      "explanation": "弥→ますます",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx51wou09zj",
       "question": "素朴",
       "answer": "飾り気がなく，ありのままであること",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5aavknt3b",
       "question": "趣向を凝らして",
       "answer": "趣を出すために一心に考えを巡らせて工夫する。",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5eitmjk67",
       "question": "添え物",
       "answer": "（取るに足りない）付け添えたもの",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5ga1l0d2x",
       "question": "息を呑んだ",
       "answer": "驚きや恐れのために一瞬息を止めた",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5gtqc69xq",
       "question": "宛ら（さながら）",
       "answer": "そのまま",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5h9sgtfm0",
       "question": "迸る（ほとばしる）",
       "answer": "激しく噴き出す",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5ip49wnzb",
       "question": "細流（せせらぎ）",
       "answer": "浅瀬などを流れる水の音",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5iy3kqjoa",
       "question": "乏しい",
       "answer": "不足している",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5kzttrtrs",
       "question": "行雲流水",
       "answer": "執着なく物に応じ事に従って行動すること",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5m1fvld3g",
       "question": "感性",
       "answer": "外界からの刺激を直感的に印象として感じ取る能力",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5mab78c4k",
       "question": "最早",
       "answer": "今となっては",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5o41sh3hr",
       "question": "間隙",
       "answer": "物と物の間の隙間",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrx5vw0zpvkw",
       "question": "極致",
       "answer": "達することのできる最高の境地",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "国語1甲a",
-  "folder_id": "05aaqyfmyi",
+  "folder_id": null,
   "published_by": {
     "id": "32618",
     "nickname": "小鷹"
