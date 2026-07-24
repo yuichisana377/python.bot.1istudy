@@ -5,499 +5,745 @@
       "id": "mrnh6zlgvmgq",
       "question": "現代世界では【　　】を単位として構成される。",
       "answer": "国家",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrni5mubmm5u",
       "question": "国家とは、一定の【　①　】及び、そこに住む【　②　】と、それらを【　③　】によって統治する組織をもった【　④　】のこと。",
       "answer": "① 領土　② 人々　③ 権力　④ 社会",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrni67kt8opz",
       "question": "国家を成立させる3要素",
       "answer": "主権・領域・国民",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrni7usjk9iv",
       "question": "国内の政治と外交についての意思決定を他国からの干渉を受けずに独立して行う権利。",
       "answer": "主権",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrni9yzak5uf",
       "question": "領海：沿岸（干潮時の海岸線）から【　　】までの範囲",
       "answer": "１２海里",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrnic8a9og9w",
       "question": "沿岸国の主権が及ぶ範囲",
       "answer": "領海",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrnjib9xbva9",
       "question": "Exclusive Economic Zoneを日本語で？",
       "answer": "排他的経済水域",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrnjllbhzr2w",
       "question": "沿岸から200海里までの範囲のうち、領海を除いた部分。",
       "answer": "排他的経済水域",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrnjms5j8row",
       "question": "水深130m程度の比較的平坦な海底。",
       "answer": "大陸棚",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9atwb4mkz",
       "question": "領海や排他的水域に属さず、どこの国の船も自由に航行可能。漁業などの経済活動も自由に行える水域。",
       "answer": "公海",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9b9g0jwam",
       "question": "国家間の境界線",
       "answer": "国境",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9f81rgm4r",
       "question": "河川・湖沼・海洋・山脈などの自然物を利用する国境",
       "answer": "自然的国境",
-      "explanation": "隔離性が高い"
+      "explanation": "隔離性が高い",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9h7k2lsjr",
       "question": "経線・緯線や人工的建造物などを利用した国境",
       "answer": "人為的国境",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9k617suyg",
       "question": "中国北部に位置する世界最大級の人工的建造物。人為的国境の建造物の例。",
       "answer": "万里の長城",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9lnnuooxe",
       "question": "人為的国境のうち、緯線・経線を利用したもの。",
       "answer": "数理的国境",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9n3spfbud",
       "question": "日本の最北端",
       "answer": "択捉島",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9ndmzpert",
       "question": "日本の最東端",
       "answer": "南鳥島",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9nplca5mm",
       "question": "日本の最南端",
       "answer": "沖ノ鳥島",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9oi5cz7yf",
       "question": "日本の最西端",
       "answer": "与那国島",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9q5msmv5g",
       "question": "北方領土４つ。",
       "answer": "歯舞群島・色丹島・国後島・択捉島",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9ti6mgsmk",
       "question": "日本は19世紀初めに北方島の実効支配を確立。樺太は雑居地とし、日本ロシアの人々が暮らした。",
       "answer": "日露通好条約",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9vjtx3pm5",
       "question": "明治政府はロシアとの関係や国内情勢に鑑み、樺太の放棄をロシアに提案して千島列島をえることで合意が成立。",
       "answer": "樺太・千島交換条約",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9xedmlw05",
       "question": "第二次世界大戦の連合国と日本の講和条約。",
       "answer": "サンフランシスコ平和条約",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrt9zhi0y1kw",
       "question": "竹島や尖閣諸島を含む日本の領土が定められた。日本は【　①　】と【　②　】に対するすべての権利を放棄。",
       "answer": "① 樺太南部　② 千島列島",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrta0quwthez",
       "question": "日本が放棄した中に【　　】は含まれていない。ロシアは不法占拠であり、日本は返還を求めている。",
       "answer": "北方四島",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrta1l18043z",
       "question": "島根県隠岐郡隠岐の島町に属する島。",
       "answer": "竹島",
-      "explanation": "日本と韓国が領有権を主張している。韓国が不法占拠中。"
+      "explanation": "日本と韓国が領有権を主張している。韓国が不法占拠中。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrta7iqpsxr9",
       "question": "沖縄県石垣市に属する無人島で、1895年に領土に編入。",
       "answer": "尖閣諸島",
-      "explanation": "周辺に海底油田が存在する可能性が判明し、1970年代以降、中国や台湾が領有権を主張。"
+      "explanation": "周辺に海底油田が存在する可能性が判明し、1970年代以降、中国や台湾が領有権を主張。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrtazh3lupf4",
       "question": "世襲的な君主が当時する国家",
       "answer": "君主制",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrtb0zndxoxn",
       "question": "君主国の多くは、憲法によって君主の権力が一定の制約を受ける【　　】を採用。",
       "answer": "立憲君主制",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrtb23mpjx8v",
       "question": "国民から選ばれた代表者（大統領など）が統治する国家。",
       "answer": "共和国",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrtb7z3l877o",
       "question": "中央政府が全国民と領域を直接支配する国家",
       "answer": "単一国家",
-      "explanation": "日本、フランスなど"
+      "explanation": "日本、フランスなど",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrtb8y3928in",
       "question": "複数の州などが中央政府のもとに結合してできた国家。",
       "answer": "連邦国家",
-      "explanation": "アメリカ、ブラジル"
+      "explanation": "アメリカ、ブラジル",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrulrz6oip8t",
       "question": "人種とは、【　①　】な特徴で区分した人類の集団。【　②　】の色、毛髪の【　③　】や【　④　】、【　⑤　】などを基準とする。",
       "answer": "① 生物学的　② 皮膚　③ 色　④ 形　⑤ 骨格",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrum91hhxs06",
       "question": "日本人、中国人、ネイティブアメリカン、イヌイットなどの人種",
       "answer": "モンゴロイド（東ユーラシア人）",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrum9ouj5f4k",
       "question": "ヨーロッパ、アラブ人、インド人など",
       "answer": "コーカソイド（西ユーラシア）",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrumbbd8brcv",
       "question": "中東阿アフリカの人々など",
       "answer": "ネグロイド（アフリカ人）",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrumdk0zft55",
       "question": "オーストラリア先住民のアボリジニ",
       "answer": "オーストラリアロイド（サフール人）",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrumgobt0361",
       "question": "民族とは、【　①　】的特色によって分類された人類の集団。【　②　】や【　③　】などを基準とする。",
       "answer": "① 文化　② 言語　③ 宗教",
-      "explanation": "②と③は順不同"
+      "explanation": "②と③は順不同",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrumizprrf6p",
       "question": "英語、ドイツ語、オランダ語など。アメリカ北西部、北アメリカ、オーストラリアに分布",
       "answer": "ゲルマン語派",
-      "explanation": "インド・ヨーロッパ語族"
+      "explanation": "インド・ヨーロッパ語族",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrumk6r65daq",
       "question": "フランス語、スペイン語、イタリア語など。ヨーロッパ南部やラテンアメリカに分布",
       "answer": "ラテン語派",
-      "explanation": "インド・ヨーロッパ語族"
+      "explanation": "インド・ヨーロッパ語族",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrun1mzq7304",
       "question": "ロシア語、ウクライナ語、ポーランド語など。ロシア、アメリカ東部に分布",
       "answer": "スラブ語派",
-      "explanation": "インド・ヨーロッパ語族"
+      "explanation": "インド・ヨーロッパ語族",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrunaclppai7",
       "question": "アラビア語、ヘブライ語など、西アジア～北アフリカに分布する語族",
       "answer": "アフリカ・アジア語族",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mruo622k5t5z",
       "question": "フィンランド語、ハンガリー語。ヨーロッパの一部に分布",
       "answer": "ウラル語族",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mruobi81ej49",
       "question": "トルコ語、モンゴル語など。トルコ～中央アジア、シベリア～モンゴルに分布している諸語。",
       "answer": "アルタイ諸語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mruog0x2ddrb",
       "question": "中国語、チベット語、タイ語など。中国～インドシナ半島に分布する諸語",
       "answer": "シナ・チベット諸語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mruommryb6we",
       "question": "マレー語、インドネシア語、フィリピノ語、マダガスカル語、マオリ語など。東南アジア島嶼部、マダガスカル、ポリネシアに分布する語族。",
       "answer": "オーストロネシア語族",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mruosa9pvhsc",
       "question": "スワヒリ語など。サハラ砂漠以南の中南アフリカに分布している諸語",
       "answer": "ニジェール・コルドファン諸語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mruot2xyy7gm",
       "question": "言語別人口TOP3",
       "answer": "中国語・スペイン語・アラビア語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2040sehwt",
       "question": "スペイン語の分布している諸国",
       "answer": "ラテンアメリカ諸国",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw247wd6lum",
       "question": "スペイン語を話すラテン系の人々。",
       "answer": "ヒスパニック",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2842hmg94",
       "question": "イギリス、イングランド人、スコットランド人、アイルランド人、ウェールズ人、インド系、アフリカ系、カリブ系、アラブ系など",
       "answer": "英語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw28zs4dbzz",
       "question": "サウジアラビア、アラビア系、東アフリカ系、インド系、パキスタン系など。",
       "answer": "アラビア語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2bo0fvzm3",
       "question": "イラン、ペルシア人、アゼルバイジャン人、クルド人、ロル族",
       "answer": "ペルシア語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2egxju2ax",
       "question": "スイスの公用語４つ。",
       "answer": "ドイツ語、フランス語、イタリア語、ロマンシュ語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2f18u2f8f",
       "question": "ベルギーの公用語３つ。",
       "answer": "フランス語、オランダ語、ドイツ語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2fo0xx1n8",
       "question": "カナダの公用語２つ。",
       "answer": "英語、フランス語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2gx2726vq",
       "question": "シンガポールの公用語４つ。",
       "answer": "マレー語、中国語、タミル語、英語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2kce0im4w",
       "question": "旧宗主国の言語を公用語とする国。ブラジルの公用語。",
       "answer": "ポルトガル語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2lecsjtvy",
       "question": "旧宗主国の言語を公用語とする国。アルゼンチンの公用語。",
       "answer": "スペイン語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2q2nn83bs",
       "question": "旧宗主国の言語を公用語とする国。ガーナ、ナイジェリアの公用語。",
       "answer": "英語",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw2yvgzvdx1",
       "question": "古代ヨーロッパの先住民。アイルランド、イギリスのスコットランドなど。",
       "answer": "ケルト系民族",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw359b09ga5",
       "question": "カトリックを信仰している。スペインからフランスにかけてのバスク地方に分布。",
       "answer": "バスク人",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw35uk7pi82",
       "question": "スペインでは自治が認められているが、【　】が盛んである。",
       "answer": "分離独立運動",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw398kqe1jj",
       "question": "世界三大宗教",
       "answer": "キリスト教、イスラーム、仏教",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw3po8e7zul",
       "question": "聖地：エルサレム（イスラエル）\n創始者：イエス\n聖典：聖書\n分布：ヨーロッパを中心に普及。",
       "answer": "キリスト教",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw3v5z3sboq",
       "question": "主にラテン系の人々が信仰\n分布：南ヨーロッパ、アイルランド、ラテンアメリカ、フィリピンなど。",
       "answer": "カトリック",
-      "explanation": "スラブ系のチェコ、スロバキア、ポーランドなどでも信仰"
+      "explanation": "スラブ系のチェコ、スロバキア、ポーランドなどでも信仰",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw4116s7oih",
       "question": "１１世紀ごろにカトリックと分布。主にスラブ系の人々が信仰。ロシア～東ヨーロッパに分布",
       "answer": "正教会",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw44448ay3u",
       "question": "16世紀の宗教改革によってカトリックから分離。主にゲルマン系の人々が信仰。ヨーロッパ北部、北アメリカに分布。",
       "answer": "プロテスタント",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw482qk7rq6",
       "question": "聖地：メッカ（サウジアラビア）\n創始者：ムハンマド；マホメット\n聖典：コーラン；クルアーン",
       "answer": "イスラーム",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw4a1dex6vp",
       "question": "イスラームの多数派。西アジア～北アフリカ、中央アジア、パキスタン、バングラデシュ、インドネシア、マレーシアに分布。",
       "answer": "スンニ派、スンナ派",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw4t8z68m2h",
       "question": "イスラームの少数派。イランなどに分布。",
       "answer": "シーア派",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw4vkfqcep8",
       "question": "聖地：ブッダガヤ（インド）\n創始者：ブッダ（ガウタマ＝シッダールタ）",
       "answer": "仏教",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw4wy1pv21y",
       "question": "個々に悟りを開くことが重要とされ、出家して仏門に入る信者が多い。東アジア、ベトナムなど。",
       "answer": "上座仏教",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrw5ki82fdc1",
       "question": "自分が修行をすることで、出家をしていない人々も救える。東アジア、モンゴルなどに分布",
       "answer": "チベット仏教",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrxhcvoylerw",
       "question": "インドで発生。インド最大の信徒をもつ。古代インドの民族宗教に先住民の土着信仰が吸収・融合されて成立した宗教。",
       "answer": "ヒンドゥー教",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrxhgob9efku",
       "question": "エルサレム（イスラエル）で発生。一神教でキリスト教に影響を与える。イスラエルとユダヤ人の移住先に分布。",
       "answer": "ユダヤ教",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrxhmsuc5pbi",
       "question": "この宗教はどれ？",
       "answer": "カトリック",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrxhnya5k3in",
       "question": "この宗教はどれ？",
       "answer": "プロテスタント",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrxhuh8qyxwd",
       "question": "この宗教はどれ？",
       "answer": "正教会",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrxhviv60okg",
       "question": "この宗教はどれ？",
       "answer": "イスラーム",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrxhw7kfdu7b",
       "question": "この宗教はどれ？",
       "answer": "ヒンドゥー教",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrxhxe7dlrtx",
       "question": "この宗教はどれ？",
       "answer": "仏教",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "地理a",
-  "folder_id": null,
+  "folder_id": "05aaqyfmyi",
   "published_by": {
-    "id": "32615",
+    "id": "32618",
     "nickname": "Chiro"
   }
 }
