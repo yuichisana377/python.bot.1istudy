@@ -5,540 +5,808 @@
       "id": "mrh3si6ng9qm",
       "question": "人間に近い知能を作り上げる取り組みや、そのための技術体系。",
       "answer": "人工知能",
-      "explanation": "AIともいう。"
+      "explanation": "AIともいう。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrh3tl95zkiu",
       "question": "コンピュータにデータを読み込ませて規則性を見つけ出す技術。",
       "answer": "機械学習",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrh3u6koca09",
       "question": "機械学習の手法の一つ。",
       "answer": "深層学習",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrh3v923w4lo",
       "question": "学習した膨大なデータをもとに新しいコンテンツを生成したり、人間のように質問に答えたりすることが可能なAI。",
       "answer": "生成AI",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrh419h9nwae",
       "question": "生成AIは、利用者が入力した〇〇に応じて、人間のような様々なことを行うことができる。",
       "answer": "プロンプト",
-      "explanation": "指示のこと。"
+      "explanation": "指示のこと。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrh4301jx0ah",
       "question": "自動車や家電製品などの身の回りの様々なモノにコンピュータが組み込まれ、これらがお互いに連携して生活のサポートをするための技術。",
       "answer": "ユビキタスコンピューティング",
-      "explanation": "ユビキタスとは、「どこにでもある」という意味。"
+      "explanation": "ユビキタスとは、「どこにでもある」という意味。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrh43wq4te3a",
       "question": "ユビキタスコンピューティングと目指すものは同じ考え方。",
       "answer": "IoT",
-      "explanation": "モノのインターネットのこと。"
+      "explanation": "モノのインターネットのこと。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrh44ztg6yvw",
       "question": "最新のデジタル技術などを利用し、渋滞の緩和、安全性の向上といった交通システムを向上させる取り組み。",
       "answer": "スマートモビリティ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhd42i32pcc",
       "question": "AIやモバイル通信、GPS、瞬時に車を制御する処理技術などの最新技術によって、周りの状況を読み取って自動でハンドル操作や加速・減速を行う技術。",
       "answer": "自動運転",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhd5q3alknc",
       "question": "仮想空間と現実世界とを融合して現実にはないものを知覚できる技術の総称。",
       "answer": "XR",
-      "explanation": "エクステンデッドリアリティのこと。"
+      "explanation": "エクステンデッドリアリティのこと。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhd6x5rldnk",
       "question": "XRの例（２つ）。",
       "answer": "VR\nAR",
-      "explanation": "VRは仮想現実\nARは拡張現実"
+      "explanation": "VRは仮想現実\nARは拡張現実",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhd7m5jowqi",
       "question": "コンピュータの中に構築された3次元の仮想空間やそのサービスのこと",
       "answer": "メタバース",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhd839enx8t",
       "question": "メタバースにアクセスするときに利用者が使う技術。",
       "answer": "VR",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhd9mmgbupr",
       "question": "内閣府により提唱された未来の日本人が目指す人間中心の社会。",
       "answer": "Society 5.0",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhdbxmokhaj",
       "question": "情報技術の浸透を前提として、ものごとの「やり方」自体を大きく変え、人々の生活をあらゆる面でより良い方向に変化させること。",
       "answer": "デジタルトランスフォーメーション（DX）",
-      "explanation": "トランスの「交差する」という意味から略称に「X」を用いている。"
+      "explanation": "トランスの「交差する」という意味から略称に「X」を用いている。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhdcwrhtsel",
       "question": "企業の本拠地から、離れて働くこと。",
       "answer": "テレワーク",
-      "explanation": "離れて（tele）働く（work）"
+      "explanation": "離れて（tele）働く（work）",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhddqcavxpz",
       "question": "テレワークの例（２つ）。",
       "answer": "在宅勤務\nサテライトオフィス",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhdecc1ixpk",
       "question": "現金が不要な支払方法。",
       "answer": "キャッシュレス決済",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhdeyvocbj0",
       "question": "キャッシュレス決済の例（２つ）。",
       "answer": "電子マネー\n二次元コード決済",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhdfjeg7hys",
       "question": "いつでも送金することができるようになる技術。",
       "answer": "仮想通貨",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhdg11mtb82",
       "question": "仮想通貨の別名。",
       "answer": "暗号資産",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhdhh8nwcct",
       "question": "暗号資産は、〇〇という暗号技術を用いて銀行を経由しない取引を行うことができる。",
       "answer": "ブロックチェーン",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhdiq2gb1h4",
       "question": "データがきっかけとなって、社会の様々な活動が活性化される社会。",
       "answer": "データ駆動型社会",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhdk4pnyr3h",
       "question": "自動運転車やドローンなどの様々な情報技術を活用して、都市や地域の機能やサービスを高度化し、生活しやすくした街",
       "answer": "スマートシティ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrheozx7u3s4",
       "question": "インターネットなどの、だれもが参加できる情報発信技術を用いて、受信者と発信者が双方向で情報が広がっていくメディア。",
       "answer": "ソーシャルメディア",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhepl49sje9",
       "question": "インターネット上で人と人とのつながりをより円滑に行う場を提供するサービス",
       "answer": "SNS",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrheqckfnqm8",
       "question": "毎日長時間インターネットにアクセスし、インターネットから離れると不安や孤独を感じる症状。",
       "answer": "インターネット依存症",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrheric3my5q",
       "question": "健康面に悪い影響があるにもかかわらずゲームを続けてしまう状態。",
       "answer": "ゲーム障害",
-      "explanation": "WHOによって疾病と定義されている。"
+      "explanation": "WHOによって疾病と定義されている。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhesptnsk1h",
       "question": "情報技術を使える人と使えない人との間に生じる有利・不利の格差。",
       "answer": "情報格差（デジタルデバイド）",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfg2yd3fwd",
       "question": "ブログやSNSなどで議論が過熱しすぎたり、投稿した内容に批判のコメントが殺到したりする状況。",
       "answer": "炎上",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfhqq7p1rm",
       "question": "インターネット上に残った炎上の情報によって、生涯にわたって影響を受け続ける状態のこと。",
       "answer": "デジタルタトゥー",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfis815o8b",
       "question": "自分の意志に反してさらされた個人情報を検索結果から除外する権利。",
       "answer": "忘れられる権利",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfjqnm05jn",
       "question": "インターネットでは、匿名で簡単に書き込みができるので、〇〇や〇〇が起こりやすい。",
       "answer": "ネットいじめ\n誹謗中傷",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfkbxxow4d",
       "question": "自分の本名を名乗らず、情報発信できる性質。",
       "answer": "匿名性",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfl2m1rykv",
       "question": "意図的に流される偽情報や根拠のないうわさ。",
       "answer": "デマ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfmcn7smm1",
       "question": "人から人に次々と転送されるように仕向けられたメール。",
       "answer": "チェーンメール",
-      "explanation": "これによってデマが拡散することもある。"
+      "explanation": "これによってデマが拡散することもある。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfmqwqll8i",
       "question": "偽の情報を伝えるニュース。",
       "answer": "フェイクニュース",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfnfidqrir",
       "question": "世の中に広まるニュースやうわさに対して、事実かどうか確認すること。",
       "answer": "ファクトチェック",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfnxbw7smk",
       "question": "受信者が迷惑に感じるメール。",
       "answer": "迷惑メール",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfoiiqybtl",
       "question": "不特定多数の人に承諾なく送られる迷惑メール。",
       "answer": "スパムメール",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfpbo52hvk",
       "question": "大量のメールを送信してメールボックスをいっぱいにする迷惑メール。",
       "answer": "メールボム",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfq3cex4w7",
       "question": "メールを開くとウイルスに感染してしまう迷惑メール。",
       "answer": "ウイルスメール",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhfrzjdk2f3",
       "question": "スマートフォンなどのGPSが内蔵された機器の機能によって、写真やビデオの中に自動的に付加される撮影した場所の情報。",
       "answer": "ジオタグ（位置情報）",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhjv5el6c4y",
       "question": "情報をやり取りすること。",
       "answer": "通信",
-      "explanation": "コミュニケーションともいう。"
+      "explanation": "コミュニケーションともいう。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhjvybw9mek",
       "question": "初期の通信手段（４つ）。",
       "answer": "のろし\n飛脚\n早馬\n伝書鳩",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhjwfyo2age",
       "question": "19世紀にイギリスで確立された制度。",
       "answer": "近代郵便制度",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhjxaj7ndtl",
       "question": "1873年にモールスが開発した、電磁石を利用した電信機",
       "answer": "モールス電信機",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhjxpnh80jl",
       "question": "電話機を発明した人物",
       "answer": "グラハム・ベル",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhjycwcon85",
       "question": "モールス電信機での通信のために考案されたもの。",
       "answer": "モールス符号",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhjzdevj44l",
       "question": "1914年、日本で無線電話が実用化された場所。",
       "answer": "三重県鳥羽市",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhk01fnlu83",
       "question": "1946年にアメリカで開発された、移動しながら通話できる電話。",
       "answer": "モバイル通信",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhk0wzps885",
       "question": "現在、情報端末として世界中で使われている、多機能携帯端末。",
       "answer": "スマートフォン",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhk1uo850xj",
       "question": "ラジオ放送、テレビ放送や、印刷物のように、一度に多くの人に情報を送る手段のこと。",
       "answer": "マスコミュニケーション",
-      "explanation": "マスコミのこと。"
+      "explanation": "マスコミのこと。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhk33sh5ho7",
       "question": "日本では1953年に〇〇方式でのテレビ放送が始まり、2011年には〇〇方式に移行した。",
       "answer": "アナログ\nデジタル",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhk4cazbrxv",
       "question": "インターネットに接続したテレビが視聴者側からの情報を放送局に送り、それを番組に反映するといったサービス。",
       "answer": "双方向テレビ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhk4wtvgdlt",
       "question": "宇宙空間に打ち上げられた人工衛星を中継して行う通信。",
       "answer": "衛星通信",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhk6ahsw2nv",
       "question": "コンピュータ同士をつないで行う処理。",
       "answer": "分散処理",
-      "explanation": "故障や断線時のリスクが減る。"
+      "explanation": "故障や断線時のリスクが減る。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhk7s6nd5ys",
       "question": "1969年、アメリカで国防省支援のもとで実験が始まった、のちにインターネットとなるネットワーク。",
       "answer": "ARPANET（アーパネット）",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhk9h51r9wv",
       "question": "文化祭、修学旅行の情報や自分の意見などをいろいろな人やグループなどに伝達すること。",
       "answer": "情報の発信",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhka1dai8xz",
       "question": "主なメディアの性質。情報をいち早く伝えることができる性質。",
       "answer": "速報性",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkagc0ac89",
       "question": "主なメディアの性質。多くの人に同時に情報を伝えることができる性質。",
       "answer": "同報性",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkaw1astut",
       "question": "主なメディアの性質。発信された情報を蓄えることができる性質。",
       "answer": "蓄積性",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkbcray052",
       "question": "主なメディアの性質。発信された情報の中から欲しい情報を探すことができる性質。",
       "answer": "検索性",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkbxxavmqu",
       "question": "主なメディアの性質。情報の送り手にも受け手にもなることができる性質。",
       "answer": "双方向性",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkctnorzjf",
       "question": "情報を送る・受けるタイミングがほぼ一致するもの",
       "answer": "同期型",
-      "explanation": "例：電話など。"
+      "explanation": "例：電話など。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkdc4ect8p",
       "question": "情報を送る・受けるタイミングが一致しないもの。",
       "answer": "非同期型",
-      "explanation": "例：メールなど。"
+      "explanation": "例：メールなど。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkdqwpyjs5",
       "question": "発信した情報を受け取ることができる人の範囲。",
       "answer": "発信範囲",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhke6abhk69",
       "question": "メディアを使って情報発信できる人や機関、会社など。",
       "answer": "発信者",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkgejcdgt1",
       "question": "情報を発信するときに考えなければいけない、5W1Hをすべて。",
       "answer": "いつ、だれが、なぜ、何を、どこで、どのように",
-      "explanation": "when, who, why, what, where, how"
+      "explanation": "when, who, why, what, where, how",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkh8jqj0ky",
       "question": "6W1Hで加わるもの。",
       "answer": "だれに",
-      "explanation": "whom"
+      "explanation": "whom",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkil3wcoye",
       "question": "インターネットを使った情報の発信にある性質（５つ）。",
       "answer": "速報性\n同報性\n蓄積性\n検索性\n双方向性",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkjbhk5ioy",
       "question": "パソコンやスマートフォンでの映像付きの通話で行う会議。",
       "answer": "オンラインミーティング",
-      "explanation": "ウェブ会議ともいう。"
+      "explanation": "ウェブ会議ともいう。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkkjc7evtu",
       "question": "特に〇〇性の高いメディアでは、誤った情報が流れた場合の影響が大きいので、注意が必要である。",
       "answer": "同報",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkmiyrd786",
       "question": "効果的なコミュニケーションや問題解決のために、情報を整理したり情報の受け手の知識や状況などに配慮したうえで分かりやすく伝達するための、デザインの基礎知識や表現方法・技術のこと。",
       "answer": "情報デザイン",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkmy676v64",
       "question": "文書を作成するためのソフトウェア。",
       "answer": "ワープロソフトウェア",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhknt8m0cfj",
       "question": "データの集計や計算ができるソフトウェア。",
       "answer": "表計算ソフトウェア",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkong0jfyh",
       "question": "情報を正しく表現するために、5つの基準で情報を分類・整理する考え方。",
       "answer": "LATCH法",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkqev0dsjt",
       "question": "LATCH法の5つの基準。",
       "answer": "場所\nアルファベット\n時間\nカテゴリー\n序列",
-      "explanation": "Location\nAlphabet\nTime\nCategory\nHierarchy"
+      "explanation": "Location\nAlphabet\nTime\nCategory\nHierarchy",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkr6x0njpb",
       "question": "場所や利用する人の特性についての情報を抽象化した記号。",
       "answer": "ピクトグラム",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhks24pqyjn",
       "question": "情報の中から利用者にとって重要な部分を抜き出してまとめること。",
       "answer": "情報の抽象化",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkt6wnqewo",
       "question": "伝えたい情報を文書で表現する場合、情報を整理し、関連する情報をグループ化したり重要な情報を強調したりすること。",
       "answer": "情報の構造化",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkumkvq46w",
       "question": "数値を含む情報を、表やグラフを用いて視覚的に表現すること。",
       "answer": "情報の可視化",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkw4rak8jo",
       "question": "私たちは、初めて目にしたものであっても、たいていはうまく扱うことができる。このような、モノと人の動作の関係性のことを何というか。",
       "answer": "アフォーダンス",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkxrwbb561",
       "question": "適切なアフォーダンスの存在を示す手がかり。",
       "answer": "シグニファイア",
-      "explanation": "例：ドアの板（直感的に押すと開くことがわかるようになる）"
+      "explanation": "例：ドアの板（直感的に押すと開くことがわかるようになる）",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkyffmdrsx",
       "question": "人とコンピュータの間で情報の受け渡しを行うもの。",
       "answer": "ユーザインタフェース",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhkz9m9qgqk",
       "question": "機器やサービスの利用のしやすさ。",
       "answer": "ユーザビリティ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhl0m87tuf6",
       "question": "ユーザビリティは利用する人によって異なる。それに対し、幅広い人々にとっての利用しやすさのことを何というか。",
       "answer": "アクセシビリティ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhl1y591a0u",
       "question": "道路や建物内の段差をなくして移動しやすくしたり、様々な操作に対応した機器を作ったりして、高齢の人や身体の不自由な人が生活する上での支障を取り除く工夫。",
       "answer": "バリアフリー",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrhl3od48uj1",
       "question": "年齢や身長、右利きと左利き、身体の障害の有無などによらず、すべての人が不自由なく使えることをあらかじめ想定した工夫されたデザイン。",
       "answer": "ユニバーサルデザイン",
-      "explanation": "例：波形の手すり"
+      "explanation": "例：波形の手すり",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
+  "folder_id": "3y5kzbzknl",
   "published_by": {
-    "id": null,
+    "id": "32618",
     "nickname": "小鷹"
   }
 }
