@@ -1,0 +1,101 @@
+{
+  "name": "化学1a 化学　定期テスト対策",
+  "cards": [
+    {
+      "id": "mry7tyuknc41",
+      "question": "一番電気陰性度が大きい電子",
+      "answer": "F(フッ素)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry7vyz80f37",
+      "question": "電気陰性度は周期表の(　　)に行くほど大きい",
+      "answer": "右上",
+      "explanation": "貴ガスは除くよ！",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry7xsaznsll",
+      "question": "δ-になるのは？\nH-F",
+      "answer": "F",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry7ywozs2ep",
+      "question": "極性はある？\nH2O",
+      "answer": "ある\n折れ線形",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry7zop93jg3",
+      "question": "極性はある？\nNH3",
+      "answer": "ある\n三角錐形",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry80va79aau",
+      "question": "極性はある？\nCO2",
+      "answer": "ない\n二重結合なので直線形",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry82nn5ahci",
+      "question": "極性はある？\nCH4",
+      "answer": "ない\n正四面体形",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry86akg66p0",
+      "question": "δの意味",
+      "answer": "ごくわずかな",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry8lixpfrg1",
+      "question": "水素結合で働く力",
+      "answer": "静電気力(クーロン力)",
+      "explanation": "電気陰性度が大きい原子とHが結合すると別の分子と引きつけ合う",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry902k9eruk",
+      "question": "配位結合したイオンの例",
+      "answer": "オキソニウムイオン　OH3\nアンモニウムイオン　NH4+\nなど",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "化学1a",
+  "folder_id": null,
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  }
+}
