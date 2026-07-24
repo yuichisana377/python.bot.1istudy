@@ -1,0 +1,83 @@
+{
+  "name": "地理a 前期定期テスト【プリント No.16】",
+  "cards": [
+    {
+      "id": "mry9bo0wq9zd",
+      "question": "地質時代の動植物の死骸が、地下で圧力と熱をうけ形成されたもの。石炭・石油・天然ガスなどで、将来的に枯渇する。",
+      "answer": "化石燃料",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry9bzk9c0cx",
+      "question": "化石燃料に頼らないエネルギー源。自然の力やリサイクルエネルギー。",
+      "answer": "再生可能エネルギー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry9d3h716l4",
+      "question": "地下に存在する核分裂物質（ウラン）を使用し、核分裂をする際に発生する熱を利用して発電する。",
+      "answer": "原子力",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry9dz2lm3bd",
+      "question": "化石燃料、再生可能エネルギー、原子力のエネルギーを何エネルギーという？",
+      "answer": "一次エネルギー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry9fhxz4a5v",
+      "question": "1次エネルギーは何エネルギーに加工される？",
+      "answer": "2次エネルギー",
+      "explanation": "1次エネルギーを使いやすく加工した物。電力、都市ガス、ガソリンなど。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry9g0mwi2qr",
+      "question": "可採取年数が100年を切っている資源２つ。",
+      "answer": "原油　天然ガス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry9iyu2pojq",
+      "question": "プレート同士が衝突することによって衝突面に力が加わり、山脈などが形成される運動。",
+      "answer": "造山運動",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry9uu4u1a4f",
+      "question": "約5億年4100年前～約2億5200万年前（古生代）にかけて造山運動で形成された地形。",
+      "answer": "古期造山帯",
+      "explanation": "浸食がすすみ、なだらかな丘陵が広がる。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "地理a",
+  "folder_id": "qujgbh8vui",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  }
+}
