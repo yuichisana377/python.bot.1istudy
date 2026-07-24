@@ -90,6 +90,33 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "mry92v8k3e33",
+      "question": "金属イオンに配位結合してできたイオン",
+      "answer": "錯イオン",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry95kpykup4",
+      "question": "共有結合の結晶の例",
+      "answer": "ダイヤモンド\n黒鉛\n二酸化ケイ素\n炭化ケイ素\nケイ素\nなど",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mry98fg0ohr3",
+      "question": "黒鉛の層の間に働く力",
+      "answer": "ファンデルワールス力",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "化学1a",
