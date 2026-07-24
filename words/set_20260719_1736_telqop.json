@@ -5,370 +5,554 @@
       "id": "mrrc3779z8a5",
       "question": "「学校から自宅までの最短ルートを考える」などの問題解決のために、必要な要素を抜き出して簡潔に表現すること",
       "answer": "モデル化",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrc3jnel3h2",
       "question": "モデル化によって表現されたもの",
       "answer": "モデル",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrc4ersdlcx",
       "question": "実験や計測などを行うための模型",
       "answer": "実物モデル",
-      "explanation": "物理モデルともいう。"
+      "explanation": "物理モデルともいう。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrc518bohaa",
       "question": "実際の事柄を図や表、数式などを用いて簡潔に表現したもの",
       "answer": "論理モデル",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrc5q4apvkp",
       "question": "論理モデルの1種で、図で表現したもの",
       "answer": "図的モデル",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrc63x26s57",
       "question": "論理モデルの1種で、数式で表現したもの",
       "answer": "数式モデル",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrc727i9htk",
       "question": "偶然や確率によって決まる現象のモデル",
       "answer": "確率モデル",
-      "explanation": "例）レジの待ち行列の予測"
+      "explanation": "例）レジの待ち行列の予測",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrc81id0ugq",
       "question": "偶然の要素がなく、確定した結果が定まる現象のモデル",
       "answer": "確定モデル",
-      "explanation": "例）立方体の辺の長さと体積の関係"
+      "explanation": "例）立方体の辺の長さと体積の関係",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrc8mjg5wg8",
       "question": "時間によって変化する現象のモデル",
       "answer": "動的モデル",
-      "explanation": "例）物体の自由落下の速度"
+      "explanation": "例）物体の自由落下の速度",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrc99ocdbf3",
       "question": "時間によって変化しない現象のモデル",
       "answer": "静的モデル",
-      "explanation": "例）模型、座席表"
+      "explanation": "例）模型、座席表",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrca80vonvy",
       "question": "問題を解決するためのプロセスで、目的を明らかにし、問題を解決するための要素を明確にすること",
       "answer": "問題の明確化",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrcb2likn3m",
       "question": "問題を解決するためのプロセスで、明確になった要素について、重要度を考えて優先順位を決めること",
       "answer": "要素の分析",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrcbwhgu6vv",
       "question": "問題を解決するためのプロセスで、優先順位を付けた要素同士の関係を、図や数式を用いて評価しやすい形にすること",
       "answer": "モデル化",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrcddheksm5",
       "question": "モデルの例で、優先順位に基づいて各要素の配点を決め、合計が100点満点になる式のこと",
       "answer": "評価式",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrcdr34fi8a",
       "question": "評価式によってモデル化すること",
       "answer": "問題の定式化",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrcebn4rg4k",
       "question": "実際の問題を解決するため、モデルを使って試してみること",
       "answer": "シミュレーション",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrceo5112ne",
       "question": "シミュレーションを行う装置やソフトウェア",
       "answer": "シミュレータ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrcg55pb3gx",
       "question": "実物モデルを作る際、早く・安くモデルを作ることができる技術",
       "answer": "3Dプリンタ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrciccewg98",
       "question": "より現実に近い条件でシミュレーションを行うためには、最初にコンピュータ上で〇〇を作り、シミュレーションを行う。その結果、最適と思われるものをもとに〇〇をつくり、確認を行う。",
       "answer": "論理モデル\n実物モデル",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrcj73ymup2",
       "question": "コンピュータを使って建築物や工業製品などのモデル化を専門的に行う職業",
       "answer": "CADオペレーター",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrckp0sz6k3",
       "question": "振ったさいころの目やシャッフルしたトランプの数字などの、偶然によって決まる現象は予測できない。このような確率モデルのシミュレーションでは、偶然を表すために〇〇を用いる",
       "answer": "乱数",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrggrg9udr5",
       "question": "シミュレーションしたい事柄が複雑で、計算式によるモデル化ができてもそれを解くことができず、ある状況をもたらす確率や予想などに使えない場合がある。そのような場合に使われる、様々な状況を乱数で与えて事象の確立や予想などを計算する方法のこと",
       "answer": "モンテカルロ法",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrghhzhl7dv",
       "question": "回数を増やすほど、結果の割合（確率）が一定の値に近づいていくこと",
       "answer": "大数の法則",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrgin9qwr7v",
       "question": "人気のラーメン店、商店のレジなど、様々な場所でできる、客の行列のこと",
       "answer": "待ち行列",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri06ed96gd",
       "question": "待ち行列は前の客が到着してから次の客が訪れるまでの時間（到着間隔）が不規則であるため、行列の予測を正確に行うことは不可能であるが、このような場合も〇〇を用いたシミュレーションによって、平均的な待ち時間を求めることができる",
       "answer": "乱数",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri110hq9jn",
       "question": "コンピュータやスマートフォンなどの様々な情報機器をつないだ通信システム",
       "answer": "コンピュータネットワーク",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri26l2ghbt",
       "question": "コンピュータネットワークを相互接続し、統一した方法で通信できるようにした、世界規模のネットワーク",
       "answer": "インターネット",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri2vywoywi",
       "question": "インターネットに接続するサービスを提供する事業者",
       "answer": "インターネットサービスプロバイダ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri5dh9m5rj",
       "question": "コンピュータネットワークの形態の一つで、サービスを提供するサーバと、サービスを利用するクライアントから構成されるもの",
       "answer": "クライアントサーバシステム",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri66mlil8e",
       "question": "企業、学校、家庭などの限られた範囲で利用される小規模なネットワーク",
       "answer": "LAN",
-      "explanation": "Local Area Networkのこと"
+      "explanation": "Local Area Networkのこと",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri6juss35v",
       "question": "直接ケーブルでつなぐLAN",
       "answer": "有線LAN",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri6xm95ba2",
       "question": "電波を通して接続するLAN",
       "answer": "無線LAN",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri7vmwy1y4",
       "question": "LANの各機器をケーブルでつなぐ装置",
       "answer": "ハブ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri8dkza4ot",
       "question": "LANのネットワーク同士をつなぐ装置",
       "answer": "ルータ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrri900nds45",
       "question": "有線LANの規格でもっともよく用いられているもの",
       "answer": "イーサネット",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrria176d0b8",
       "question": "無線LANで普及している規格",
       "answer": "IEEE 802.11",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrriahlvgquw",
       "question": "無線LANの接続性が保証された機器",
       "answer": "Wi-Fi",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrribavq0gz5",
       "question": "LANよりも広い地域で利用されるネットワーク",
       "answer": "WAN",
-      "explanation": "Wide Area Networkのこと"
+      "explanation": "Wide Area Networkのこと",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrric3i4thm5",
       "question": "スマートフォンなどの携帯端末が利用するネットワークで、WANの一種",
       "answer": "モバイル通信",
-      "explanation": "移動体通信ともいう"
+      "explanation": "移動体通信ともいう",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrridas8k6uk",
       "question": "モバイル通信の方式である4G、5Gなどの方式の「G」の意味",
       "answer": "世代",
-      "explanation": "GenerationのG"
+      "explanation": "GenerationのG",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrie6rg2fng",
       "question": "モバイル通信では、通信エリアを〇〇と呼ばれるいくつかの区画に分割し、それぞれに基地局を設置する",
       "answer": "セル",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrriehh2exro",
       "question": "セルを使った通信の方式",
       "answer": "セル方式",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrif8hf6teb",
       "question": "ネットワーク回線で、一定時間に通信できるデータ量のこと",
       "answer": "通信速度",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrig1fuhaj6",
       "question": "通信速度の単位で、1秒あたりに通信できるビット数を表すもの",
       "answer": "bps",
-      "explanation": "bit per secondのこと"
+      "explanation": "bit per secondのこと",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrighobmnei",
       "question": "ネットワークを通じてファイルを入手すること",
       "answer": "ダウンロード",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrih2ayj299",
       "question": "ネットワークを通じてファイルを送信すること",
       "answer": "アップロード",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrihqw558vb",
       "question": "短距離にある情報機器を無線でつなぐ規格",
       "answer": "Bluetooth",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrijdkhegrv",
       "question": "通信するときに必要な手順や、情報の表現と形式などに関する取り決め",
       "answer": "通信プロトコル",
-      "explanation": "単にプロトコルともいう。プロトコルとは、もともと「外交儀礼、議定書」という意味"
+      "explanation": "単にプロトコルともいう。プロトコルとは、もともと「外交儀礼、議定書」という意味",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrimgl2ag0t",
       "question": "インターネットで通信するときには、数多くのプロトコルが必要で、それらの処理を個別に行うと大変複雑になる。そのため、プロトコルを階層に分けて構成し、効率的に処理している。そのようなインターネットのプロトコルのこと",
       "answer": "インターネットプロトコルスイート",
-      "explanation": "スイートは「ひと揃い」という意味"
+      "explanation": "スイートは「ひと揃い」という意味",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrin1x2tjmx",
       "question": "インターネットプロトコルスイートの別名",
       "answer": "TCP/IPプロトコル",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrriowjc6i2y",
       "question": "インターネットプロトコルスイートの階層の1つで、直接つながっているコンピュータ同士が正しくデータをやり取りできるようにするもの",
       "answer": "ネットワークインタフェース層",
-      "explanation": "1番下で、どのようにつなぐかの取り決め"
+      "explanation": "1番下で、どのようにつなぐかの取り決め",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrjalcj5kpo",
       "question": "インターネットプロトコルスイートの階層の1つで、通信する相手のコンピュータがどこにあるかを見つけ、経路を決めるもの",
       "answer": "インターネット層",
-      "explanation": "下から2番目で、IPというプロトコルで処理される。どの経路で届けるかについての取り決め"
+      "explanation": "下から2番目で、IPというプロトコルで処理される。どの経路で届けるかについての取り決め",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrjc58ja337",
       "question": "インターネットプロトコルスイートの階層の1つで、通信しあうプログラムが正しくデータをやり取りできるようにするもの",
       "answer": "トランスポート層",
-      "explanation": "下から3番目で、TCPというプロトコルで処理される。正しく届いたかどうかの確認方法の取り決め"
+      "explanation": "下から3番目で、TCPというプロトコルで処理される。正しく届いたかどうかの確認方法の取り決め",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrje9u0plbt",
       "question": "インターネットプロトコルスイートの階層の1つで、各サービスに応じたプロトコルが適用されるもの",
       "answer": "アプリケーション層",
-      "explanation": "1番上で、インターネットのサービスの種類に応じた取り決め"
+      "explanation": "1番上で、インターネットのサービスの種類に応じた取り決め",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrjeze6at84",
       "question": "インターネット上で用いられる、パケット交換による通信",
       "answer": "パケット通信",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrjg7xmwcno",
       "question": "パケット通信では、データを〇〇と呼ばれる小さな単位に分割し、それぞれに送り状（〇〇）を付けて送信する。",
       "answer": "パケット\nヘッダ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrjgpcdcq41",
       "question": "ネットワークをつなぐ中継装置",
       "answer": "ルータ",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrji4sw3nqs",
       "question": "ルータが持っている、パケットの送信先ごとにどの通信回線に転送するかという情報をまとめた表",
       "answer": "ルーティングケーブル（経路制御表）",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrjipo2s1dj",
       "question": "1つの回線を占有して情報を交換する通信の方式",
       "answer": "回線交換",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrjjq3c4985",
       "question": "ネットワーク上の通信において、受信したデータの誤りを見つける方法の1つ",
       "answer": "パリティ検査",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     },
     {
       "id": "mrrjkwqf2o8t",
       "question": "パリティ検査で用いられる、一定のビットの列の中に1が偶数個あるか奇数個あるかを示すビット",
       "answer": "パリティビット",
-      "explanation": ""
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
+  "folder_id": "3y5kzbzknl",
   "published_by": {
     "id": "32618",
     "nickname": "小鷹"
