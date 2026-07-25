@@ -171,6 +171,33 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms0gb3baum17",
+      "question": "国民が、政府や大企業などが保有する公共性の高い情報を自由に知ることができる権利をなんというか。",
+      "answer": "知る権利",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0gckhfu37j",
+      "question": "情報の受け手がマスコミに接近して、情報収集に利用する権利をなんというか。",
+      "answer": "アクセス権",
+      "explanation": "知る権利とは違い、自分から接近するということが特徴。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0gdmwa7q28",
+      "question": "個人の私的な生活をみだりに公開されないという、法的保障ないし権利をなんというか。",
+      "answer": "プライバシーの権利",
+      "explanation": "個人情報保護法（2003年制定、2015年改正）",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "公共a",
@@ -178,5 +205,6 @@
   "published_by": {
     "id": "32623",
     "nickname": "たけのこども"
-  }
+  },
+  "incomplete": false
 }
