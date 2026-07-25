@@ -126,12 +126,57 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms02dhmynhv9",
+      "question": "ワン切り詐欺、オレオレ詐欺、振り込め詐欺など、SNSを利用して騙し取る詐欺をまとめてなんというか。",
+      "answer": "特殊詐欺",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms02emgfe7c2",
+      "question": "虚偽の情報で作られたニュースやデマのことをなんというか。",
+      "answer": "フェイクニュース",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms02feo08flc",
+      "question": "民族や宗教など、特定の属性に対する嫌悪や偏見により脅迫や暴行などの違法行為を起こすことをなんというか。",
+      "answer": "ヘイトクライム",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms02gbq0e9ii",
+      "question": "メディアの発達によって作られた現実には存在しない仮想の環境をなんというか。",
+      "answer": "バーチャル・リアリティ（VR）",
+      "explanation": "これによって現実感の喪失が起こる",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms02hrzdqa6z",
+      "question": "国や地方公共団体の行政機関が保有する公的な情報を、国民が自由に入手できるように保障することをなんというか。",
+      "answer": "情報公開",
+      "explanation": "1999年制定の情報公開法など",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32628",
-    "nickname": "hara-Kirby"
+    "id": "32623",
+    "nickname": "たけのこども"
   }
 }
