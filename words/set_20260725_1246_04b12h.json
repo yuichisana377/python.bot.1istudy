@@ -1,0 +1,47 @@
+{
+  "name": "前期定期テスト【プリント No.18】",
+  "cards": [
+    {
+      "id": "mrztr8xvpsod",
+      "question": "石炭の分類の一つ。発電用・産業用のボイラ燃料に使われる",
+      "answer": "一般炭",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrztrxhbwuyw",
+      "question": "燃料価格は石炭が○○",
+      "answer": "安価",
+      "explanation": "石油に次いでLNG、石油の順に高くなる",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrztszmeoewt",
+      "question": "環境への負荷が○○。",
+      "answer": "大きい",
+      "explanation": "CO₂、NOxの排出量がLNG、石油よりも大きい",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrztu3exmm68",
+      "question": "鉄鋼を作る際に用いられるコークスの原料",
+      "answer": "原料炭",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": null,
+  "folder_id": "qujgbh8vui",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  }
+}
