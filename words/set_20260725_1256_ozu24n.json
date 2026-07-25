@@ -1,0 +1,92 @@
+{
+  "name": "前期定期テスト【プリント No.19】",
+  "cards": [
+    {
+      "id": "mrztw2cfg3ac",
+      "question": "天然ガスは○○エネルギーとして注目を集める",
+      "answer": "クリーンエネルギー",
+      "explanation": "原油石炭に比べ汚染物質やCO₂の排出量が少ない",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrztzruw2u5b",
+      "question": "天然ガスを気体で輸送する方法",
+      "answer": "パイプライン",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzu09v873yw",
+      "question": "LNG",
+      "answer": "液化天然ガス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzu1buqs7mg",
+      "question": "LNG（液化天然ガス）は○○での利用が中心",
+      "answer": "先進国",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzu3lcjuu5x",
+      "question": "天然ガス主要生産国　上位２か国",
+      "answer": "アメリカ合衆国　ロシア",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzu43youocy",
+      "question": "天然ガス主要輸出国　上位３か国",
+      "answer": "アメリカ合衆国　ロシア　カタール",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzu4h002uhi",
+      "question": "天然ガス主要輸入国　上位３か国",
+      "answer": "中国　日本　ドイツ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzu4z2h5per",
+      "question": "天然ガスの主な用途",
+      "answer": "火力発電　都市ガス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzu726wiiz7",
+      "question": "近年注目されている天然ガスの種類",
+      "answer": "シェールガス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": null,
+  "folder_id": "qujgbh8vui",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  }
+}
