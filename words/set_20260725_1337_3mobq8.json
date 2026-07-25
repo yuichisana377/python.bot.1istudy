@@ -1,0 +1,137 @@
+{
+  "name": "公共a ④資源・エネルギー問題",
+  "cards": [
+    {
+      "id": "mrzv5w6yyxbq",
+      "question": "資源の[　　]\n資源がなくなる",
+      "answer": "枯渇",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzv6chppc1j",
+      "question": "石油、石炭、天然ガスなど",
+      "answer": "化石燃料",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzv8sz1p6t5",
+      "question": "アメリカの大企業メジャーによる独占に対抗して結成",
+      "answer": "石油輸出国機構(OPEC)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvayfmzd81",
+      "question": "資源保有国が、先進国に支配されていた資源を取り返し、利益を得ようとすること",
+      "answer": "資源ナショナリズム",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvcfwmaq0r",
+      "question": "第四次中東戦争とイラン革命による石油の高騰",
+      "answer": "石油危機(オイルショック)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvektut2ey",
+      "question": "化石エネルギーの利点と問題点",
+      "answer": "利点　　安い、効率がよい\n問題点　枯渇する、CO2出す",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvezb39rzm",
+      "question": "石油に替わるエネルギー",
+      "answer": "代替エネルギー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvfwc3vvkh",
+      "question": "原子核反応で得られるエネルギー",
+      "answer": "原子力エネルギー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvinhcolie",
+      "question": "原子力エネルギーの利点と問題点",
+      "answer": "利点　　発電効率がよい、CO2出さない\n問題点　枯渇、事故、放射性廃棄物",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvjeshcgdp",
+      "question": "ウクライナの原発事故",
+      "answer": "チェルノブイリ原発事故",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvk18ie4p3",
+      "question": "繰り返し使えるエネルギー",
+      "answer": "再生可能エネルギー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvloibwhy0",
+      "question": "再生可能エネルギーの例",
+      "answer": "水力、地熱、太陽光、風力、バイオマス、波力\n　　　　　　　　　　　　　　　　　　　　など",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvmo013781",
+      "question": "資源他消費型社会から[　　]型社会へ",
+      "answer": "循環",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzvnwpq0jzc",
+      "question": "3R",
+      "answer": "Reduce Reuse Recycle",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "公共a",
+  "folder_id": "f1opih0i4p",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  }
+}
