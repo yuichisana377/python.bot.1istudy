@@ -1,0 +1,147 @@
+{
+  "name": "公共a ⑩人口・食料問題",
+  "cards": [
+    {
+      "id": "ms0dzbu246up",
+      "question": "20世紀に入り発展途上国を中心に加速度的に人口が増える現象",
+      "answer": "人口爆発",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e0ap50i77",
+      "question": "年齢別、性別人口を表現するグラフ",
+      "answer": "人口ピラミッド",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e1v1nqy3l",
+      "question": "人口ピラミッドの移行",
+      "answer": "多産多死→多産少死→少産少死→少子高齢化",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e3cz9wlo6",
+      "question": "1967の人口関連の技術援助機関",
+      "answer": "国連人口基金(UNFPA)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e53u2cpfd",
+      "question": "人口爆発による問題に対処するため国連主催で開かれる会議",
+      "answer": "人口会議",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e65qiopec",
+      "question": "エジプトの人口に関する会議(1994)",
+      "answer": "国際人口開発会議",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e8rplrtbs",
+      "question": "全ての女性が性と生殖の過程で身体的、精神的、社会的に良好であることを求める権利",
+      "answer": "リプロダクティブ・ヘルス・アンド・ライツ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e9lshprye",
+      "question": "食料分配のアンバランス",
+      "answer": "飢饉",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0eazryiup1",
+      "question": "自国で食料を生産し供給できる率",
+      "answer": "食料自給率",
+      "explanation": "漢字注意",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0eed577dj7",
+      "question": "世界経済の発展や飢餓からの解法を目指して設立された国連の機関",
+      "answer": "国連食糧農業機関(FAO)",
+      "explanation": "漢字注意",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0egnwomtya",
+      "question": "全ての人が常に活動的、健康的生活を営むために必要となる、必要十分で安全な栄養価に富む食糧を得ることができる",
+      "answer": "食料安全保障",
+      "explanation": "漢字注意",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0ehtyggw58",
+      "question": "1961に設立\n国連の食料支援機関",
+      "answer": "国連世界食糧計画(WFP)",
+      "explanation": "漢字注意",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0ekd9gc0ci",
+      "question": "ローマで開かれた発展途上国における食糧問題に関する会議",
+      "answer": "世界食糧サミット",
+      "explanation": "漢字注意",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0empx7oqfi",
+      "question": "世界の8億4000万人の栄養不足人口を2015までに半減させる",
+      "answer": "ローマ宣言",
+      "explanation": "結局これ達成したんかな？",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0eoeo417x6",
+      "question": "日本と人口・食料問題",
+      "answer": "少子高齢化　食料自給率の低下\n人口問題　食料問題\n先進国と発展途上国の協力",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "公共a",
+  "folder_id": "f1opih0i4p",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
