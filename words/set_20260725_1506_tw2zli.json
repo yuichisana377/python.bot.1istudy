@@ -1,0 +1,137 @@
+{
+  "name": "国語1乙a 『伊勢物語』について",
+  "cards": [
+    {
+      "id": "mrzxptzt1o97",
+      "question": "成立はいつか。",
+      "answer": "10世紀半ばごろ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzxq8kcbdzk",
+      "question": "作者はだれか。",
+      "answer": "未詳",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzxqifynwhr",
+      "question": "ジャンルは何か。",
+      "answer": "歌物語",
+      "explanation": "和歌を中心にまとめられた短編物語。あるいは短編物語集。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzyf7yem2tx",
+      "question": "内容は誰の何か。",
+      "answer": "在原業平らしき男の一代記（一生を記したもの）",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzygo1ychpx",
+      "question": "在原業平について。代表歌は何か。",
+      "answer": "ちはやぶる\n神世もきかず\n竜田川\n韓紅に\n水くくるとは",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzyhwklc41y",
+      "question": "高貴な血筋の主人公がさすらいに出るタイプの話をなんというか。",
+      "answer": "貴種流離譚",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzyilax4ykg",
+      "question": "助動詞「けり」が使われることからわかることは？",
+      "answer": "自伝ではなく、誰かが書いたものであること。",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzyjrio0thj",
+      "question": "使われている技法について。「掛詞」とは。",
+      "answer": "駄洒落のように、同じ音のものでふたつのい二つの言葉をダブルミーニングすること。",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzylp5ufcz6",
+      "question": "使われている技法について。「縁語」とは。",
+      "answer": "同じものに関連する言葉を多用する技法。\n（例）「衣」に関連す言葉…きつつ、なれ、つま、はるばる",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzymvunula4",
+      "question": "使われている技法について。枕詞とは何か。",
+      "answer": "特定の言葉を導くもの。\n（例）「から衣」→「着つつ」を導く",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzyp21e2wpe",
+      "question": "使われている技法について。折り句とは何か。",
+      "answer": "与えられたご音節の題を各句の初めに分けて読み込む技法。",
+      "explanation": "他に沓冠（くつかぶり）という、上と下両方を読み込むやつもある",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzyq61d2sku",
+      "question": "「みな人、かれいひの上に涙おとしておとびにけり。」の効果は？",
+      "answer": "急に滑稽な雰囲気に転換し、笑いを誘う効果",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzyrhm92kpf",
+      "question": "「京に、その人の御もとにて、文かきてつく。」の「その人」とは？",
+      "answer": "高貴な立場の、「男」の恋人。",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzyu9c76jze",
+      "question": "序詞とは何か。",
+      "answer": "意味や音の似ているものを導く技法。\n（例）駿河なる「うつ」の山辺の→「うつつ」を導く",
+      "explanation": "意味上のつながりで何かを導くものを「有心の序」、音の繋がりで何かを導くものを「無心の序」という",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "国語1乙a",
+  "folder_id": "o1se10e9v3",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  }
+}
