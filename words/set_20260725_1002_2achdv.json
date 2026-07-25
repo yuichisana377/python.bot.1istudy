@@ -13,7 +13,7 @@
     {
       "id": "mrzn8x4vn26n",
       "question": "生命の仕組みを研究する分野",
-      "answer": "生命化学",
+      "answer": "生命科学",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -158,7 +158,8 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32628",
+    "id": "32623",
     "nickname": "hara-Kirby"
-  }
+  },
+  "incomplete": false
 }
