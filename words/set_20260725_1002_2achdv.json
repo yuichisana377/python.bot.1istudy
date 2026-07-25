@@ -1,0 +1,164 @@
+{
+  "name": "公共a 公共　2",
+  "cards": [
+    {
+      "id": "mrzn7rrh42ow",
+      "question": "生物の形質を決める遺伝情報",
+      "answer": "DNA",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzn8x4vn26n",
+      "question": "生命の仕組みを研究する分野",
+      "answer": "生命化学",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzn9o1j1z1p",
+      "question": "二次らせん構造を発見した人(二人)",
+      "answer": "ワトソン　クリック",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznbk37neez",
+      "question": "[　　　　　　　　　](生命工学)\n生命の仕組みを応用",
+      "answer": "バイオテクノロジー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznd4kabco9",
+      "question": "遺伝子操作の種類",
+      "answer": "遺伝子組みかえ\n遺伝子治療\nクローン技術",
+      "explanation": "組み\"かえ\"はひらがな",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznedjrcmmr",
+      "question": "遺伝子操作1\n遺伝子のDNAをはさみとのりを使いくみかえる",
+      "answer": "遺伝子組みかえ",
+      "explanation": "アメリカは許可してる",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzng4keilop",
+      "question": "遺伝子を切断するなどして特定の遺伝子を改変する技術",
+      "answer": "ゲノム編集",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzni9j9iwv0",
+      "question": "遺伝子操作2\n病気の原因となる遺伝子を解明し、びの根源の治療や個人に合わせた治療をすること",
+      "answer": "遺伝子治療",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznk2adpjpy",
+      "question": "ヒトの全遺伝情報\n人間の設計図とも",
+      "answer": "ヒトゲノム",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznkslbnoh8",
+      "question": "遺伝子を検出して病気の原因を診断すること",
+      "answer": "遺伝子診断",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznmzbqs6yc",
+      "question": "出生前に遺伝子レベルで状態をチェックして遺伝病や障がいの有無、性別を診断すること",
+      "answer": "出生前診断",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzntaf2skxl",
+      "question": "人工授精と体外受精の違い",
+      "answer": "人工授精　人工で体内に精子をいれる\n体外受精　外で受精させてから戻す\n　　　　　試験管ベビーともいう\nあと漢字が違う",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznubk4lz5o",
+      "question": "他人に産んでもらう",
+      "answer": "代理出産",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznv82nfo3u",
+      "question": "子供の遺伝子を選んで選別する",
+      "answer": "デザイナーベビー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznxu2q0icm",
+      "question": "遺伝子操作3\n同じ遺伝情報を持つ個体",
+      "answer": "クローン",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznybve49u3",
+      "question": "クローンを人為的に作る技術",
+      "answer": "クローン技術",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrznzoezx61z",
+      "question": "クローンを作ることに関する是非",
+      "answer": "クローン技術規制法",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "公共a",
+  "folder_id": "f1opih0i4p",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  }
+}
