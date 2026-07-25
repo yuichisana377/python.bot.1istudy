@@ -111,7 +111,7 @@
     },
     {
       "id": "mry8g3fjk80u",
-      "question": "多様な文化の混在を積極的に評価しいようとする考え方で、民族的出自による差別を禁止している。",
+      "question": "多様な文化の混在を積極的に評価しようとする考え方で、民族的出自による差別を禁止している。",
       "answer": "多文化主義",
       "explanation": "",
       "imgs_q": [],
@@ -131,7 +131,8 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32618",
+    "id": "32619",
     "nickname": "Chiro"
-  }
+  },
+  "incomplete": false
 }
