@@ -23,5 +23,10 @@
     "id": "f1opih0i4p",
     "name": "公共A",
     "parent_id": "05aaqyfmyi"
+  },
+  {
+    "id": "sac396c8pf",
+    "name": "テスト",
+    "parent_id": null
   }
 ]
