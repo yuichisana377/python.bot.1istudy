@@ -1370,6 +1370,9 @@ def _meta_from_card_data(filename, data):
         "folder_id": data.get("folder_id"),
         "has_folder_id": "folder_id" in data,
         "published_by": (data.get("published_by") or {}).get("nickname"),
+        # ★ 未完成フラグ。list_cards（索引）にも含めることで、
+        #   公開者以外の端末でも同じ「🟡 未完成」表示ができるようにする。
+        "incomplete": bool(data.get("incomplete", False)),
     }
 
 def load_cards_index():
@@ -1461,6 +1464,8 @@ def get_card_set():
             "subject": data.get("subject"),
             "folder_id": data.get("folder_id"),
             "published_by": (data.get("published_by") or {}).get("nickname"),
+            # ★ カード本体を開いた際にも未完成フラグを返す
+            "incomplete": bool(data.get("incomplete", False)),
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -1477,6 +1482,7 @@ def save_cards():
     publisher_id       = data.get("publisher_id")
     publisher_nickname = data.get("publisher_nickname") or "匿名"
     silent   = data.get("silent", False)  # ★ 追加：trueなら通知しない
+    incomplete = bool(data.get("incomplete", False))  # ★ 追加：未完成フラグ（みんなに表示するため保存する）
 
     if not name or not isinstance(cards, list):
         return jsonify({"ok": False, "error": "name と cards は必須です"})
@@ -1498,6 +1504,7 @@ def save_cards():
             "id": publisher_id,
             "nickname": publisher_nickname,
         },
+        "incomplete": incomplete,  # ★ 未完成フラグを保存（他人の端末にも同じ表示をするため）
     }
 
     try:
