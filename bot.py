@@ -1349,24 +1349,6 @@ def uncomplete_task():
 
 # ================================
 #  Flask API — 単語カード
-#  ─────────────────────────────────────────────
-#  ★ 修正点（最重要）：
-#   以前の list_cards は「カードファイルの一覧を取得 → ファイルの数だけ
-#   github_get() を個別に呼んでメタ情報だけ取り出す」という実装だった。
-#   フロント側はこれを10秒おきにポーリングしているため、デッキ数が
-#   増えるほど GitHub API呼び出しが線形に増え、レート制限やタイムアウト
-#   （フロント側は5秒でabort）に引っかかりやすくなっていた。
-#
-#   これを解消するため、単語カードのメタ情報（name/count/subject/
-#   folder_id/published_by など、カード本体を含まない軽量なデータ）を
-#   まとめて1つの索引ファイル cards_index_{guild非依存}.json として持ち、
-#   save_cards / delete_cards のたびにその索引だけを更新する方式にした。
-#   list_cards はこの索引ファイルを1回 github_get するだけで済むため、
-#   GitHub APIコール数はデッキ数に依存せず常に1回になる。
-#
-#   既存の cards/*.json はそのまま本体データとして使い続けるので、
-#   移行作業は不要（索引ファイルが存在しない場合は自動的に
-#   フォルダをスキャンして再構築する）。
 # ================================
 CARDS_DIR = "words"
 CARDS_INDEX_FILE = "cards_index.json"
@@ -1596,17 +1578,162 @@ def delete_cards():
         print(f"[WARN] cards_index からの削除に失敗しました: {e}")
 
     return jsonify({"ok": True})
+# ================================================================
+#  
+# ================================================================
 
+NOTICES_DIR = "notices"
+NOTICE_ALLOWED_EXT = (".md", ".txt")
+
+
+def _is_safe_notice_filename(filename: str) -> bool:
+    """パストラバーサル対策・拡張子チェック"""
+    if not filename:
+        return False
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return False
+    return filename.lower().endswith(NOTICE_ALLOWED_EXT)
+
+
+def list_notice_files():
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{NOTICES_DIR}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    r = requests.get(url, headers=headers, timeout=15)
+    if r.status_code == 404:
+        return []
+    r.raise_for_status()
+    files = r.json()
+    return [
+        f for f in files
+        if isinstance(f, dict) and f["name"].lower().endswith(NOTICE_ALLOWED_EXT)
+    ]
+
+
+@app.route("/list_notices", methods=["GET"])
+def list_notices():
+    """お知らせファイルの一覧を返す（中身は含まない、軽量版）"""
+    try:
+        files = list_notice_files()
+        notices = [
+            {
+                "filename": f["name"],
+                "size": f.get("size"),
+                "ext": f["name"].rsplit(".", 1)[-1].lower(),
+            }
+            for f in files
+        ]
+        # ファイル名（先頭に日付を付ける運用を推奨）で新しい順に並べる
+        notices.sort(key=lambda n: n["filename"], reverse=True)
+        return jsonify({"ok": True, "notices": notices})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/get_notice", methods=["GET"])
+def get_notice():
+    """お知らせ1件の中身（テキスト本文）を返す"""
+    filename = request.args.get("filename", "")
+    if not _is_safe_notice_filename(filename):
+        return jsonify({"ok": False, "error": "invalid filename"})
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{NOTICES_DIR}/{filename}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code == 404:
+            return jsonify({"ok": False, "error": "not found"})
+        r.raise_for_status()
+        data = r.json()
+        content = base64.b64decode(data["content"]).decode("utf-8")
+        return jsonify({"ok": True, "filename": filename, "content": content})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/upload_notice", methods=["POST"])
+def upload_notice():
+    """お知らせファイル（.md / .txt）をアップロード（新規 or 上書き）する"""
+    data = request.json or {}
+    filename = (data.get("filename") or "").strip()
+    content = data.get("content")
+    uploader = (data.get("uploader") or "匿名").strip()
+    guild_id = data.get("guild_id")
+
+    if not _is_safe_notice_filename(filename):
+        return jsonify({"ok": False, "error": ".md または .txt ファイルのみアップロードできます"})
+    if content is None or not content.strip():
+        return jsonify({"ok": False, "error": "内容が空です"})
+
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{NOTICES_DIR}/{filename}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+
+    # 既存ファイルなら上書き（sha が必要）
+    r = requests.get(url, headers=headers, timeout=15)
+    sha = r.json().get("sha") if r.status_code == 200 else None
+    is_update = sha is not None
+
+    encoded = base64.b64encode(content.encode("utf-8")).decode()
+    payload = {
+        "message": f"{'update' if is_update else 'add'} notice: {filename} by {uploader}",
+        "content": encoded,
+    }
+    if sha:
+        payload["sha"] = sha
+
+    put_res = requests.put(url, headers=headers, json=payload, timeout=15)
+    if put_res.status_code not in (200, 201):
+        return jsonify({
+            "ok": False,
+            "error": f"github_write_failed: {put_res.status_code} {put_res.text[:300]}"
+        })
+
+    # --- 任意：Discordの通知チャンネルに投稿 ---
+    if guild_id:
+        try:
+            guild_id_int = int(guild_id)
+            guild = bot.get_guild(guild_id_int)
+            if guild:
+                config = load_config(guild_id_int)
+                channel_id = config.get("remind_channel_id")
+                channel = bot.get_channel(channel_id) if channel_id else None
+                if channel:
+                    action = "更新" if is_update else "公開"
+                    msg = f"📢 お知らせ「{filename}」が{uploader}さんによって{action}されました！"
+                    asyncio.run_coroutine_threadsafe(
+                        channel.send(msg), bot.loop
+                    ).result(timeout=10)
+        except Exception as e:
+            print(f"[WARN] upload_notice notify failed: {e}")
+
+    return jsonify({"ok": True, "filename": filename, "is_update": is_update})
+
+
+@app.route("/delete_notice", methods=["POST"])
+def delete_notice():
+    """お知らせファイルを削除する"""
+    data = request.json or {}
+    filename = data.get("filename", "")
+    if not _is_safe_notice_filename(filename):
+        return jsonify({"ok": False, "error": "invalid filename"})
+
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{NOTICES_DIR}/{filename}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    r = requests.get(url, headers=headers, timeout=15)
+    if r.status_code == 404:
+        return jsonify({"ok": False, "error": "ファイルが見つかりません"})
+    sha = r.json().get("sha")
+    del_res = requests.delete(
+        url, headers=headers,
+        json={"message": f"delete notice {filename}", "sha": sha},
+        timeout=15
+    )
+    if del_res.status_code not in (200, 201):
+        return jsonify({
+            "ok": False,
+            "error": f"github_delete_failed: {del_res.status_code} {del_res.text[:300]}"
+        })
+    return jsonify({"ok": True})
 # ================================
 #  Flask API — カードのフォルダ（みんなで共有）
-#
-#  folders.json に以下の形式で1ファイルにまとめて保存する。
-#  [
-#    {"id": "abc123", "name": "数学", "parent_id": null},
-#    {"id": "def456", "name": "定期試験", "parent_id": "abc123"}
-#  ]
-#  parent_id が null のものがルート直下のフォルダ。
-#  最大3階層（ルート > フォルダ > フォルダ > フォルダ）まで作成できる。
 # ================================
 FOLDERS_FILE = "folders.json"
 MAX_FOLDER_DEPTH = 3
