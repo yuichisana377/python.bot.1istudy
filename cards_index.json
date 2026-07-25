@@ -20,10 +20,10 @@
   {
     "filename": "set_20260706_2224_uo1g0w.json",
     "name": "化学1a イオン式",
-    "count": 10,
+    "count": 0,
     "subject": "化学1a",
-    "folder_id": null,
-    "has_folder_id": false,
+    "folder_id": "y7xl891igt",
+    "has_folder_id": true,
     "published_by": "Chiro"
   },
   {
