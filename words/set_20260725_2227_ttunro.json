@@ -1,0 +1,138 @@
+{
+  "name": "公共a 公共⑨ 国際社会の中の日本　人類の福祉と平和の課題",
+  "cards": [
+    {
+      "id": "ms0dti7qgf1a",
+      "question": "米ソの対立→ベルリンの壁、朝鮮戦争、キューバ危機、ベトナム戦争",
+      "answer": "冷戦",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0dudzvhoge",
+      "question": "マルタ会談（ブッシュ・ゴルバチョフ）→ドイツ統一、ソ連解体",
+      "answer": "冷戦終結",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0dvrxwdx4r",
+      "question": "差別や富の不平等、経済的な貧困",
+      "answer": "地域紛争・民族紛争",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0dx1dbyxqa",
+      "question": "戦争や政治的・宗教的迫害などの理由から、住んでいた国を離れざるをえなくなった人々",
+      "answer": "難民",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0dyeddipli",
+      "question": "平和の維持",
+      "answer": "人権の保障、差別の克服",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0dzcabzsac",
+      "question": "連合国を中心に集団安全保障の考えをもとに発足した国際平和維持機構（1945年）",
+      "answer": "国際連合",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e04guokxs",
+      "question": "一人権の保障",
+      "answer": "国際憲章",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e1u0fqtyx",
+      "question": "第3回国際総会で採択され、自由権・参政権・社会権の達成基準を宣言したもの（1948年）",
+      "answer": "世界人権宣言",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e4956de8c",
+      "question": "世界人権宣言を条約化し、各国にその実施を義務付けるために採択された国際規約。社会権規約、自由権規約とその選択議定書からなる。日本は1979年に一部保留の形で批准（1966年）",
+      "answer": "国際人権規約",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0e953topzd",
+      "question": "人種差別撤廃のために国連総会で採択された条約。日本は1995年に批准（人種的相違に基づくいかなる優越主義も科学的に誤りであり、また社会的に不当かつ危険であること）（1965年）",
+      "answer": "人種差別撤廃条約",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0eb4j3fhva",
+      "question": "思想・信条・宗教・民族などを理由に拘束されている「良心の囚人」の釈放、死刑制度の廃止などを訴え、人権擁護運動をしている民間有志による国際組織",
+      "answer": "アムネスティ・インターナショナル",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0ed3a6j3ua",
+      "question": "政治・社会・労働・教育などの分野におけるあらゆる形態の男女差別の是正・撤廃のために国連総会で採択された条約。日本は1985年に批准（1979年）",
+      "answer": "女性（女子）差別撤廃条約",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0eh4sds7sr",
+      "question": "募集・採用・配置・昇進に関する男女差別の禁止（1985年）（日本）",
+      "answer": "男女雇用機会均等法",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0eip772eaf",
+      "question": "児童の自由と権利を擁護するまめ「国連総会で採択された条約。18歳未満のすべての児童を対象。日本は1994年に批准（1989年）",
+      "answer": "子どもの権利条約",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "公共a",
+  "folder_id": "f1opih0i4p",
+  "published_by": {
+    "id": "32637",
+    "nickname": "たりき"
+  },
+  "incomplete": false
+}
