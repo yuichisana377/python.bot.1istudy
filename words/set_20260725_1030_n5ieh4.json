@@ -1,0 +1,218 @@
+{
+  "name": "公共a ③死の問題",
+  "cards": [
+    {
+      "id": "mrzo4c3nvz86",
+      "question": "従来の死の基準。\n三兆候死が確認される",
+      "answer": "心臓死",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzo5b9hkdfs",
+      "question": "三兆候死",
+      "answer": "心拍停止、自発呼吸の停止、瞳孔拡大",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzo6usd662r",
+      "question": "大脳や脳幹が機能しなくなり、回復不能になった不可逆的状態",
+      "answer": "脳死",
+      "explanation": "植物状態とか",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzo9phiyiar",
+      "question": "脳死と臓器移植の問題を考える諮問機関(しもんきかん)\n脳死患者からの臓器移植の道を開いた",
+      "answer": "脳死臨調\n(のうしりんちょう)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzoawfrhe9g",
+      "question": "臓器障害を持つひとに他の健康な臓器を移植する治療法",
+      "answer": "臓器移植",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzobiymcr2z",
+      "question": "脳死の人から臓器移植すること",
+      "answer": "脳死移植",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzodec5h3qy",
+      "question": "臓器移植の際に脳死を人の死と判断するこ法",
+      "answer": "臓器移植法",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzoeuhcn4ns",
+      "question": "腎臓や肝臓などの臓器を患者に提供する提供者",
+      "answer": "ドナー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzof439hs2x",
+      "question": "ドナーの反対",
+      "answer": "レシピエント",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzogcf6ge4y",
+      "question": "脳死での臓器提供の意思を示したカード",
+      "answer": "ドナーカード\n(臓器提供者意思表示カード)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzohm58wtk4",
+      "question": "脳死は死で、家族の同意で移植可能にする法",
+      "answer": "改正臓器移植法",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzoj8sacssy",
+      "question": "大脳の働きは失われたが、呼吸や循環などは機能している状態(スパゲッティ症候群)",
+      "answer": "植物状態",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzok7nphbwx",
+      "question": "回復困難な病気で苦痛から逃れるために人為的に死を早めること",
+      "answer": "安楽死",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzoktmafef8",
+      "question": "薬などを使う安楽死",
+      "answer": "積極的安楽死",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzolj14z01y",
+      "question": "生命維持機などを外す安楽死",
+      "answer": "消極的安楽死",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzomutckydl",
+      "question": "医師が患者やその家族に治療法を説明し、患者わ家族が同意すること",
+      "answer": "インフォームド・コンセント",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzonzfeeti3",
+      "question": "個人の事柄(治療の方針)を自分の意思で決定できる権利",
+      "answer": "自己決定権",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzorr9aqn5b",
+      "question": "回復困難な病気で、延命治療を拒否し自然死を選ぶこと",
+      "answer": "尊厳死",
+      "explanation": "消極的安楽死は途中で治療をやめたりすること\n尊厳死は延命治療を拒否",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzou26289ny",
+      "question": "判断力がある間に医師に自分の医療方法の意思を伝える。生前発行遺言",
+      "answer": "リヴィング・ウィル",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzowug3sdrh",
+      "question": "生命の質のこと。患者の人生や生活の質に重点を置いて医療を行う考え方",
+      "answer": "クオリティ・オブ・ライフ\n(QOL)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzox4r9eit7",
+      "question": "生命の尊厳",
+      "answer": "SOL",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzoy6nwzfxf",
+      "question": "治療が困難な患者の苦痛を和らげ安らかな死を迎えさせる\"治療\"",
+      "answer": "ターミナルケア",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzozyostf14",
+      "question": "末期患者の苦痛を取り除き安らかな死を迎えさせるための\"システム\"や\"施設\"",
+      "answer": "ホスピス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "公共a",
+  "folder_id": "f1opih0i4p",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  }
+}
