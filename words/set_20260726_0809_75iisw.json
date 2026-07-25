@@ -1,0 +1,246 @@
+{
+  "name": "公共a 定期試験　プリント11",
+  "cards": [
+    {
+      "id": "ms0ych8nuczc",
+      "question": "総人口に対して65歳以上の人口の占める割合",
+      "answer": "高齢化率",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0ycq00ejx4",
+      "question": "高齢化率が高くなること",
+      "answer": "高齢化",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0ydlun9ogj",
+      "question": "高齢化率が7％以上になった社会",
+      "answer": "高齢化社会",
+      "explanation": "これは国連の規定",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yf0qtbajw",
+      "question": "高齢化率が14%以上になった社会",
+      "answer": "高齢社会",
+      "explanation": "日本は高齢化社会→高齢社会の期間が短い\n⇨高齢化が早い",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yfncs3u7z",
+      "question": "高齢化率が21%以上になった社会",
+      "answer": "超高齢社会",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yh00xvyln",
+      "question": "出生時に，あと何年生きられるかを算出しもの",
+      "answer": "平均寿命",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yhmdh6bfm",
+      "question": "平均寿命が延びること",
+      "answer": "長寿化",
+      "explanation": "高齢化の原因",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yi5nibnq2",
+      "question": "子どもの出生率が低下していること",
+      "answer": "少子化",
+      "explanation": "高齢化の原因。総人口が減少してしまうので，結果として高齢化率が高まる",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yk7owojnb",
+      "question": "一人の女性が，一生の間に平均何人の子どもを産むかという推計率",
+      "answer": "合計特殊出生率",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0ylaidystq",
+      "question": "歳をとってから結婚する傾向",
+      "answer": "晩婚化",
+      "explanation": "少子化の直接的原因",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0ylqry4jxc",
+      "question": "未婚率の上昇",
+      "answer": "非婚化",
+      "explanation": "少子化の直接的原因",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yo6lts1mx",
+      "question": "夫婦と未婚の子どもから構成されている家族",
+      "answer": "核家族",
+      "explanation": "核家族化の進行が少子化の背景になっている",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yp0gwzr2b",
+      "question": "少子化の背景。女性の〇〇化",
+      "answer": "高学歴",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yprlihs3g",
+      "question": "職業を持つ女性が増加すること",
+      "answer": "女性の社会進出",
+      "explanation": "少子化の背景",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yrlxw8hk7",
+      "question": "高齢者を介助・保護すること",
+      "answer": "介護",
+      "explanation": "介護期間の長期化が，少子高齢化の課題",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0ysan1624g",
+      "question": "労働力の中核をなす15〜64歳の人口",
+      "answer": "生産年齢人口",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yt1engmfk",
+      "question": "生産年齢人口の減少によって起こる，少子高齢化の課題",
+      "answer": "労働力不足",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yucd5178u",
+      "question": "老齢・障害・死亡などに対し，お金を給付する制度",
+      "answer": "年金制度",
+      "explanation": "年金制度の見直しが，少子高齢化の課題",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yw3js83a3",
+      "question": "活力ある高齢社会を目指す高齢者保健福祉政策（1999）",
+      "answer": "ゴールドプラン21",
+      "explanation": "ゴールドプラン（1989）→新ゴールドプラン（1994）→ゴールドプラン21",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yx71s9dub",
+      "question": "身体的な理由などで，居宅での生活が困難になった高齢者が入る施設",
+      "answer": "（特別養護）老人ホーム",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0yxr560snm",
+      "question": "寝たきり高齢者らを，居宅において介護すること",
+      "answer": "在宅介護",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0z1ppab8rc",
+      "question": "在宅介護の例（3つ）",
+      "answer": "ホームヘルパー\nデイサービス\nショートステイ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0z49kof903",
+      "question": "満1歳未満の子どもがいる労働者は子どもが満1歳になるまで，介護を必要とする家族がいる労働者は3ヶ月，休業できることを定めた法律（1995）",
+      "answer": "育児・介護休業法",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0z59r6o7e2",
+      "question": "保険料を徴収して，高齢者に介護サービスを提供する社会保険制度（2000）",
+      "answer": "介護保険制度",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0zc08jwkjz",
+      "question": "子ども手当，高校無償化の政策（2010）",
+      "answer": "子ども・子育てビジョン",
+      "explanation": "エンゼルプラン（1994）→新エンゼルプラン（1999）→新新エンゼルプラン（2004）→子ども・子育てビジョン",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0zdm1jpduw",
+      "question": "男性にも育児休業を保障した法律（1991）",
+      "answer": "育児休業法",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "公共a",
+  "folder_id": "f1opih0i4p",
+  "published_by": {
+    "id": "32615",
+    "nickname": "小鷹"
+  },
+  "incomplete": false
+}
