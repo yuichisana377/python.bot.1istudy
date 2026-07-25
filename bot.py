@@ -1270,6 +1270,13 @@ def generate_card_filename():
     rand  = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
     return f"set_{date}_{time_}_{rand}.json"
 
+# ★ 一覧表示は軽量なメタ情報のみを返す（カード本体は含めない）。
+#   ─────────────────────────────────────────────
+#   以前はここで全カードセットの cards（問題文・解答・画像のbase64）を
+#   まるごと返していたため、デッキ数や画像が増えるほど一覧の読み込みが
+#   遅くなっていた。
+#   カード本体は、実際にそのデッキを開く（プレイ／編集）ときにだけ
+#   /get_card_set?filename=... で個別に取得する方式に変更した。
 @app.route("/list_cards", methods=["GET"])
 def list_cards():
     try:
@@ -1283,7 +1290,7 @@ def list_cards():
             result.append({
                 "filename": f["name"],
                 "name":     data.get("name", f["name"]),
-                "cards":    cards,
+                # ★ cards 本体は含めない。問題数だけ count として返す。
                 "count":    len(cards),
                 "subject":  data.get("subject"),
                 "folder_id": data.get("folder_id"),
@@ -1295,6 +1302,30 @@ def list_cards():
                 "published_by": (data.get("published_by") or {}).get("nickname"),
             })
         return jsonify({"ok": True, "sets": result})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+# ★ 単一のカードセットの本体（カード全問・画像含む）を取得する。
+#   デッキ一覧では呼ばれず、ユーザーがプレイ／編集のためにデッキを
+#   開いたタイミングでクライアントから呼ばれる。
+@app.route("/get_card_set", methods=["GET"])
+def get_card_set():
+    filename = request.args.get("filename")
+    if not filename:
+        return jsonify({"ok": False, "error": "filename は必須です"})
+    try:
+        data, _ = get_card_file(filename)
+        if data is None:
+            return jsonify({"ok": False, "error": "ファイルが見つかりません"})
+        return jsonify({
+            "ok": True,
+            "filename": filename,
+            "name": data.get("name", filename),
+            "cards": data.get("cards", []),
+            "subject": data.get("subject"),
+            "folder_id": data.get("folder_id"),
+            "published_by": (data.get("published_by") or {}).get("nickname"),
+        })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
