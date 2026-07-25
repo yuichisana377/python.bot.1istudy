@@ -71,18 +71,30 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ================================
 #  GitHub ユーティリティ
+#  ─────────────────────────────────────────────
+#  ★ 修正点：
+#   1. github_get / github_put が例外・エラーを握りつぶさないようにした。
+#      github_put はステータスコードを確認し、失敗時は GitHubWriteError を送出する。
+#   2. 複数人が同時に同じファイルを保存した場合、古い sha で PUT すると
+#      GitHub は 409 (Conflict) を返す。これまでは無視されて「保存できたのに
+#      実際は反映されていない」状態になっていた。409の場合は最新のshaを
+#      取り直して自動的に1回だけ再送する（github_put_safe）。
 # ================================
+class GitHubWriteError(Exception):
+    pass
+
 def github_get(filename):
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers)
+    r = requests.get(url, headers=headers, timeout=15)
     if r.status_code == 404:
         return None, None
+    r.raise_for_status()
     data = r.json()
     content = base64.b64decode(data["content"]).decode()
     return json.loads(content), data["sha"]
 
-def github_put(filename, content_obj, sha=None):
+def _github_put_once(filename, content_obj, sha=None):
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     encoded = base64.b64encode(
@@ -91,7 +103,31 @@ def github_put(filename, content_obj, sha=None):
     payload = {"message": f"update {filename}", "content": encoded}
     if sha:
         payload["sha"] = sha
-    requests.put(url, headers=headers, json=payload)
+    return requests.put(url, headers=headers, json=payload, timeout=15)
+
+def github_put(filename, content_obj, sha=None):
+    """
+    GitHubへの書き込み。失敗した場合は例外を送出する（以前は無視していた）。
+    ・409（sha衝突 = 他の誰かが先に保存した）の場合は、最新のshaを取り直して
+      1回だけ自動再試行する。
+    ・それでも失敗する場合は GitHubWriteError を送出するので、呼び出し側で
+      「保存に失敗しました」とユーザーに伝えられるようにする。
+    """
+    r = _github_put_once(filename, content_obj, sha)
+    if r.status_code in (200, 201):
+        return r.json()
+
+    if r.status_code == 409:
+        # 誰かが先に更新した → 最新のshaを取得して1回だけ再試行
+        _, latest_sha = github_get(filename)
+        r2 = _github_put_once(filename, content_obj, latest_sha)
+        if r2.status_code in (200, 201):
+            return r2.json()
+        raise GitHubWriteError(
+            f"GitHub保存に失敗しました（409再試行後も失敗）: {r2.status_code} {r2.text[:300]}"
+        )
+
+    raise GitHubWriteError(f"GitHub保存に失敗しました: {r.status_code} {r.text[:300]}")
 
 async def async_github_get(filename):
     loop = asyncio.get_event_loop()
@@ -123,7 +159,8 @@ async def async_save_config(guild_id: int, data: dict):
 def list_all_configs():
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers)
+    r = requests.get(url, headers=headers, timeout=15)
+    r.raise_for_status()
     files = r.json()
     return [
         f["name"] for f in files
@@ -155,17 +192,24 @@ async def async_save_plans(guild_id: int, plans: list):
 #  ログ
 # ================================
 def write_log(guild_id: int, log_type: str, detail: str):
-    filename = f"logs_{guild_id}.json"
-    logs, sha = github_get(filename)
-    logs = logs or []
-    now_jst = datetime.now(JST)
-    now_str = now_jst.strftime("%Y-%m-%d %H:%M:%S")
-    logs = [
-        log for log in logs
-        if (now_jst - datetime.strptime(log["time"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=JST)).days <= 30
-    ]
-    logs.append({"time": now_str, "type": log_type, "detail": detail})
-    github_put(filename, logs, sha)
+    """
+    ★ ログ保存の失敗は本質的な機能ではないので、例外を握りつぶして良い。
+       ただし今後の調査用に標準出力へは残す。
+    """
+    try:
+        filename = f"logs_{guild_id}.json"
+        logs, sha = github_get(filename)
+        logs = logs or []
+        now_jst = datetime.now(JST)
+        now_str = now_jst.strftime("%Y-%m-%d %H:%M:%S")
+        logs = [
+            log for log in logs
+            if (now_jst - datetime.strptime(log["time"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=JST)).days <= 30
+        ]
+        logs.append({"time": now_str, "type": log_type, "detail": detail})
+        github_put(filename, logs, sha)
+    except Exception as e:
+        print(f"[WARN] write_log failed (ignored): {e}")
 
 async def async_write_log(guild_id: int, log_type: str, detail: str):
     loop = asyncio.get_event_loop()
@@ -312,7 +356,10 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
 
     plans = load_plans(guild_id)
     plans.append(plan)
-    save_plans(guild_id, plans)
+    try:
+        save_plans(guild_id, plans)
+    except GitHubWriteError as e:
+        return False, f"保存に失敗しました（GitHubエラー）。もう一度お試しください。\n{e}"
 
     detail = f"{date_str} / {subject} / {tagged_content}"
     if "points" in plan:
@@ -416,7 +463,11 @@ async def delete_plan(interaction: discord.Interaction, target: str):
     if not deleted:
         await interaction.followup.send("その予定は見つかりませんでした。", ephemeral=True)
         return
-    save_plans(guild.id, new_plans)
+    try:
+        save_plans(guild.id, new_plans)
+    except GitHubWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（GitHubエラー）。もう一度お試しください。\n{e}", ephemeral=True)
+        return
     write_log(guild.id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
     msg = f"削除しました！\n{target}"
     target_channel = get_subject_channel_by_name(guild, deleted["subject"])
@@ -486,7 +537,11 @@ async def edit_plan(interaction: discord.Interaction, target: str, date: str = N
     elif current_category in POINT_CATEGORIES and "points" not in found:
         found["points"] = DEFAULT_TASK_POINTS
 
-    await async_save_plans(guild.id, plans)
+    try:
+        await async_save_plans(guild.id, plans)
+    except GitHubWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（GitHubエラー）。もう一度お試しください。\n{e}", ephemeral=True)
+        return
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
     await async_write_log(guild.id, "edit", detail=f"{before_str} → {after_str}")
     msg = f"編集しました！\n\n【編集前】\n{before_str}\n\n【編集後】\n{after_str}"
@@ -537,7 +592,11 @@ async def cleanup_command(interaction: discord.Interaction):
         p for p in plans
         if datetime.strptime(p["date"], "%Y-%m-%d").date() >= threshold
     ]
-    await async_save_plans(guild_id, new_plans)
+    try:
+        await async_save_plans(guild_id, new_plans)
+    except GitHubWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（GitHubエラー）。もう一度お試しください。\n{e}", ephemeral=True)
+        return
     if deleted_dates:
         await async_write_log(guild_id, "cleanup", detail="削除した日付: " + ", ".join(deleted_dates))
         await interaction.followup.send(
@@ -569,7 +628,11 @@ async def setchannel(interaction: discord.Interaction, type: app_commands.Choice
         config["remind_channel_id"] = interaction.channel.id
         label = "通生（朝5:30・夜20:00）"
 
-    await async_save_config(guild_id, config)
+    try:
+        await async_save_config(guild_id, config)
+    except GitHubWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（GitHubエラー）。もう一度お試しください。\n{e}", ephemeral=True)
+        return
     await interaction.followup.send(
         f"{label} の通知チャンネルを **#{interaction.channel.name}** に設定しました！"
     )
@@ -614,7 +677,11 @@ async def setup_roles(
     config["role_panel_channel_id"] = msg.channel.id
     config["commuter_role_id"] = 通生ロール.id
     config["dorm_role_id"] = 寮生ロール.id
-    await async_save_config(guild.id, config)
+    try:
+        await async_save_config(guild.id, config)
+    except GitHubWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（GitHubエラー）。パネルは投稿済みですが、設定の保存に失敗しました。\n{e}", ephemeral=True)
+        return
 
     await interaction.followup.send("パネルを投稿しました。", ephemeral=True)
 
@@ -810,6 +877,12 @@ def get_channels():
     guild_id = request.args.get("guild_id")
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
+    # ★ Botがまだ準備完了していない（再接続中・起動直後など）場合、
+    #    bot.get_guild() は必ず None を返してしまい、フロント側には
+    #    「guild not found」という誤解を招くメッセージが出ていた。
+    #    準備中であることを明示的に区別して返す。
+    if not bot.is_ready():
+        return jsonify({"ok": False, "error": "bot_not_ready", "message": "Botが起動中です。数秒後にもう一度お試しください。"})
     guild = bot.get_guild(int(guild_id))
     if not guild:
         return jsonify({"ok": False, "error": "guild not found"})
@@ -873,13 +946,19 @@ def add_study_log():
     ]
 
     logs.append(entry)
-    save_study_logs(guild_id, logs)
+    try:
+        save_study_logs(guild_id, logs)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
 
     # --- ポイント加算（5分ごとに1pt） ---
     earned = entry["minutes"] // 5
     pts = load_points(guild_id)
     pts[entry["student_id"]] = pts.get(entry["student_id"], 0) + earned
-    save_points(guild_id, pts)
+    try:
+        save_points(guild_id, pts)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
 
     return jsonify({"ok": True, "earned": earned, "total": pts[entry["student_id"]]})
 
@@ -949,7 +1028,10 @@ def edit_schedule():
     elif current_category in POINT_CATEGORIES and "points" not in found:
         found["points"] = DEFAULT_TASK_POINTS
 
-    save_plans(guild_id, plans)
+    try:
+        save_plans(guild_id, plans)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
     write_log(guild_id, "edit", detail=f"{before_str} → {after_str}")
     if guild:
@@ -983,7 +1065,10 @@ def delete_schedule():
             new_plans.append(p)
     if not deleted:
         return jsonify({"ok": False, "error": "plan not found"})
-    save_plans(guild_id, new_plans)
+    try:
+        save_plans(guild_id, new_plans)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
     write_log(guild_id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
     if guild:
         target_channel = get_subject_channel_by_name(guild, deleted["subject"])
@@ -1039,7 +1124,10 @@ def update_timetable():
         "items":   data.get("items", []),
         "note":    data.get("note", ""),
     }
-    save_timetable(int(guild_id), tt)
+    try:
+        save_timetable(int(guild_id), tt)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"時間割変更: {key} → {data.get('subject')}")
     return jsonify({"ok": True})
 
@@ -1058,7 +1146,10 @@ def set_holiday():
         "reason": data.get("reason", "休校"),
         "note":   data.get("note", ""),
     }
-    save_timetable(int(guild_id), tt)
+    try:
+        save_timetable(int(guild_id), tt)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"休校設定: {data.get('date')} {data.get('reason')}")
     return jsonify({"ok": True})
 
@@ -1072,7 +1163,10 @@ def delete_timetable():
     tt = load_timetable(int(guild_id))
     if key in tt:
         del tt[key]
-        save_timetable(int(guild_id), tt)
+        try:
+            save_timetable(int(guild_id), tt)
+        except GitHubWriteError as e:
+            return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
         write_log(int(guild_id), "edit", detail=f"時間割変更削除: {key}")
     return jsonify({"ok": True})
 
@@ -1194,12 +1288,18 @@ def complete_task():
         })
 
     done[student_id] = normalized
-    save_completed_tasks(guild_id, done)
+    try:
+        save_completed_tasks(guild_id, done)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
 
     # --- ポイント加算 ---
     pts = load_points(guild_id)
     pts[student_id] = pts.get(student_id, 0) + points
-    save_points(guild_id, pts)
+    try:
+        save_points(guild_id, pts)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
 
     return jsonify({"ok": True, "total": pts[student_id]})
 
@@ -1231,27 +1331,53 @@ def uncomplete_task():
 
     normalized = [e for e in normalized if e["id"] != task_id]
     done[student_id] = normalized
-    save_completed_tasks(guild_id, done)
+    try:
+        save_completed_tasks(guild_id, done)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
 
     # --- ポイント減算（0未満にはしない） ---
     removed_points = target.get("points") or 0
     pts = load_points(guild_id)
     pts[student_id] = max(0, pts.get(student_id, 0) - removed_points)
-    save_points(guild_id, pts)
+    try:
+        save_points(guild_id, pts)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
 
     return jsonify({"ok": True, "total": pts[student_id]})
 
 # ================================
 #  Flask API — 単語カード
+#  ─────────────────────────────────────────────
+#  ★ 修正点（最重要）：
+#   以前の list_cards は「カードファイルの一覧を取得 → ファイルの数だけ
+#   github_get() を個別に呼んでメタ情報だけ取り出す」という実装だった。
+#   フロント側はこれを10秒おきにポーリングしているため、デッキ数が
+#   増えるほど GitHub API呼び出しが線形に増え、レート制限やタイムアウト
+#   （フロント側は5秒でabort）に引っかかりやすくなっていた。
+#
+#   これを解消するため、単語カードのメタ情報（name/count/subject/
+#   folder_id/published_by など、カード本体を含まない軽量なデータ）を
+#   まとめて1つの索引ファイル cards_index_{guild非依存}.json として持ち、
+#   save_cards / delete_cards のたびにその索引だけを更新する方式にした。
+#   list_cards はこの索引ファイルを1回 github_get するだけで済むため、
+#   GitHub APIコール数はデッキ数に依存せず常に1回になる。
+#
+#   既存の cards/*.json はそのまま本体データとして使い続けるので、
+#   移行作業は不要（索引ファイルが存在しない場合は自動的に
+#   フォルダをスキャンして再構築する）。
 # ================================
 CARDS_DIR = "words"
+CARDS_INDEX_FILE = "cards_index.json"
 
 def list_card_files():
     url     = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CARDS_DIR}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers)
+    r = requests.get(url, headers=headers, timeout=15)
     if r.status_code == 404:
         return []
+    r.raise_for_status()
     files = r.json()
     return [f for f in files if isinstance(f, dict) and f["name"].endswith(".json")]
 
@@ -1270,38 +1396,84 @@ def generate_card_filename():
     rand  = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
     return f"set_{date}_{time_}_{rand}.json"
 
-# ★ 一覧表示は軽量なメタ情報のみを返す（カード本体は含めない）。
-#   ─────────────────────────────────────────────
-#   以前はここで全カードセットの cards（問題文・解答・画像のbase64）を
-#   まるごと返していたため、デッキ数や画像が増えるほど一覧の読み込みが
-#   遅くなっていた。
+def _meta_from_card_data(filename, data):
+    cards = data.get("cards", [])
+    return {
+        "filename": filename,
+        "name":     data.get("name", filename),
+        "count":    len(cards),
+        "subject":  data.get("subject"),
+        "folder_id": data.get("folder_id"),
+        "has_folder_id": "folder_id" in data,
+        "published_by": (data.get("published_by") or {}).get("nickname"),
+    }
+
+def load_cards_index():
+    """索引ファイルを取得する。存在しない場合は None を返す（呼び出し側で再構築する）。"""
+    data, sha = github_get(CARDS_INDEX_FILE)
+    return data, sha
+
+def save_cards_index(index_list, sha=None):
+    if sha is None:
+        _, sha = github_get(CARDS_INDEX_FILE)
+    github_put(CARDS_INDEX_FILE, index_list, sha)
+
+def rebuild_cards_index():
+    """
+    索引ファイルが無い（初回・以前のデータ）場合に、wordsフォルダを
+    スキャンして索引を作り直す。これは初回だけ発生する重い処理。
+    """
+    files = list_card_files()
+    index = []
+    for f in files:
+        data, _ = github_get(f"{CARDS_DIR}/{f['name']}")
+        if data is None:
+            continue
+        index.append(_meta_from_card_data(f["name"], data))
+    try:
+        save_cards_index(index, sha=None)
+    except GitHubWriteError as e:
+        print(f"[WARN] cards_index の再構築保存に失敗しました: {e}")
+    return index
+
+def upsert_cards_index_entry(filename, data):
+    """save_cards のたびに呼び出し、索引ファイル内の該当エントリだけを更新する。"""
+    index, sha = load_cards_index()
+    if index is None:
+        index = rebuild_cards_index()
+        index, sha = load_cards_index()
+    meta = _meta_from_card_data(filename, data)
+    found = False
+    for i, entry in enumerate(index):
+        if entry.get("filename") == filename:
+            index[i] = meta
+            found = True
+            break
+    if not found:
+        index.append(meta)
+    save_cards_index(index, sha)
+
+def remove_cards_index_entry(filename):
+    """delete_cards のたびに呼び出し、索引ファイルから該当エントリを削除する。"""
+    index, sha = load_cards_index()
+    if index is None:
+        index = rebuild_cards_index()
+        index, sha = load_cards_index()
+    new_index = [e for e in index if e.get("filename") != filename]
+    if len(new_index) != len(index):
+        save_cards_index(new_index, sha)
+
+# ★ 一覧表示は索引ファイル（cards_index.json）を1回読むだけ。
 #   カード本体は、実際にそのデッキを開く（プレイ／編集）ときにだけ
-#   /get_card_set?filename=... で個別に取得する方式に変更した。
+#   /get_card_set?filename=... で個別に取得する方式は維持。
 @app.route("/list_cards", methods=["GET"])
 def list_cards():
     try:
-        files  = list_card_files()
-        result = []
-        for f in files:
-            data, _ = github_get(f"{CARDS_DIR}/{f['name']}")
-            if data is None:
-                continue
-            cards = data.get("cards", [])
-            result.append({
-                "filename": f["name"],
-                "name":     data.get("name", f["name"]),
-                # ★ cards 本体は含めない。問題数だけ count として返す。
-                "count":    len(cards),
-                "subject":  data.get("subject"),
-                "folder_id": data.get("folder_id"),
-                # ★ このカードセットのJSONに folder_id キー自体が存在するかどうか。
-                #   古いデータ（フォルダ機能追加前に保存されたもの）には無いので、
-                #   クライアント側で「サーバーが明示的にルートだと言っている」のか
-                #   「まだこの機能に未対応のデータ」なのかを区別できるようにする。
-                "has_folder_id": "folder_id" in data,
-                "published_by": (data.get("published_by") or {}).get("nickname"),
-            })
-        return jsonify({"ok": True, "sets": result})
+        index, _ = load_cards_index()
+        if index is None:
+            # 索引ファイルがまだ存在しない（初回移行時）→ 1回だけ再構築する
+            index = rebuild_cards_index()
+        return jsonify({"ok": True, "sets": index})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -1353,7 +1525,7 @@ def save_cards():
     if is_update:
         _, sha = get_card_file(filename)
 
-    put_card_file(filename, {
+    card_payload = {
         "name": name,
         "cards": cards,
         "subject": subject,
@@ -1362,7 +1534,20 @@ def save_cards():
             "id": publisher_id,
             "nickname": publisher_nickname,
         },
-    }, sha)
+    }
+
+    try:
+        put_card_file(filename, card_payload, sha)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+
+    # ★ 索引ファイルも合わせて更新する（list_cardsを軽く保つため）
+    try:
+        upsert_cards_index_entry(filename, card_payload)
+    except GitHubWriteError as e:
+        # カード本体の保存自体は成功しているので、索引更新の失敗は警告に留める。
+        # 次回 list_cards アクセス時に再構築されるので実害は小さい。
+        print(f"[WARN] cards_index の更新に失敗しました: {e}")
 
     # --- Discord通知（silentがtrueならスキップ） ---
     if guild_id and not silent:
@@ -1396,11 +1581,20 @@ def delete_cards():
         return jsonify({"ok": False, "error": "filename は必須です"})
     url     = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CARDS_DIR}/{filename}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers)
+    r = requests.get(url, headers=headers, timeout=15)
     if r.status_code == 404:
         return jsonify({"ok": False, "error": "ファイルが見つかりません"})
     sha = r.json().get("sha")
-    requests.delete(url, headers=headers, json={"message": f"delete {filename}", "sha": sha})
+    del_res = requests.delete(url, headers=headers, json={"message": f"delete {filename}", "sha": sha}, timeout=15)
+    if del_res.status_code not in (200, 201):
+        return jsonify({"ok": False, "error": f"github_delete_failed: {del_res.status_code} {del_res.text[:300]}"})
+
+    # ★ 索引ファイルからも削除する
+    try:
+        remove_cards_index_entry(filename)
+    except GitHubWriteError as e:
+        print(f"[WARN] cards_index からの削除に失敗しました: {e}")
+
     return jsonify({"ok": True})
 
 # ================================
@@ -1503,6 +1697,8 @@ def save_folder():
 
         save_card_folders(folders, sha)
         return jsonify({"ok": True, "id": folder_id})
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -1519,6 +1715,8 @@ def delete_folder():
         new_folders = [f for f in folders if f["id"] not in remove_ids]
         save_card_folders(new_folders, sha)
         return jsonify({"ok": True, "deleted_ids": list(remove_ids)})
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
