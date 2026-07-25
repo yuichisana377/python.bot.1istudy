@@ -71,14 +71,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ================================
 #  GitHub ユーティリティ
-#  ─────────────────────────────────────────────
-#  ★ 修正点：
-#   1. github_get / github_put が例外・エラーを握りつぶさないようにした。
-#      github_put はステータスコードを確認し、失敗時は GitHubWriteError を送出する。
-#   2. 複数人が同時に同じファイルを保存した場合、古い sha で PUT すると
-#      GitHub は 409 (Conflict) を返す。これまでは無視されて「保存できたのに
-#      実際は反映されていない」状態になっていた。409の場合は最新のshaを
-#      取り直して自動的に1回だけ再送する（github_put_safe）。
 # ================================
 class GitHubWriteError(Exception):
     pass
@@ -248,20 +240,6 @@ def save_points(guild_id: int, pts: dict, sha=None):
 
 # ============================================================
 #  課題達成データ
-#
-#  completed_tasks_{guild_id}.json の形式:
-#  {
-#    "1I001": [
-#      {"id": "task_id_1", "date": "2025-06-30", "points": 5, "nickname": "太郎"},
-#      {"id": "task_id_2", "date": "2025-06-28", "points": 10, "nickname": "太郎"}
-#    ],
-#    "1I002": [
-#      {"id": "task_id_3", "date": "2025-06-25", "points": 5, "nickname": "花子"}
-#    ]
-#  }
-#
-#  ※ 旧形式（文字列のみ／points・nicknameキーなし）も読み込み時に自動正規化される。
-#     データの移行作業は不要。
 # ============================================================
 def load_completed_tasks(guild_id: int) -> dict:
     data, _ = github_get(f"completed_tasks_{guild_id}.json")
@@ -609,11 +587,13 @@ async def cleanup_command(interaction: discord.Interaction):
 # ================================
 #  /setchannel
 # ================================
+
 @bot.tree.command(name="setchannel", description="通知チャンネルを設定する")
-@app_commands.describe(type="どちらの朝通知に使うチャンネルか（省略時は通生）")
+@app_commands.describe(type="どの通知に使うチャンネルか（省略時は通生）")
 @app_commands.choices(type=[
     app_commands.Choice(name="通生（朝5:30 / 夜20:00）", value="commute"),
     app_commands.Choice(name="寮生（朝7:20 / 夜20:00）", value="dorm"),
+    app_commands.Choice(name="お知らせ用", value="main"),
 ])
 async def setchannel(interaction: discord.Interaction, type: app_commands.Choice[str] = None):
     await interaction.response.defer(ephemeral=True)
@@ -624,6 +604,9 @@ async def setchannel(interaction: discord.Interaction, type: app_commands.Choice
     if kind == "dorm":
         config["remind_channel_id_dorm"] = interaction.channel.id
         label = "寮生（朝7:20）"
+    elif kind == "main":
+        config["notice_channel_id"] = interaction.channel.id
+        label = "お知らせ用"
     else:
         config["remind_channel_id"] = interaction.channel.id
         label = "通生（朝5:30・夜20:00）"
@@ -636,7 +619,6 @@ async def setchannel(interaction: discord.Interaction, type: app_commands.Choice
     await interaction.followup.send(
         f"{label} の通知チャンネルを **#{interaction.channel.name}** に設定しました！"
     )
-
 # ================================
 #  /setup_roles（通生/寮生 振り分けパネル）
 # ================================
@@ -772,7 +754,7 @@ async def help_command(interaction: discord.Interaction):
         "**/delete** — 予定を削除する\n"
         "**/edit** — 予定を編集する\n"
         "**/cleanup** — 過去の予定を削除する\n"
-        "**/setchannel** — 通知チャンネルを設定する（通生／寮生を選択可）\n"
+        "**/setchannel** — 通知チャンネルを設定する（通生／寮生／お知らせ用を選択可）\n"
         "**/setup_roles** — 通生/寮生 振り分けパネルを投稿する\n"
         "**webページ** - https://1istudyweb.pages.dev/\n"
     )
@@ -1583,6 +1565,7 @@ def delete_cards():
 # ================================================================
 
 NOTICES_DIR = "notices"
+NOTICES_META_FILE = "notices_meta.json"
 NOTICE_ALLOWED_EXT = (".md", ".txt")
 
 
@@ -1609,19 +1592,33 @@ def list_notice_files():
     ]
 
 
+def load_notices_meta():
+    data, sha = github_get(NOTICES_META_FILE)
+    return (data or {}), sha
+
+
+def save_notices_meta(meta, sha=None):
+    if sha is None:
+        _, sha = github_get(NOTICES_META_FILE)
+    github_put(NOTICES_META_FILE, meta, sha)
+
+
 @app.route("/list_notices", methods=["GET"])
 def list_notices():
-    """お知らせファイルの一覧を返す（中身は含まない、軽量版）"""
+    """お知らせファイルの一覧を返す（中身は含まない、投稿者名つき）"""
     try:
         files = list_notice_files()
-        notices = [
-            {
+        meta, _ = load_notices_meta()
+        notices = []
+        for f in files:
+            m = meta.get(f["name"], {})
+            notices.append({
                 "filename": f["name"],
                 "size": f.get("size"),
                 "ext": f["name"].rsplit(".", 1)[-1].lower(),
-            }
-            for f in files
-        ]
+                "uploader": m.get("uploader"),
+                "uploaded_at": m.get("uploaded_at"),
+            })
         # ファイル名（先頭に日付を付ける運用を推奨）で新しい順に並べる
         notices.sort(key=lambda n: n["filename"], reverse=True)
         return jsonify({"ok": True, "notices": notices})
@@ -1631,7 +1628,7 @@ def list_notices():
 
 @app.route("/get_notice", methods=["GET"])
 def get_notice():
-    """お知らせ1件の中身（テキスト本文）を返す"""
+    """お知らせ1件の中身（テキスト本文）と投稿者名を返す"""
     filename = request.args.get("filename", "")
     if not _is_safe_notice_filename(filename):
         return jsonify({"ok": False, "error": "invalid filename"})
@@ -1644,7 +1641,17 @@ def get_notice():
         r.raise_for_status()
         data = r.json()
         content = base64.b64decode(data["content"]).decode("utf-8")
-        return jsonify({"ok": True, "filename": filename, "content": content})
+
+        meta, _ = load_notices_meta()
+        m = meta.get(filename, {})
+
+        return jsonify({
+            "ok": True,
+            "filename": filename,
+            "content": content,
+            "uploader": m.get("uploader"),
+            "uploaded_at": m.get("uploaded_at"),
+        })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -1655,7 +1662,7 @@ def upload_notice():
     data = request.json or {}
     filename = (data.get("filename") or "").strip()
     content = data.get("content")
-    uploader = (data.get("uploader") or "匿名").strip()
+    uploader = (data.get("uploader") or "匿名").strip() or "匿名"
     guild_id = data.get("guild_id")
 
     if not _is_safe_notice_filename(filename):
@@ -1686,14 +1693,28 @@ def upload_notice():
             "error": f"github_write_failed: {put_res.status_code} {put_res.text[:300]}"
         })
 
+    # --- 投稿者メタ情報を notices_meta.json に保存 ---
+    try:
+        meta, meta_sha = load_notices_meta()
+        meta[filename] = {
+            "uploader": uploader,
+            "uploaded_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
+        }
+        save_notices_meta(meta, meta_sha)
+    except GitHubWriteError as e:
+        # 本体の保存自体は成功しているので、メタ情報の失敗は警告に留める
+        print(f"[WARN] notices_meta の更新に失敗しました: {e}")
+
     # --- 任意：Discordの通知チャンネルに投稿 ---
+    #     /setchannel main で設定した「お知らせ用」チャンネルを優先し、
+    #     未設定の場合は通生用チャンネル（remind_channel_id）にフォールバックする
     if guild_id:
         try:
             guild_id_int = int(guild_id)
             guild = bot.get_guild(guild_id_int)
             if guild:
                 config = load_config(guild_id_int)
-                channel_id = config.get("remind_channel_id")
+                channel_id = config.get("notice_channel_id") or config.get("remind_channel_id")
                 channel = bot.get_channel(channel_id) if channel_id else None
                 if channel:
                     action = "更新" if is_update else "公開"
@@ -1704,12 +1725,12 @@ def upload_notice():
         except Exception as e:
             print(f"[WARN] upload_notice notify failed: {e}")
 
-    return jsonify({"ok": True, "filename": filename, "is_update": is_update})
+    return jsonify({"ok": True, "filename": filename, "is_update": is_update, "uploader": uploader})
 
 
 @app.route("/delete_notice", methods=["POST"])
 def delete_notice():
-    """お知らせファイルを削除する"""
+    """お知らせファイルを削除する（メタ情報も合わせて削除）"""
     data = request.json or {}
     filename = data.get("filename", "")
     if not _is_safe_notice_filename(filename):
@@ -1731,7 +1752,18 @@ def delete_notice():
             "ok": False,
             "error": f"github_delete_failed: {del_res.status_code} {del_res.text[:300]}"
         })
+
+    # メタ情報からも削除
+    try:
+        meta, meta_sha = load_notices_meta()
+        if filename in meta:
+            del meta[filename]
+            save_notices_meta(meta, meta_sha)
+    except GitHubWriteError as e:
+        print(f"[WARN] notices_meta からの削除に失敗しました: {e}")
+
     return jsonify({"ok": True})
+
 # ================================
 #  Flask API — カードのフォルダ（みんなで共有）
 # ================================
