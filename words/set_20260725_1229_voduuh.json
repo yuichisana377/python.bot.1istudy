@@ -1,0 +1,65 @@
+{
+  "name": "地理a 前期定期テスト【プリント No.17】",
+  "cards": [
+    {
+      "id": "mrzt32t6yc2r",
+      "question": "原油は○○に埋蔵量の約50％が集中",
+      "answer": "西アジア",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzt491f70tx",
+      "question": "原油は貯蔵や運搬が液化天然ガスや石炭と比べて○○",
+      "answer": "容易",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzt4tzkym3r",
+      "question": "原油は燃料価格は液化天然ガスや石炭と比べて○○",
+      "answer": "割高",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzt6yd71tjh",
+      "question": "石油精製業と石油化学工業を結び付けたもの",
+      "answer": "石油化学コンビナート",
+      "explanation": "原油を精製する石油精製業\n精製によって得られたナフサを原料にプラスチックや合成繊維を作る石油化学工業",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzt7o5szo93",
+      "question": "日本は石炭化学コンビナートは○○に立地",
+      "answer": "臨海部",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzt8h0wj8th",
+      "question": "欧米では石油化学コンビナートは原油産地からパイプラインによって結ばれた○○にもみられる",
+      "answer": "内陸都市",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "地理a",
+  "folder_id": "qujgbh8vui",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  }
+}
