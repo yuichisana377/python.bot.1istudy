@@ -115,7 +115,8 @@
     "subject": "地理a",
     "folder_id": "qujgbh8vui",
     "has_folder_id": true,
-    "published_by": "Chiro"
+    "published_by": "Chiro",
+    "incomplete": false
   },
   {
     "filename": "set_20260725_1002_2achdv.json",
