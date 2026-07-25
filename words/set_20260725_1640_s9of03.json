@@ -1,0 +1,137 @@
+{
+  "name": "公共a ⑦情報倫理",
+  "cards": [
+    {
+      "id": "ms01f2dtixa5",
+      "question": "テレビの視聴率や新聞の売り上げなど番組や記事の価値を「商品価値」としてのみとらえる考え方",
+      "answer": "コマーシャリズム(商業主義)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms01iehtg6qn",
+      "question": "人の興味を引き、注目を集めることを第一とする考え方",
+      "answer": "センセーショナリズム(扇情主義)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms01kx26pn3e",
+      "question": "ラジオ、テレビ、映画などの媒体を通じ、認知不可能な速度または音量でメッセージを出すことによって広告効果を狙う手法",
+      "answer": "サブリミナル効果",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms01m7eanaye",
+      "question": "政府、大企業、メディアが\n都合よく不正確な情報を流したり、情報を隠蔽したりすること",
+      "answer": "情報操作",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms01o4149yt0",
+      "question": "政府や政党を批判して国民の関心を集めたり、逆に政策を広めたりする役割を担ったりすること",
+      "answer": "世論操作",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms01raszx2n7",
+      "question": "コンピュータやネットワークの仕組みを悪用し、不当に利益を得たり、他人に損害を与える行為",
+      "answer": "サイバー犯罪",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms01sr3lgnxb",
+      "question": "コンピュータの機能や記憶を破壊するために作られたプログラム",
+      "answer": "コンピュータ・ウイルス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms01ukky7h8k",
+      "question": "コンピュータについて知識を持つ人。\n最近は不正アクセスしたり盗聴や改ざん、破壊など違法行為をする人としても使われる",
+      "answer": "ハッカー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms01xrmmnbpm",
+      "question": "SNSなどで自分と似た意見が返ってくる状況で、同種で均等な主張ばかりに触れるようになること",
+      "answer": "エコーチェンバー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms01zgwiyr0s",
+      "question": "産業財産権や著作権などの権利",
+      "answer": "知的財産権",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms021b1y9vek",
+      "question": "知的財産権の一つでコンピュータソフトの不正コピーで侵害される権利",
+      "answer": "著作権",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms023mm06pxv",
+      "question": "日常的にコンピュータに触れる人に生じる、頭痛やや肩こりを伴う不安や憂鬱感",
+      "answer": "テクノストレス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms025c8u3x6j",
+      "question": "コンピュータ活用能力や情報収集能力の格差",
+      "answer": "デジタル・デバイド",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0269uio45l",
+      "question": "コンピュータが年を下2桁（例: 1999年は「99」）だけで記録していたため、2000年を「00（1900年）」と間違えて止まったり誤作動したりする懸念があったトラブル",
+      "answer": "2000年問題",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "公共a",
+  "folder_id": "f1opih0i4p",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  }
+}
