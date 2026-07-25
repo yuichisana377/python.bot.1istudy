@@ -1,0 +1,164 @@
+{
+  "name": "公共a ⑥高度情報社会",
+  "cards": [
+    {
+      "id": "mrzzotitiejd",
+      "question": "自然に存在してる動植物を採集したりする社会",
+      "answer": "狩猟社会",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzzrno0ntm0",
+      "question": "家畜の飼育や穀物の栽培により効率的に生活ができる社会",
+      "answer": "農耕社会",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzzukk1ow06",
+      "question": "モノを中心とした社会\n自然を加工して人口物を作る社会",
+      "answer": "工業社会",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzzw56yhyhz",
+      "question": "情報を中心とした社会\n情報の流通により人やモノが動く社会",
+      "answer": "情報社会",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrzzy1xgb61a",
+      "question": "日本政府が掲げる「我が国が目指すべき未来社会の姿」",
+      "answer": "Society5.0",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms002zdq6b6u",
+      "question": "1カ所から不特定多数の人々に向かって大量の情報を送る一方向的なコミュニケーションの手段",
+      "answer": "マスメディア",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms004nu0xu99",
+      "question": "ダニエル・ベルが唱えた第三次産業に移行する社会",
+      "answer": "脱工業化社会",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms008fxo59ja",
+      "question": "マスメディアを活用した情報伝達の過程",
+      "answer": "マスコミ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms00cutaqk9l",
+      "question": "複数のネットワークを通信回線で接続してネットワーク化したもの",
+      "answer": "コンピュータ・ネットワーク",
+      "explanation": "これにより双方向性のコミュニケーションが可能に",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms00djmznk4g",
+      "question": "情報通信の技術革新",
+      "answer": "IT革命",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms00iktk06mv",
+      "question": "IT革命により様々なメディアが結ばれ、大量の情報がやり取りされる社会",
+      "answer": "高度情報社会",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms00opc9aj7u",
+      "question": "双方向性が目指され、光ファイバーや半導体などの新しい技術を導入したコミュニケーションの手段",
+      "answer": "ニューメディア",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms00vs6ot65h",
+      "question": "通信回線によって世界各地のコンピュータを結び、必要な情報を集めたりできる地球規模の巨大なコンピュータ・ネットワークのこと",
+      "answer": "インターネット",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms00wr839lc3",
+      "question": "人工知能",
+      "answer": "AI",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms00x5l7dy3e",
+      "question": "モノのインターネット",
+      "answer": "IoT",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms00zgyzl1a2",
+      "question": "事業に役立つ知見を算出するためのデータ",
+      "answer": "ビッグデータ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms010n2riszr",
+      "question": "いつでもどこでもだれとでも\nネットワークでつながる社会",
+      "answer": "ユビキタス社会",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "公共a",
+  "folder_id": "f1opih0i4p",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  }
+}
