@@ -1,0 +1,155 @@
+{
+  "name": "公共a ⑧国際化とグローバル化",
+  "cards": [
+    {
+      "id": "ms013f45b3rx",
+      "question": "互いに異なる文化同士が出会った際に生じる、文化上の対立",
+      "answer": "文化摩擦",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms013wnkb2bs",
+      "question": "他の文化に出会った際、その違いから衝撃を受けること",
+      "answer": "カルチャーショック",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms019pey5bkw",
+      "question": "自民族の文化や価値観だけを正統のものと考え、多民族の文化に対して否定的・抑圧的・敵対的な態度をとる自民族優越の思考傾向",
+      "answer": "エスノセントリズム（自民族中心主義）",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms01awb0n9fh",
+      "question": "民族の統一・独立や国家形成を目的とする思想や運動",
+      "answer": "ナショナリズム",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms04ydtosvg8",
+      "question": "多数派民族による少数派民族への差別、あるいは侵略した民族による被支配民族や被抑圧民族への差別",
+      "answer": "民族差別",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms04zfqwt7fd",
+      "question": "マジョリティの反対語で、人種や宗教において多数派を形成できない少数派、少数民族",
+      "answer": "マイノリティ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms0502sxqss4",
+      "question": "インディアン、アイヌ民族",
+      "answer": "先住民\n[例を２つ]",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms051suqjjos",
+      "question": "すべての文化は与えられた環境に適応する中でれきし的に形成されてきたものであり、それぞれに固有の価値を持つものとみなす考え方",
+      "answer": "文化相対主義",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms053ncxa5dk",
+      "question": "単一の文化価値に還元することなく、１つ１つの文化が多様性を持ったまま、相互の差異を認め合う共生関係を築き上げようとする考え方。",
+      "answer": "マルチカルチュラリズム（文化相対主義）",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms053ubhjeds",
+      "question": "多様性",
+      "answer": "ダイバーシティ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms055ckcv2vi",
+      "question": "国境がないという意味。財やサービスを始め、人や資金や情報などのあらゆるものが、国境に関係なく移動が可能になった状況",
+      "answer": "ボーダーレス",
+      "explanation": "多国籍企業、衛星放送、NGOなど",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms056u1z45gn",
+      "question": "政府や政府機関ではなく、平和・人権・環境などの公共問題に自発的に取り組む民間団体",
+      "answer": "NGO（非政府組織）",
+      "explanation": "アムネスティ・インターナショナル、国境なき医師団",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms057vmapk6a",
+      "question": "先進国の政府による、発展途上国への経済開発のための援助",
+      "answer": "ODA（政府開発援助）",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms058u3l9yle",
+      "question": "地球から作られた造語で、人間の諸活動が時間的・地域的な制約を離れ、地球規模になりつつある現象のこと。",
+      "answer": "グローバリゼーション",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms05a1m2k9ol",
+      "question": "地球の一体化を見据えたうえで求められる世界的な統一基準",
+      "answer": "グローバル・スタンダード",
+      "explanation": "近年ではアメリカ的な基準がそのように考えられている",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms05bb5ok2ve",
+      "question": "グローバリゼーションが超大国アメリカの経済進出を招いて途上国との貧富の差を拡大し、利益優先の経済活動と開発が環境を破壊するという考え",
+      "answer": "反グローバリゼーション",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "公共a",
+  "folder_id": "f1opih0i4p",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  }
+}
