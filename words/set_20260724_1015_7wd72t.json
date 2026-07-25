@@ -85,7 +85,7 @@
     {
       "id": "mry902k9eruk",
       "question": "配位結合したイオンの例",
-      "answer": "オキソニウムイオン　OH3\nアンモニウムイオン　NH4+\nなど",
+      "answer": "オキソニウムイオン　H3O+\nアンモニウムイオン　NH4+\nなど",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -122,7 +122,7 @@
   "subject": "化学1a",
   "folder_id": "05aaqyfmyi",
   "published_by": {
-    "id": "32628",
+    "id": "32615",
     "nickname": "hara-Kirby"
   }
 }
