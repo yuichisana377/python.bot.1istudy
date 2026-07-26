@@ -3,7 +3,7 @@
   "cards": [
     {
       "id": "mry7tyuknc41",
-      "question": "一番電気陰性度が大きい電子",
+      "question": "一番電気陰性度が大きい原子",
       "answer": "F(フッ素)",
       "explanation": "",
       "imgs_q": [],
@@ -122,7 +122,8 @@
   "subject": "化学1a",
   "folder_id": "05aaqyfmyi",
   "published_by": {
-    "id": "32615",
+    "id": "32623",
     "nickname": "hara-Kirby"
-  }
+  },
+  "incomplete": false
 }
