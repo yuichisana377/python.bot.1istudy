@@ -135,7 +135,8 @@
     "subject": "公共a",
     "folder_id": "f1opih0i4p",
     "has_folder_id": true,
-    "published_by": "hara-Kirby"
+    "published_by": "hara-Kirby",
+    "incomplete": false
   },
   {
     "filename": "set_20260725_1036_2fjitn.json",
