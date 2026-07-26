@@ -21,7 +21,7 @@
     },
     {
       "id": "mrzzukk1ow06",
-      "question": "モノを中心とした社会\n自然を加工して人口物を作る社会",
+      "question": "モノを中心とした社会\n自然を加工して人工物を作る社会",
       "answer": "工業社会",
       "explanation": "",
       "imgs_q": [],
@@ -158,7 +158,8 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32628",
+    "id": "32615",
     "nickname": "hara-Kirby"
-  }
+  },
+  "incomplete": false
 }
