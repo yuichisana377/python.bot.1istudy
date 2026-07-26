@@ -3,7 +3,7 @@
   "cards": [
     {
       "id": "ms14ja8ax21g",
-      "question": "12〜23歳くらいまでの，児童期から青年期に移行する期間",
+      "question": "12〜23歳くらいまでの，児童期から成人期に移行する期間",
       "answer": "青年期",
       "explanation": "職業選択の自由から生まれたと言われる",
       "imgs_q": [],
@@ -293,7 +293,7 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32615",
+    "id": "32628",
     "nickname": "小鷹"
   },
   "incomplete": false
