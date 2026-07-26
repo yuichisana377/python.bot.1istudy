@@ -39,7 +39,7 @@
     },
     {
       "id": "mrznd4kabco9",
-      "question": "遺伝子操作の種類",
+      "question": "遺伝子操作の種類　3種類",
       "answer": "遺伝子組みかえ\n遺伝子治療\nクローン技術",
       "explanation": "組み\"かえ\"はひらがな",
       "imgs_q": [],
@@ -158,7 +158,7 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32619",
+    "id": "32618",
     "nickname": "たけのこども"
   },
   "incomplete": false
