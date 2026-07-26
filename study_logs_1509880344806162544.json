@@ -166,5 +166,13 @@
     "memo": "プリント2～7",
     "student_id": "32623",
     "nickname": "たけのこども"
+  },
+  {
+    "date": "2026-07-26",
+    "subject": "公共a",
+    "minutes": 150,
+    "memo": "残りプリント全部",
+    "student_id": "32623",
+    "nickname": "たけのこども"
   }
 ]
