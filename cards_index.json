@@ -79,7 +79,8 @@
     "subject": "化学1a",
     "folder_id": "05aaqyfmyi",
     "has_folder_id": true,
-    "published_by": "hara-Kirby"
+    "published_by": "hara-Kirby",
+    "incomplete": false
   },
   {
     "filename": "set_20260724_1606_rzicst.json",
