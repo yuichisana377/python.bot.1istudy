@@ -23,7 +23,7 @@
       "id": "mrzv8sz1p6t5",
       "question": "アメリカの大企業メジャーによる独占に対抗して結成",
       "answer": "石油輸出国機構(OPEC)",
-      "explanation": "",
+      "explanation": "メジャーのことを国際石油資本ともいう",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -131,7 +131,8 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32628",
+    "id": "32623",
     "nickname": "hara-Kirby"
-  }
+  },
+  "incomplete": false
 }
