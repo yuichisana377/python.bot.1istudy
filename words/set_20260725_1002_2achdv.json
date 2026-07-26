@@ -66,7 +66,7 @@
     },
     {
       "id": "mrzni9j9iwv0",
-      "question": "遺伝子操作2\n病気の原因となる遺伝子を解明し、びの根源の治療や個人に合わせた治療をすること",
+      "question": "遺伝子操作2\n病気の原因となる遺伝子を解明し、病気の根源の治療や個人に合わせた治療をすること",
       "answer": "遺伝子治療",
       "explanation": "",
       "imgs_q": [],
@@ -158,7 +158,7 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32623",
+    "id": "32619",
     "nickname": "たけのこども"
   },
   "incomplete": false
