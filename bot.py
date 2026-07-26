@@ -37,6 +37,28 @@ scheduler = AsyncIOScheduler(timezone=JST)
 app = Flask("")
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 
+# ★ 追加：ブラウザ（特にChrome）がこれらのGET APIレスポンスを
+#   ディスクキャッシュに保存してしまい、新しく作成・公開したデッキや
+#   フォルダ、科目一覧がクライアント側の一覧にすぐ反映されない不具合の
+#   根本対策。フロント側（Cardmaker.js）でも fetch に cache: 'no-store' を
+#   付けているが、サーバー側でも明示的に Cache-Control: no-store を返す
+#   ことで、ブラウザ・CDN・中間プロキシのどこでキャッシュされても
+#   確実に最新のデータが返るようにする。
+NO_CACHE_PATHS = {
+    "/list_cards",
+    "/get_card_set",
+    "/list_folders",
+    "/channels",
+}
+
+@app.after_request
+def add_no_cache_headers(response):
+    if request.method == "GET" and request.path in NO_CACHE_PATHS:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 @app.before_request
 def handle_preflight():
     if request.method == "OPTIONS":
