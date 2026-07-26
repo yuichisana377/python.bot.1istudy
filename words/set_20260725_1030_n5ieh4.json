@@ -23,7 +23,7 @@
       "id": "mrzo6usd662r",
       "question": "大脳や脳幹が機能しなくなり、回復不能になった不可逆的状態",
       "answer": "脳死",
-      "explanation": "植物状態…脳幹は生き残ってて、呼吸や循環の機能は動く。",
+      "explanation": "植物状態とは違う（植物状態は脳幹が生きている）",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -57,7 +57,7 @@
     },
     {
       "id": "mrzodec5h3qy",
-      "question": "臓器移植の際に脳死を人の死と判断する法",
+      "question": "臓器移植の際に脳死を人の死と判断するこ法",
       "answer": "臓器移植法",
       "explanation": "",
       "imgs_q": [],
@@ -138,7 +138,7 @@
     },
     {
       "id": "mrzomutckydl",
-      "question": "医師が患者やその家族に治療法を説明し、患者や家族が同意すること",
+      "question": "医師が患者やその家族に治療法を説明し、患者わ家族が同意すること",
       "answer": "インフォームド・コンセント",
       "explanation": "",
       "imgs_q": [],
@@ -212,7 +212,7 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32623",
+    "id": "32615",
     "nickname": "hara-Kirby"
   },
   "incomplete": false
