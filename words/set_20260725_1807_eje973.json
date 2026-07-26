@@ -76,7 +76,7 @@
     {
       "id": "ms053ncxa5dk",
       "question": "単一の文化価値に還元することなく、１つ１つの文化が多様性を持ったまま、相互の差異を認め合う共生関係を築き上げようとする考え方。",
-      "answer": "マルチカルチュラリズム（文化相対主義）",
+      "answer": "マルチカルチュラリズム（多文化主義）",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -149,7 +149,8 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32618",
+    "id": "32623",
     "nickname": "Chiro"
-  }
+  },
+  "incomplete": false
 }
