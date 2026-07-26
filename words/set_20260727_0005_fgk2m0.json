@@ -1,0 +1,30 @@
+{
+  "name": "化学1a 多原子イオン",
+  "cards": [
+    {
+      "id": "ms1xfibasbui",
+      "question": "アンモニウムイオン",
+      "answer": "NH₄⁺",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1xj5qp8rdp",
+      "question": "オキソニウムイオン",
+      "answer": "H₃",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "化学1a",
+  "folder_id": "og6qshekii",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  },
+  "incomplete": true
+}
