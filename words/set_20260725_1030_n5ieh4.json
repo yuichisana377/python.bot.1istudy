@@ -57,7 +57,7 @@
     },
     {
       "id": "mrzodec5h3qy",
-      "question": "臓器移植の際に脳死を人の死と判断するこ法",
+      "question": "臓器移植の際に脳死を人の死と判断する法",
       "answer": "臓器移植法",
       "explanation": "",
       "imgs_q": [],
@@ -214,5 +214,6 @@
   "published_by": {
     "id": "32628",
     "nickname": "hara-Kirby"
-  }
+  },
+  "incomplete": false
 }
