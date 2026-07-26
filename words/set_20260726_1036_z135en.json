@@ -1,0 +1,147 @@
+{
+  "name": "公共a ⑫女性の社会進出と社会福祉",
+  "cards": [
+    {
+      "id": "ms13tyif9b1r",
+      "question": "文化的、社会的に作られる性、性別、性差\n生物学的な性とは違う",
+      "answer": "ジェンダー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms13vdf7npyu",
+      "question": "「男は仕事、女は家庭」のような性差による役割分担の意識",
+      "answer": "性別役割分担",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms13wwqzphcg",
+      "question": "男女平等を目指し、男性中心の社会構造を変えようとする考え方、運動",
+      "answer": "フェミニズム",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms140h66fuz5",
+      "question": "各国の男女間の格差を表す指標で、経済、教育、健康、政治の各分野の値を総合して算出したもの",
+      "answer": "ジェンダーギャップ指数",
+      "explanation": "1が完全平等、0は完全不平等",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1433l9mrl2",
+      "question": "男女共同参画社会の実現を基本理念とし、その政策の方向を定めた法律",
+      "answer": "男女共同参画社会基本法",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms144dc3x7st",
+      "question": "性別による差別にとらわれずに、性別役割分担の見直しを図ること",
+      "answer": "ジェンダーフリー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms145fcczk5z",
+      "question": "特別な措置により男女格差を解除する取り組み",
+      "answer": "ポジティブ・アクション",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1480h16731",
+      "question": "企業の職場や教育機関で性的な要求をしたり、接触、卑猥な言葉により相手に不快な思いをさせること",
+      "answer": "セクシャル・ハラスメント",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms14bx6a2too",
+      "question": "21世紀の日本の重要課題\n家庭や職場で男性が女性を対等なパートナーとみなして[　　　　　　　　]を形成すること",
+      "answer": "男女共同参画社会",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms14epsohvwt",
+      "question": "「善い生活」を意味し、多くの人が健康で幸せに暮らすこと、あるいはそのようにすること",
+      "answer": "福祉",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms14hepr6d2b",
+      "question": "高齢者などの社会的弱者がハンディを持ったまま暮らせる社会。つまり社会で特別視されず健常者と生活する社会がノーマルであるとする考え方",
+      "answer": "ノーマライゼーション",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms14igrwepak",
+      "question": "福祉社会=[　　　　]",
+      "answer": "[　　　　]=共生社会",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms14k9kq5bho",
+      "question": "障壁になるものを取り除き、不自由なく生活を送れるようにすること",
+      "answer": "バリアフリー",
+      "explanation": "バリアフリー新法(2006)",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms14m9zvwuum",
+      "question": "製品の設計に最初から配慮を組み込んでおき、高齢者や障碍者との分担を避けようとする考え方\nバリアフリーの考え方をさらに進めるもの",
+      "answer": "ユニバーサルデザイン",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms14n9tvrenw",
+      "question": "ともに生きること",
+      "answer": "共生",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "公共a",
+  "folder_id": "f1opih0i4p",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
