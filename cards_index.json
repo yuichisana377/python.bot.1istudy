@@ -297,11 +297,11 @@
   {
     "filename": "set_20260727_0005_fgk2m0.json",
     "name": "化学1a 多原子イオン",
-    "count": 2,
+    "count": 11,
     "subject": "化学1a",
     "folder_id": "og6qshekii",
     "has_folder_id": true,
     "published_by": "Chiro",
-    "incomplete": true
+    "incomplete": false
   }
 ]
