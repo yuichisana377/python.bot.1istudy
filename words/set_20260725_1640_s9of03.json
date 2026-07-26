@@ -76,7 +76,7 @@
     {
       "id": "ms01xrmmnbpm",
       "question": "SNSなどで自分と似た意見が返ってくる状況で、同種で均等な主張ばかりに触れるようになること",
-      "answer": "エコーチェンバー効果",
+      "answer": "エコーチェンバー",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -102,7 +102,7 @@
     },
     {
       "id": "ms023mm06pxv",
-      "question": "日常的にコンピュータに触れる人に生じる、頭痛やや肩こりを伴う不安や憂鬱感",
+      "question": "日常的にコンピュータに触れる人に生じる、頭痛や肩こりを伴う不安や憂鬱感",
       "answer": "テクノストレス",
       "explanation": "",
       "imgs_q": [],
@@ -221,7 +221,7 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32623",
+    "id": "32615",
     "nickname": "たけのこども"
   },
   "incomplete": false
