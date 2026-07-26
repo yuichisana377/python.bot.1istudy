@@ -48,7 +48,7 @@
     },
     {
       "id": "ms0yh00xvyln",
-      "question": "出生時に，あと何年生きられるかを算出したもの",
+      "question": "出生時に，あと何年生きられるかを算出しもの",
       "answer": "平均寿命",
       "explanation": "",
       "imgs_q": [],
@@ -111,7 +111,7 @@
     },
     {
       "id": "ms0yp0gwzr2b",
-      "question": "少子化の背景。女性の〇〇化",
+      "question": "少子化の背景。女性の○○○化",
       "answer": "高学歴",
       "explanation": "",
       "imgs_q": [],
@@ -239,7 +239,7 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32623",
+    "id": "32628",
     "nickname": "小鷹"
   },
   "incomplete": false
