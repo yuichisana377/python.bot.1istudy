@@ -48,7 +48,7 @@
     },
     {
       "id": "ms0yh00xvyln",
-      "question": "出生時に，あと何年生きられるかを算出しもの",
+      "question": "出生時に，あと何年生きられるかを算出したもの",
       "answer": "平均寿命",
       "explanation": "",
       "imgs_q": [],
@@ -239,7 +239,7 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32615",
+    "id": "32623",
     "nickname": "小鷹"
   },
   "incomplete": false
