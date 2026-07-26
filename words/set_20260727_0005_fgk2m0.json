@@ -18,6 +18,87 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms1xkogt601m",
+      "question": "水酸化物イオン",
+      "answer": "OH⁻",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1xl38927p8",
+      "question": "硝酸イオン",
+      "answer": "NO₃⁻",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1xls4hcvfe",
+      "question": "酢酸イオン",
+      "answer": "CH₃COO⁻",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1xmcc5sx3x",
+      "question": "炭酸水素イオン",
+      "answer": "HCO₃⁻",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1xmqvdkt0r",
+      "question": "シアン化合物イオン",
+      "answer": "CN⁻",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1xngmkyffn",
+      "question": "炭酸イオン",
+      "answer": "CO₃²⁻",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1xp1svz006",
+      "question": "硫酸イオン",
+      "answer": "SO₄²⁻",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1xpub5ieak",
+      "question": "シュウ酸イオン",
+      "answer": "C₂O₄²⁻",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1xq52z2lvi",
+      "question": "リン酸イオン",
+      "answer": "PO₄³⁻",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "化学1a",
@@ -26,5 +107,5 @@
     "id": "32618",
     "nickname": "Chiro"
   },
-  "incomplete": true
+  "incomplete": false
 }
