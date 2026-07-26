@@ -23,7 +23,7 @@
       "id": "mrzo6usd662r",
       "question": "大脳や脳幹が機能しなくなり、回復不能になった不可逆的状態",
       "answer": "脳死",
-      "explanation": "植物状態とか",
+      "explanation": "植物状態…脳幹は生き残ってて、呼吸や循環の機能は動く。",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -212,7 +212,7 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32628",
+    "id": "32623",
     "nickname": "hara-Kirby"
   },
   "incomplete": false
