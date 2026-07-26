@@ -39,7 +39,7 @@
     },
     {
       "id": "mrznd4kabco9",
-      "question": "遺伝子操作の種類　3種類",
+      "question": "遺伝子操作の種類",
       "answer": "遺伝子組みかえ\n遺伝子治療\nクローン技術",
       "explanation": "組み\"かえ\"はひらがな",
       "imgs_q": [],
@@ -66,7 +66,7 @@
     },
     {
       "id": "mrzni9j9iwv0",
-      "question": "遺伝子操作2\n病気の原因となる遺伝子を解明し、病気の根源の治療や個人に合わせた治療をすること",
+      "question": "遺伝子操作2\n病気の原因となる遺伝子を解明し、びの根源の治療や個人に合わせた治療をすること",
       "answer": "遺伝子治療",
       "explanation": "",
       "imgs_q": [],
@@ -75,7 +75,7 @@
     },
     {
       "id": "mrznk2adpjpy",
-      "question": "ヒトの全遺伝情報。\n人間の設計図とも言う。",
+      "question": "ヒトの全遺伝情報\n人間の設計図とも",
       "answer": "ヒトゲノム",
       "explanation": "",
       "imgs_q": [],
@@ -158,7 +158,7 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32618",
+    "id": "32615",
     "nickname": "たけのこども"
   },
   "incomplete": false
