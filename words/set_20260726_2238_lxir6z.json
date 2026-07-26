@@ -4,7 +4,7 @@
     {
       "id": "ms1tmgb9nzs2",
       "question": "パウリの原理",
-      "answer": "それぞれの軌道に電子スピンの向きの異なる電子が2個ずつ収容されるということ",
+      "answer": "それぞれの軌道に電子スピンの向きの異なる電子がずつ収容されるということ",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -22,7 +22,7 @@
     {
       "id": "ms1tnq8gv1oe",
       "question": "フントの規則",
-      "answer": "同じエネルギーの軌道には、電子スピンの向きが同じ電子が一つずつ収容されてから、それぞれの軌道に2個目が収容される。",
+      "answer": "同じエネルギーの軌道には、電子スピンの向きが同じ段差が一つずつ収容されてから、それぞれの軌道に2個目が収容される。",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -103,7 +103,7 @@
     {
       "id": "ms1uflubmo49",
       "question": "14族の元素の特徴",
-      "answer": "共有結合を作りやすい",
+      "answer": "共有結合の結晶を作りやすい",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -122,7 +122,7 @@
   "subject": "化学1a",
   "folder_id": "og6qshekii",
   "published_by": {
-    "id": "32628",
+    "id": "32623",
     "nickname": "たけのこども"
   },
   "incomplete": false
