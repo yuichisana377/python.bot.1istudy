@@ -156,7 +156,7 @@
     },
     {
       "id": "mrzy7xozwhzv",
-      "question": "国連環境開発",
+      "question": "国連環境開発の別名",
       "answer": "地球サミット",
       "explanation": "",
       "imgs_q": [],
@@ -241,5 +241,6 @@
   "published_by": {
     "id": "32628",
     "nickname": "hara-Kirby"
-  }
+  },
+  "incomplete": false
 }
