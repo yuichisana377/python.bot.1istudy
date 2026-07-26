@@ -1,0 +1,129 @@
+{
+  "name": "化学1a 古めの化学",
+  "cards": [
+    {
+      "id": "ms1tmgb9nzs2",
+      "question": "パウリの原理",
+      "answer": "それぞれの軌道に電子スピンの向きの異なる電子がずつ収容されるということ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1tmhhbu0w1",
+      "question": "パウリの原理",
+      "answer": "それぞれの軌道に電子スピンの向きの異なる電子がずつ収容されるということ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1tnq8gv1oe",
+      "question": "フントの規則",
+      "answer": "同じエネルギーの軌道には、電子スピンの向きが同じ段差が一つずつ収容されてから、それぞれの軌道に2個目が収容される。",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1tq9l87jr3",
+      "question": "周期律",
+      "answer": "パターンの繰り返し",
+      "explanation": "周期表などに現れる",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1u0v17jjrm",
+      "question": "価数",
+      "answer": "イオンの電子の数の違い",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1u1cgxjcw8",
+      "question": "イオン結晶",
+      "answer": "イオンからなる物質の結晶",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1u3tfzfxca",
+      "question": "ルイス構造式",
+      "answer": "電子式のこと",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1ua07gggd5",
+      "question": "結合の強さ",
+      "answer": "共有結合>イオン結合>>水素結合>ファンデルワールス力",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1ud1qfbvz2",
+      "question": "ヒドロキシ基",
+      "answer": "OH-",
+      "explanation": "水素結合を形成する",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1ud31wn01x",
+      "question": "ヒドロキシ基",
+      "answer": "OH-",
+      "explanation": "水素結合を形成する",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1uds6ar4ua",
+      "question": "アミノ基",
+      "answer": "NH2-",
+      "explanation": "水素結合を形成する",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1uflubmo49",
+      "question": "14族の元素の特徴",
+      "answer": "共有結合を作りやすい",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms1ug9xf7nfp",
+      "question": "共有結合結晶の電気伝導性",
+      "answer": "導きにくい",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "化学1a",
+  "folder_id": "og6qshekii",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  },
+  "incomplete": false
+}
