@@ -31,7 +31,7 @@
     {
       "id": "ms31p62sr0l4",
       "question": "(x-x₀)²　  (y-y₀)²\n-------  一  -------  = 1　焦点、頂点\n    a²              b²",
-      "answer": "焦点　(±c , 0)\n頂点　(x₀±a , y₀)",
+      "answer": "焦点　(x₀±c ,y₀)\n頂点　(x₀±a , y₀)",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
