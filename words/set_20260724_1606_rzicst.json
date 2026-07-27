@@ -75,7 +75,7 @@
     },
     {
       "id": "mrzsrm6d49n7",
-      "question": "約２億５２００万年前から現在（中生代・新生代）にかけての造山運動で形成されている地形。",
+      "question": "約２億52000万年前から現在（中生代・新生代）にかけての造山運動で形成されている地形。",
       "answer": "新期造山帯",
       "explanation": "",
       "imgs_q": [],
@@ -113,7 +113,8 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32618",
+    "id": "32615",
     "nickname": "Chiro"
-  }
+  },
+  "incomplete": false
 }
