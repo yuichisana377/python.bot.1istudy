@@ -131,7 +131,8 @@
     "subject": "国語1乙a",
     "folder_id": "o1se10e9v3",
     "has_folder_id": true,
-    "published_by": "たけのこども"
+    "published_by": "たけのこども",
+    "incomplete": false
   },
   {
     "filename": "set_20260725_1229_voduuh.json",
