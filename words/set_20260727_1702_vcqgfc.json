@@ -22,7 +22,7 @@
     {
       "id": "ms2xsie2lsac",
       "question": "円x²+y²=r²の点(a,b)の接線",
-      "answer": "xa+yb=r²",
+      "answer": "ax+by=r²",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -32,7 +32,7 @@
   "subject": "線形数学1a",
   "folder_id": "5eeb0ccqq9",
   "published_by": {
-    "id": "32628",
+    "id": null,
     "nickname": "hara-Kirby"
   },
   "incomplete": false
