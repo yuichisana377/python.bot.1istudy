@@ -126,13 +126,22 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms3t9rpu8j82",
+      "question": "9〜16ページまで引用した場合、どのようにそれを記すか。",
+      "answer": "九ー一六頁",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "国語1乙a",
   "folder_id": "o1se10e9v3",
   "published_by": {
-    "id": "32628",
-    "nickname": "hara-Kirby"
+    "id": "32623",
+    "nickname": "たけのこども"
   },
   "incomplete": false
 }
