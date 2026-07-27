@@ -99,13 +99,22 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms385cb3aitk",
+      "question": "3〜4行にわたる長い引用をする時鍵括弧を[　　　]、[　　]し、[　　]空けて、引用部分を全行[　]字下げする。\n引用後、また[　]行空けてから本文に戻る",
+      "answer": "外し、改行、一行、2、一",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "国語1乙a",
   "folder_id": "o1se10e9v3",
   "published_by": {
-    "id": null,
-    "nickname": "たけのこども"
+    "id": "32628",
+    "nickname": "hara-Kirby"
   },
   "incomplete": false
 }
