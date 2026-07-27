@@ -1,0 +1,102 @@
+{
+  "name": "国語1乙a 読み",
+  "cards": [
+    {
+      "id": "ms38mcpqmvv6",
+      "question": "えうなき",
+      "answer": "よーなき",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38mn0h10dp",
+      "question": "あづま",
+      "answer": "あずま",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38mw4r639t",
+      "question": "いふ",
+      "answer": "ゆー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38n6e30lvn",
+      "question": "なむ",
+      "answer": "なん",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38nvh343kh",
+      "question": "ゐて",
+      "answer": "いて",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38omrs6135",
+      "question": "かれいひ",
+      "answer": "かれいー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38p1gnj7mo",
+      "question": "入らむ",
+      "answer": "いらん",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38pgpecje5",
+      "question": "暗う",
+      "answer": "くろー",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38q0ypcgax",
+      "question": "修行者",
+      "answer": "すぎょうざ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38qiz33g77",
+      "question": "やう",
+      "answer": "よう",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "国語1乙a",
+  "folder_id": "o1se10e9v3",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
