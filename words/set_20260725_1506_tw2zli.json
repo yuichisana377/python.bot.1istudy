@@ -67,7 +67,7 @@
     {
       "id": "mrzyjrio0thj",
       "question": "使われている技法について。「掛詞」とは。",
-      "answer": "駄洒落のように、同じ音のものでふたつのい二つの言葉をダブルミーニングすること。",
+      "answer": "駄洒落のように、同じ音のもので二つの言葉をダブルミーニングすること。",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -131,7 +131,8 @@
   "subject": "国語1乙a",
   "folder_id": "o1se10e9v3",
   "published_by": {
-    "id": "32623",
+    "id": "32628",
     "nickname": "たけのこども"
-  }
+  },
+  "incomplete": false
 }
