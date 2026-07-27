@@ -1,0 +1,120 @@
+{
+  "name": "伊勢物語詳細",
+  "cards": [
+    {
+      "id": "ms3rar2cy32b",
+      "question": "在原業平の何か。",
+      "answer": "一代記",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rbluzij1v",
+      "question": "初段は何から始まるか。",
+      "answer": "初冠",
+      "explanation": "ういかんむり",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rca15r5ju",
+      "question": "最後の125段は死を迎える何で終わるか",
+      "answer": "辞世の句",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rczednrxz",
+      "question": "第九段はどこへ下るか。",
+      "answer": "東国",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rdvfkshgz",
+      "question": "東国に下る原因と考えられるのは何か",
+      "answer": "第六段芥川の事件",
+      "explanation": "求婚してた女性との駆け落ちの失敗。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rfc17iz0l",
+      "question": "駆け落ち失敗した女性は誰か。",
+      "answer": "後に二条后となる藤原高子とされる",
+      "explanation": "二条后…清和天皇の后、陽成天皇の母",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rfqc1lhd7",
+      "question": "在原業平はなんの1人か。",
+      "answer": "六歌仙",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rga8pwmdo",
+      "question": "在原業平は誰の子供か",
+      "answer": "阿保親王",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rh3nc7b85",
+      "question": "在原業平は紀貫之になんと評されたか",
+      "answer": "心余りて、詞たらず",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rjwq2mwqx",
+      "question": "在原業平は\n\n　　その心あまりて、詞たらず。しぼめる花の色なくて匂ひ残れるがごとし。（紀貫之）\n\nと何で称されたか。",
+      "answer": "『古今和歌集』仮名序",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rly0cvekz",
+      "question": "から衣の句に使われている技法を四つ答えろ。",
+      "answer": "掛詞\n縁語\n枕詞\n折句",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3rom39ltqp",
+      "question": "駿河なる\nうつの山辺の\nうつつにも\n夢にも人に\nあはぬなりけり\n\nに使われている技法は何か。",
+      "answer": "序詞",
+      "explanation": "駿河なる\nうつの山辺の\n\nは「うつつ」を導く無心の序",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": null,
+  "folder_id": "o1se10e9v3",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  },
+  "incomplete": false
+}
