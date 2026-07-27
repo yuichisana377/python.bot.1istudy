@@ -153,6 +153,96 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms391xkwrt3t",
+      "question": "各ドットの持つ色情報",
+      "answer": "24ビット（赤、緑、青それぞれ8ビット）",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms3935kkmr0a",
+      "question": "ディスプレイの1インチあたりの画素数",
+      "answer": "10dpi",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms393nmjqsua",
+      "question": "画素数の単位",
+      "answer": "dpi",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms394z2c3v4o",
+      "question": "音声のニ値化\n横軸（時間軸）方向にとびとびの値を取る",
+      "answer": "標本化",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms395r4tbrld",
+      "question": "音声のニ値化\n縦軸（電圧軸）方向にとびとびの値を取る",
+      "answer": "量子化",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms396cvciz55",
+      "question": "音声のニ値化\n電圧を二進数に変換する",
+      "answer": "符号化",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms398dcz6zsy",
+      "question": "標本化定理",
+      "answer": "周波数F（1/t）Hzで標本化すればF/2Hzまでの音を再現できる",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms39aclfmdrd",
+      "question": "人間の聴覚の限界",
+      "answer": "20Hzまで聞き取れる",
+      "explanation": "一般的な音楽は44.1Hz",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms39ce8o8gxy",
+      "question": "データ圧縮",
+      "answer": "その実質的内容をできる限り保ったままデータの量を減らした別のデータにすること",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms39cluppmk8",
+      "question": "元のデータに戻すこと",
+      "answer": "解凍",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報技術概論",
