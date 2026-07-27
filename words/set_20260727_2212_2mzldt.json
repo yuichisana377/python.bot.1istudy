@@ -1,0 +1,165 @@
+{
+  "name": "情報技術概論 11章",
+  "cards": [
+    {
+      "id": "ms37t1asm1rc",
+      "question": "コンピュータの機械、または回路そのものおよび基本的な機能",
+      "answer": "ハードウェア",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms37teg17to8",
+      "question": "データおよびその処理手順",
+      "answer": "ソフトウェア",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms37uq3ytxa6",
+      "question": "ハードウェアの5大装置",
+      "answer": "入力装置、出力装置、制御装置、演算装置、記憶装置（主記憶装置、補助記憶装置）",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms37vmdyfm0k",
+      "question": "CPUとは",
+      "answer": "制御装置、演算装置、主記憶装置",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms37wxja22im",
+      "question": "プログラムがコンピュータの主記憶装置に記憶されているコンピュータ",
+      "answer": "プログラム内蔵方式",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms37z8kiiwg4",
+      "question": "指定されたアドレスから順番に命令を読み出して、順番に命令を実行する方式",
+      "answer": "逐次処理方式",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38c23y7yae",
+      "question": "コンピュータが理解できる機械語に近いプログラミング言語",
+      "answer": "低水準言語",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38cffho9m1",
+      "question": "より人間の言語に近いプログラミング言語",
+      "answer": "高水準言語",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38evafmwj7",
+      "question": "主記憶装置　容量が大きい順",
+      "answer": "主メモリ→キャッシュメモリ→レジスタ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38gy9wrn2i",
+      "question": "主記憶装置　CPUとのアクセスが速い順",
+      "answer": "レジスタ→キャッシュメモリ→主メモリ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38lpar0jiz",
+      "question": "アクセス時間がアドレスによらず一定でHDD、SSD、USBメモリなどに使われるアクセス方法",
+      "answer": "ランダムアクセス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38mibscv2r",
+      "question": "アクセス時間がアドレスに依存して磁気テープなどに用いられるアクセス方法",
+      "answer": "順アクセス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38qncdxoe8",
+      "question": "記憶された情報を保持するのに電源が不要な記憶装置",
+      "answer": "不揮発性メモリ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38rzx250g3",
+      "question": "情報を保持するのに電源が必要な記憶装置",
+      "answer": "揮発性メモリ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38sf3bg0mk",
+      "question": "揮発とは",
+      "answer": "電源を切るとメモリ内容が消えること",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38vef84s4b",
+      "question": "読み書き両方可能で電源が必要",
+      "answer": "RAM",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms38wact1yfh",
+      "question": "読み込みのみで書くことができなく電源が不要",
+      "answer": "ROM",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "情報技術概論",
+  "folder_id": "pi5vtik4iz",
+  "published_by": {
+    "id": "32637",
+    "nickname": "たりき"
+  },
+  "incomplete": false
+}
