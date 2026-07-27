@@ -4,7 +4,7 @@
     {
       "id": "ms2xmwkun7r9",
       "question": "円の標準形",
-      "answer": "(x+a)²+(y+b)²=r²",
+      "answer": "(x-a)²+(y-b)²=r²",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -30,7 +30,7 @@
     }
   ],
   "subject": "線形数学1a",
-  "folder_id": "05aaqyfmyi",
+  "folder_id": "5eeb0ccqq9",
   "published_by": {
     "id": "32628",
     "nickname": "hara-Kirby"
