@@ -1,0 +1,66 @@
+{
+  "name": "線形数学1a 楕円",
+  "cards": [
+    {
+      "id": "ms2y5rtj6zta",
+      "question": "楕円の標準形",
+      "answer": "(x-x₀)²　(y-y₀)²\n-------  +  -------  = 1\n    a²             b²",
+      "explanation": "中心がずれたバージョン\n分数見にくくてごめん",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms2ydalb1sx9",
+      "question": "(x-x₀)²　(y-y₀)²　　　　　(a>b)\n-------  +  -------  = 1　　　この楕円の中心、頂点、\n    a²             b²　　　　　  　　　　　　焦点は？",
+      "answer": "中心(x₀ , y₀)\n頂点(x₀±a , y₀)と(x₀ , y₀±b)\n焦点(x₀±c , y₀)",
+      "explanation": "横長(a>b)の場合\ncは後で出てきます",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms2ygzh8slr9",
+      "question": "(x-x₀)²　(y-y₀)²　　　　　(a<b)\n-------  +  -------  = 1　　　この楕円の中心、頂点、\n    a²             b²　　　　　  　　　　　　焦点は？",
+      "answer": "中心(x₀ , y₀)\n頂点(x₀±a , y₀)と(x₀ , y₀±b)\n焦点(x₀ , y₀±c)",
+      "explanation": "縦長の場合",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms2ylqqd03sx",
+      "question": "(x-x₀)²　(y-y₀)²\n-------  +  -------  = 1　　　　　cは？\n    a²             b²",
+      "answer": "横長　c=√a²-b²\n縦長　c=√b²-a²",
+      "explanation": "中心がズレてなかったら焦点は\n横長　(±c , 0)\n縦長　(0 , ±c)　　　　　　　となるよ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms2ynb3or5xk",
+      "question": "楕円の焦点からの距離の和",
+      "answer": "横長　2a\n縦長　2b",
+      "explanation": "距離のわだけわかってる時に使える",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms2ypeg4odqg",
+      "question": "どうやって標準形にするか",
+      "answer": "平方完成して右辺に定数をまとめ、\n右辺が1になるよう割る",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "線形数学1a",
+  "folder_id": "5eeb0ccqq9",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
