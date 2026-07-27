@@ -122,7 +122,7 @@
       "id": "ms0empx7oqfi",
       "question": "世界の8億4000万人の栄養不足人口を2015までに半減させる",
       "answer": "ローマ宣言",
-      "explanation": "結局これ達成したんかな？",
+      "explanation": "結局これ達成したんかな？\n→してない",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -140,7 +140,7 @@
   "subject": "公共a",
   "folder_id": "f1opih0i4p",
   "published_by": {
-    "id": "32615",
+    "id": "32618",
     "nickname": "hara-Kirby"
   },
   "incomplete": false
