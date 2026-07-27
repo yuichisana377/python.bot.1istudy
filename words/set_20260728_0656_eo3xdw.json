@@ -1,5 +1,5 @@
 {
-  "name": "伊勢物語詳細",
+  "name": "国語1乙a 伊勢物語詳細",
   "cards": [
     {
       "id": "ms3rar2cy32b",
@@ -110,7 +110,7 @@
       "imgs_e": []
     }
   ],
-  "subject": null,
+  "subject": "国語1乙a",
   "folder_id": "o1se10e9v3",
   "published_by": {
     "id": "32623",
