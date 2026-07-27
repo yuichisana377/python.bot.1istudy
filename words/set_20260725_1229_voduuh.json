@@ -39,7 +39,7 @@
     },
     {
       "id": "mrzt7o5szo93",
-      "question": "日本は石炭化学コンビナートは○○に立地",
+      "question": "日本は石油化学コンビナートは○○に立地",
       "answer": "臨海部",
       "explanation": "",
       "imgs_q": [],
@@ -59,7 +59,8 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32618",
+    "id": "32615",
     "nickname": "Chiro"
-  }
+  },
+  "incomplete": false
 }
