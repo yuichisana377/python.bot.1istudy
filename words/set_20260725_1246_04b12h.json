@@ -14,7 +14,7 @@
       "id": "mrztrxhbwuyw",
       "question": "燃料価格は石炭が○○",
       "answer": "安価",
-      "explanation": "石油に次いでLNG、石油の順に高くなる",
+      "explanation": "石炭に次いでLNG、石油の順に高くなる",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -41,7 +41,8 @@
   "subject": null,
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32618",
+    "id": "32615",
     "nickname": "Chiro"
-  }
+  },
+  "incomplete": false
 }
