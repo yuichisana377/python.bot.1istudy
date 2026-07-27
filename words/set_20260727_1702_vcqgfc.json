@@ -12,7 +12,7 @@
     },
     {
       "id": "ms2xnvx6ohrd",
-      "question": "(x+a)²+(y+b)²=r²\n円の中心と半径は？",
+      "question": "(x-a)²+(y-b)²=r²\n円の中心と半径は？",
       "answer": "中心　(a,b)\n半径　r",
       "explanation": "",
       "imgs_q": [],
