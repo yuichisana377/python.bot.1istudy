@@ -105,7 +105,7 @@
     {
       "id": "mrzrshgs6nhp",
       "question": "文（名詞）",
-      "answer": "書物",
+      "answer": "手紙",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -131,7 +131,7 @@
     },
     {
       "id": "mrzru5qhr6ds",
-      "question": "鹿子まだらの意味を答えよ",
+      "question": "鹿子まだら",
       "answer": "鹿の子供のようなまだら模様",
       "explanation": "",
       "imgs_q": [],
@@ -142,7 +142,7 @@
   "subject": "国語1乙a",
   "folder_id": "o1se10e9v3",
   "published_by": {
-    "id": null,
+    "id": "32623",
     "nickname": "たけのこども"
   },
   "incomplete": false
