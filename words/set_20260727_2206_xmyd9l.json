@@ -59,7 +59,7 @@
       "id": "ms38p1gnj7mo",
       "question": "入らむ",
       "answer": "いらん",
-      "explanation": "",
+      "explanation": "「はいらん」ではない",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -95,7 +95,7 @@
   "subject": "国語1乙a",
   "folder_id": "o1se10e9v3",
   "published_by": {
-    "id": "32628",
+    "id": "32623",
     "nickname": "hara-Kirby"
   },
   "incomplete": false
