@@ -1,0 +1,39 @@
+{
+  "name": "線形数学1a 円",
+  "cards": [
+    {
+      "id": "ms2xmwkun7r9",
+      "question": "円の標準形",
+      "answer": "(x+a)²+(y+b)²=r²",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms2xnvx6ohrd",
+      "question": "(x+a)²+(y+b)²=r²\n円の中心と半径は？",
+      "answer": "中心　(a,b)\n半径　r",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms2xsie2lsac",
+      "question": "円x²+y²=r²の点(a,b)の接線",
+      "answer": "xa+yb=r²",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "線形数学1a",
+  "folder_id": "05aaqyfmyi",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
