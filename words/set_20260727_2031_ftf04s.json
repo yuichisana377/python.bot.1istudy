@@ -1,0 +1,57 @@
+{
+  "name": "線形数学1a 放物線",
+  "cards": [
+    {
+      "id": "ms34rjfvbuvn",
+      "question": "放物線の標準形(横向き)",
+      "answer": "y²=4ax",
+      "explanation": "a<0なら左向き\na>0なら右向き",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms34zn1bqra3",
+      "question": "放物線の標準形(縦向き)",
+      "answer": "x²=4ay",
+      "explanation": "a<0なら下向き\na>0なら上向き",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms351exhvu0m",
+      "question": "放物線の頂点",
+      "answer": "(0 , 0)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms356woa4ofw",
+      "question": "y²=4axの焦点、準線",
+      "answer": "(a , 0)、x=−a",
+      "explanation": "シンプルで覚えやすい",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms35bq4hw6oq",
+      "question": "x²=4ayの焦点と準線",
+      "answer": "(0 , a)、y=−a",
+      "explanation": "さっきとxyが入れ替わっただけ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "線形数学1a",
+  "folder_id": "5eeb0ccqq9",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
