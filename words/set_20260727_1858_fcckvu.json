@@ -1,0 +1,66 @@
+{
+  "name": "線形数学1a 双曲線",
+  "cards": [
+    {
+      "id": "ms2z3u72w68n",
+      "question": "双曲線の標準形(左右に開く)",
+      "answer": "(x-x₀)²　  (y-y₀)²\n-------  一  -------  = 1\n    a²              b²",
+      "explanation": "楕円の標準形と±が変わっただけ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms2z72056jvh",
+      "question": "双曲線の標準形(上下に開く)",
+      "answer": "(x-x₀)²　   (y-y₀)²\n-------  一   -------  =  −1\n    a²               b²",
+      "explanation": "左右に開く双曲線と右辺の±が違う",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms310ppw6kbs",
+      "question": "漸近線の求め方",
+      "answer": "答え\n　　　　　 b\n(y−y₀)= ± ----- (x−x₀)\n　　　　 　a",
+      "explanation": "これは上下でも左右でも同じ\nちなみにAIに聞いたら標準形の右辺を0にするという方法もあるらしいけどよくわからないのでこちらを採用しました",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms31p62sr0l4",
+      "question": "(x-x₀)²　  (y-y₀)²\n-------  一  -------  = 1　焦点、頂点\n    a²              b²",
+      "answer": "焦点　(±c , 0)\n頂点　(x₀±a , y₀)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms31u34zemzl",
+      "question": "(x-x₀)²　  (y-y₀)²\n-------  一  -------  = −1　焦点、頂点\n    a²              b²",
+      "answer": "焦点　(0 , ±c)\n頂点　(x₀ , y₀±b)",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms31yzsayg6b",
+      "question": "2つの焦点からの距離の差",
+      "answer": "左右　2a\n上下　2b",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "線形数学1a",
+  "folder_id": "5eeb0ccqq9",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
