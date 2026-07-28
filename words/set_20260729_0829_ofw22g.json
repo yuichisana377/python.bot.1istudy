@@ -1,0 +1,39 @@
+{
+  "name": "英語表現基礎a might mayについて",
+  "cards": [
+    {
+      "id": "ms5a2kmvrj46",
+      "question": "〜した方がいい",
+      "answer": "might as well",
+      "explanation": "比較対処がない",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms5a8h7kpoet",
+      "question": "〜するなら…した方がマシだ",
+      "answer": "might as well as",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms5aeejo172u",
+      "question": "むしろ〜した方がいい",
+      "answer": "would rather do 〜 than do〜",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "英語表現基礎a",
+  "folder_id": "rdxcqgtwib",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
