@@ -228,7 +228,7 @@
     },
     {
       "id": "ms39ce8o8gxy",
-      "question": "データ圧縮",
+      "question": "データ圧縮とは",
       "answer": "その実質的内容をできる限り保ったままデータの量を減らした別のデータにすること",
       "explanation": "",
       "imgs_q": [],
@@ -248,7 +248,7 @@
   "subject": "情報技術概論",
   "folder_id": "pi5vtik4iz",
   "published_by": {
-    "id": "32637",
+    "id": "32615",
     "nickname": "たりき"
   },
   "incomplete": false
