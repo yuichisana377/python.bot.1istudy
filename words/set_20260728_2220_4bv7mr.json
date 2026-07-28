@@ -1,0 +1,48 @@
+{
+  "name": "英語表現基礎a 過去にしていたこと",
+  "cards": [
+    {
+      "id": "ms4okvh7yral",
+      "question": "若い頃は〜していた",
+      "answer": "would",
+      "explanation": "昔していたけど今はどうかはどうでもいい",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4om0j4tzir",
+      "question": "昔はよく〜していた",
+      "answer": "used to",
+      "explanation": "今はしていないこと",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4omkqmzj0i",
+      "question": "昔は〜だった",
+      "answer": "used to",
+      "explanation": "状態も表す",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4onsqstnep",
+      "question": "〜に慣れている",
+      "answer": "be used to doing",
+      "explanation": "動作なので動名詞？",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "英語表現基礎a",
+  "folder_id": "rdxcqgtwib",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
