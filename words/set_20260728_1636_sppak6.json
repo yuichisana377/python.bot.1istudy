@@ -1,0 +1,57 @@
+{
+  "name": "英語表現基礎a May I … ?/Can I … ?の返答",
+  "cards": [
+    {
+      "id": "ms4c9jqnxfee",
+      "question": "Go ahead",
+      "answer": "いいですよ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4ca9ke72va",
+      "question": "Certainly",
+      "answer": "いいですよ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4cdcdr6rqz",
+      "question": "i’m afraid you can’t",
+      "answer": "いいえ駄目です",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4cdq5ct21j",
+      "question": "Why not?",
+      "answer": "いいですよ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4ce9kfo86f",
+      "question": "I’m afraid not.",
+      "answer": "いいえだめです",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "英語表現基礎a",
+  "folder_id": "rdxcqgtwib",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  },
+  "incomplete": false
+}
