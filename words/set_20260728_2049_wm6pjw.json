@@ -4,7 +4,7 @@
     {
       "id": "ms4kgs3245ry",
       "question": "can",
-      "answer": "〜がありえる",
+      "answer": "〜であるはずだ　断定",
       "explanation": "can have 過去分詞の形で過去にできない",
       "imgs_q": [],
       "imgs_a": [],
@@ -122,7 +122,7 @@
   "subject": "英語表現基礎a",
   "folder_id": "rdxcqgtwib",
   "published_by": {
-    "id": "32623",
+    "id": "32628",
     "nickname": "たけのこども"
   },
   "incomplete": false
