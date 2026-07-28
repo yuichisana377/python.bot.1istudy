@@ -58,7 +58,7 @@
     {
       "id": "ms4k77f8xwrl",
       "question": "運動量と力積の関係",
-      "answer": "Ft = mV − mV₀",
+      "answer": "Ft = mV₀ − mV",
       "explanation": "力積 = 始めの運動量 − 今の運動量\nもし始めが静止していたら力積 = 運動量となる\n跳ね返ったときは±に注意",
       "imgs_q": [],
       "imgs_a": [],
