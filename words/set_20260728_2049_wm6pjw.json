@@ -1,0 +1,129 @@
+{
+  "name": "英語表現基礎a 可能性を表す助動詞の訳",
+  "cards": [
+    {
+      "id": "ms4kgs3245ry",
+      "question": "can",
+      "answer": "〜がありえる",
+      "explanation": "can have 過去分詞の形で過去にできない",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4ki6jn8bq9",
+      "question": "could",
+      "answer": "〜かもしれない",
+      "explanation": "could have 過去分詞で、「〜だったかもしれない」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4kilbh6qgs",
+      "question": "can’t",
+      "answer": "〜なはずがない",
+      "explanation": "can’t have 過去分詞で、「〜だったはずがない」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4kk3nszer5",
+      "question": "couldn’t",
+      "answer": "〜ではないはずだ",
+      "explanation": "couldn’t have 過去分詞で、「〜でなかったはずだ」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4kkwaljc5y",
+      "question": "may",
+      "answer": "〜かもしれない",
+      "explanation": "may have 過去分詞で、「〜したかもしれない」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4knjtr8pix",
+      "question": "might",
+      "answer": "ひょっとすると〜かもしれない",
+      "explanation": "might have 過去分詞で、「ひょっとすると〜だったかもしれない」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4ksgwjnb0j",
+      "question": "may not",
+      "answer": "〜でないかもしれない",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4ktuu6u2po",
+      "question": "must",
+      "answer": "〜にちがいない",
+      "explanation": "have to 〈動詞〉も同じ意味で使える。\n\nmust have 過去分詞で、「〜したにちがいない」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4kv5tsodat",
+      "question": "should",
+      "answer": "〜のはずだ",
+      "explanation": "「〜であってほしい」というニュアンスを含むことも。\n\nshould have 過去分詞で、「〜したはずだ」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4kxh6el6b5",
+      "question": "ought to",
+      "answer": "〜のはずだ",
+      "explanation": "should とほぼ同じ意味。\n「〜であってほしい」というニュアンスを含むことも。\n\nought to have 過去分詞で、「〜したはずだ」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4l1otcdn4c",
+      "question": "will",
+      "answer": "〜だろう",
+      "explanation": "過去のいみ意味にすることはできない",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4lebjd8lwv",
+      "question": "would",
+      "answer": "おそらく〜だろう",
+      "explanation": "willより少し自信なさげ。\n過去を表しているwillというわけではないので注意",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4lf9r6hv96",
+      "question": "may well",
+      "answer": "おそらく〜するだろう",
+      "explanation": "「〜するのがもっともだ」というニュアンスを含む",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "英語表現基礎a",
+  "folder_id": "rdxcqgtwib",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  },
+  "incomplete": false
+}
