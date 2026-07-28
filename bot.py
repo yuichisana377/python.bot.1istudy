@@ -1546,7 +1546,7 @@ def save_cards():
                 target_channel = get_subject_channel_by_name(guild, subject) if subject else None
                 if not target_channel:
                     config = load_config(guild_id_int)
-                    channel_id = config.get("notice_channel_id")  　#自分で変更
+                    channel_id = config.get("notice_channel_id")   #自分で変更
                     target_channel = bot.get_channel(channel_id) if channel_id else None
 
                 if target_channel:
