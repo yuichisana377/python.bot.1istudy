@@ -1,0 +1,75 @@
+{
+  "name": "英語表現基礎a willの意味確認",
+  "cards": [
+    {
+      "id": "ms4d0tknhq9q",
+      "question": "It will rain this afternoon. に使われているwillの役割は？",
+      "answer": "未来の予測",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4d7x3rfn3f",
+      "question": "I’ll do my homework after dinner.に使われているwillの役割は？",
+      "answer": "意志未来",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4d9yomjyd2",
+      "question": "My little sister won’t eat vegetables. に使われているwillの役割は？",
+      "answer": "拒絶",
+      "explanation": "どうしても〜しようとしないという現在の拒絶。\n\n無生物を主語にすると、「それがどうしても〜しそうにない」という意味になる。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4ddl410735",
+      "question": "Will you open the door? に使われているwillの役割は？",
+      "answer": "依頼",
+      "explanation": "聞き手が当然すべきことを依頼する時に用いることが多い。\n強制的なニュアンスを含むことも。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4dh1tto3ri",
+      "question": "They will be on the island by now. に使われているwillの役割は？",
+      "answer": "現在における推量",
+      "explanation": "確信度は高く、ほぼ確実だと思えるときに使う。\nwouldにしたら少し確信度が下がる。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4dkwrpv016",
+      "question": "Babies will cry. に使われているwillの役割は？",
+      "answer": "現在の習性・習慣",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4ds1pf9j4x",
+      "question": "We would often go to the movies. に使われているwillの役割は？",
+      "answer": "過去の習慣",
+      "explanation": "often とかの頻度を表す副詞や、when I was a childのような過去を表すことを伴うことが多い。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "英語表現基礎a",
+  "folder_id": "rdxcqgtwib",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  },
+  "incomplete": false
+}
