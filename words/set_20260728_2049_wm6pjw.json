@@ -4,8 +4,8 @@
     {
       "id": "ms4kgs3245ry",
       "question": "can",
-      "answer": "〜であるはずだ　断定",
-      "explanation": "can have 過去分詞の形で過去にできない\n推量はあんまりない",
+      "answer": "〜がありえる",
+      "explanation": "can have 過去分詞の形で過去にできない",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -95,7 +95,7 @@
       "id": "ms4l1otcdn4c",
       "question": "will",
       "answer": "〜だろう",
-      "explanation": "過去のいみ意味にすることはできない",
+      "explanation": "過去の意味にすることはできない",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -122,7 +122,7 @@
   "subject": "英語表現基礎a",
   "folder_id": "rdxcqgtwib",
   "published_by": {
-    "id": "32628",
+    "id": "32615",
     "nickname": "たけのこども"
   },
   "incomplete": false
