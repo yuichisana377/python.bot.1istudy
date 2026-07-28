@@ -328,7 +328,7 @@
     {
       "id": "mrumdk0zft55",
       "question": "オーストラリア先住民のアボリジニ",
-      "answer": "オーストラリアロイド（サフール人）",
+      "answer": "オーストラロイド（サフール人）",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -755,7 +755,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32623",
+    "id": "32615",
     "nickname": "Chiro"
   },
   "incomplete": false
