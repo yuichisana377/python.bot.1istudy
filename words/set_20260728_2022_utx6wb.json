@@ -1,0 +1,30 @@
+{
+  "name": "物理1a 運動量保存の法則",
+  "cards": [
+    {
+      "id": "ms4kax9d95d0",
+      "question": "運動量保存の法則とは",
+      "answer": "物体の破裂や衝突の前後で運動量の総和は変化しない",
+      "explanation": "概念は知っておこう",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4kg2d7tgns",
+      "question": "運動量保存の法則の式",
+      "answer": "mₐVₐ + m₀V₀ = mₐVₐ' + m₀V₀'",
+      "explanation": "要するに\n始めのAの運動量+始めのBの運動量\n　=衝突後のAの運動量+衝突後のBの運動量",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "物理1a",
+  "folder_id": "zs9srly2p9",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
