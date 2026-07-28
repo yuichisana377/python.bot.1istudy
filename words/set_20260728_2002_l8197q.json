@@ -1,0 +1,75 @@
+{
+  "name": "物理1a 摩擦",
+  "cards": [
+    {
+      "id": "ms4j30ekn8ne",
+      "question": "静止摩擦力の公式",
+      "answer": "f=F",
+      "explanation": "fは押す力,Fは静止摩擦力\n静止しているので釣り合ってる",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4j4ywipfsq",
+      "question": "物体が動き出す直前の摩擦力",
+      "answer": "最大静止摩擦力F₀",
+      "explanation": "つまり押す力がF₀を超えると動く",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4j99m36qvh",
+      "question": "F₀の求め方",
+      "answer": "F₀=μN　　　　μは静止摩擦係数でミューと読む",
+      "explanation": "μは物資と床の組み合わせで決まるけどだいたい問題ごとに決まってる\nNは垂直抗力\nつまり下向きに押し付ける力(N)が大きいと摩擦が大きい",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4jbu1d9lvq",
+      "question": "垂直抗力Nの求め方",
+      "answer": "N=m g　　m=質量　g=重力加速度",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4jiro26b52",
+      "question": "動摩擦力の公式",
+      "answer": "m a= f−F'",
+      "explanation": "f(押す力)がF'(動摩擦力よりも大きいので動く)",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4jlienj89j",
+      "question": "F'の求め方",
+      "answer": "F'= μ'N　　　μ'は動摩擦力係数\n　　　　　　Nは垂直抗力でこれもN=m g",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4jpdbaguhz",
+      "question": "同じ材質ならμ□μ'　　　当てはまる不等号は？",
+      "answer": ">",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "物理1a",
+  "folder_id": "zs9srly2p9",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
