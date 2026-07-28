@@ -1392,8 +1392,6 @@ def _meta_from_card_data(filename, data):
         "folder_id": data.get("folder_id"),
         "has_folder_id": "folder_id" in data,
         "published_by": (data.get("published_by") or {}).get("nickname"),
-        # ★ 未完成フラグ。list_cards（索引）にも含めることで、
-        #   公開者以外の端末でも同じ「🟡 未完成」表示ができるようにする。
         "incomplete": bool(data.get("incomplete", False)),
     }
 
@@ -1452,23 +1450,17 @@ def remove_cards_index_entry(filename):
     if len(new_index) != len(index):
         save_cards_index(new_index, sha)
 
-# ★ 一覧表示は索引ファイル（cards_index.json）を1回読むだけ。
-#   カード本体は、実際にそのデッキを開く（プレイ／編集）ときにだけ
-#   /get_card_set?filename=... で個別に取得する方式は維持。
+
 @app.route("/list_cards", methods=["GET"])
 def list_cards():
     try:
         index, _ = load_cards_index()
         if index is None:
-            # 索引ファイルがまだ存在しない（初回移行時）→ 1回だけ再構築する
             index = rebuild_cards_index()
         return jsonify({"ok": True, "sets": index})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
-# ★ 単一のカードセットの本体（カード全問・画像含む）を取得する。
-#   デッキ一覧では呼ばれず、ユーザーがプレイ／編集のためにデッキを
-#   開いたタイミングでクライアントから呼ばれる。
 @app.route("/get_card_set", methods=["GET"])
 def get_card_set():
     filename = request.args.get("filename")
@@ -1554,7 +1546,7 @@ def save_cards():
                 target_channel = get_subject_channel_by_name(guild, subject) if subject else None
                 if not target_channel:
                     config = load_config(guild_id_int)
-                    channel_id = config.get("remind_channel_id")
+                    channel_id = config.get("notice_channel_id")  　#自分で変更
                     target_channel = bot.get_channel(channel_id) if channel_id else None
 
                 if target_channel:
