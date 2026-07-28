@@ -1,0 +1,111 @@
+{
+  "name": "地理a 自然的国境の例",
+  "cards": [
+    {
+      "id": "ms4b704ms86c",
+      "question": "ノルウェー・スウェーデン間の国境",
+      "answer": "スカンディナビア山脈",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4b7na82wfz",
+      "question": "ドイツ・ポーランド間の国境",
+      "answer": "オーデル川",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4b8c1nhpiy",
+      "question": "フランス・スペイン間の国境",
+      "answer": "ピレネー山脈",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4b99ubssfw",
+      "question": "ブルガリア・ルーマニア間の国境",
+      "answer": "ドナウ川",
+      "explanation": "ダニューブ川",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4b9vnge8aw",
+      "question": "ロシア・ジョージア間の国境",
+      "answer": "カフカス山脈",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4bbdk6an4d",
+      "question": "中学・ロシア間の国境",
+      "answer": "アムール川",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4bbs51rmjy",
+      "question": "中国・ネパール・インドなどの国境",
+      "answer": "ヒマラヤ山脈",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4bc49pwuuv",
+      "question": "タイ・ラオス間の国境",
+      "answer": "メコン川",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4bcv7dke5y",
+      "question": "コンゴ民主共和国・中央アフリカ・コンゴ共和国など",
+      "answer": "コンゴ川",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4be93d1wug",
+      "question": "アメリカ合衆国・メキシコ間の国境",
+      "answer": "リオグランデ川",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms4beryy7y8l",
+      "question": "アルゼンチン・チリ間の国境",
+      "answer": "アンデス山脈",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "地理a",
+  "folder_id": "qujgbh8vui",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  },
+  "incomplete": false
+}
