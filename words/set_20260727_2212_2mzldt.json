@@ -237,7 +237,7 @@
     },
     {
       "id": "ms39cluppmk8",
-      "question": "元のデータに戻すこと",
+      "question": "圧縮したデータを元のデータに戻すこと",
       "answer": "解凍",
       "explanation": "",
       "imgs_q": [],
