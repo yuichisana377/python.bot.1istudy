@@ -156,7 +156,7 @@
     },
     {
       "id": "ms391xkwrt3t",
-      "question": "各ドットの持つ色情報",
+      "question": "各ドットの持つ色情報の大きさ",
       "answer": "24ビット（赤、緑、青それぞれ8ビット）",
       "explanation": "",
       "imgs_q": [],
@@ -248,7 +248,7 @@
   "subject": "情報技術概論",
   "folder_id": "pi5vtik4iz",
   "published_by": {
-    "id": "32615",
+    "id": "32623",
     "nickname": "たりき"
   },
   "incomplete": false
