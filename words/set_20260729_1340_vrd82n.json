@@ -1,0 +1,21 @@
+{
+  "name": "数学確認用",
+  "cards": [
+    {
+      "id": "ms5lj4y2lkta",
+      "question": "\\(\\frac{x²}{16}\\)+\\(\\frac{y²}{7}\\)=1の頂点の座標を求めよ",
+      "answer": "(±4,0),(0,\\(\\sqrt{7}\\))",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": null,
+  "folder_id": null,
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  },
+  "incomplete": true
+}
