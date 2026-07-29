@@ -3,7 +3,7 @@
   "cards": [
     {
       "id": "mrztw2cfg3ac",
-      "question": "天然ガスは○○エネルギーとして注目を集める",
+      "question": "天然ガスは○○○○エネルギーとして注目を集める",
       "answer": "クリーンエネルギー",
       "explanation": "原油石炭に比べ汚染物質やCO₂の排出量が少ない",
       "imgs_q": [],
@@ -86,7 +86,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32623",
+    "id": null,
     "nickname": "Chiro"
   },
   "incomplete": false
