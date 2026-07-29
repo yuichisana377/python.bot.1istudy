@@ -84,7 +84,7 @@
     },
     {
       "id": "mrzsu1ei15a6",
-      "question": "新期造山帯では造山運動に加え、○○と○○なども盛ん",
+      "question": "新期造山帯では造山運動に加え、○○や○○○○なども盛ん",
       "answer": "地震　火山活動",
       "explanation": "",
       "imgs_q": [],
@@ -113,7 +113,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32615",
+    "id": null,
     "nickname": "Chiro"
   },
   "incomplete": false
