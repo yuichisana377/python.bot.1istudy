@@ -4,8 +4,8 @@
     {
       "id": "ms4b704ms86c",
       "question": "ノルウェー・スウェーデン間の国境",
-      "answer": "スカンディナヴィア山脈",
-      "explanation": "ビじゃなくてヴィだから気を付けてね",
+      "answer": "スカンディナビア山脈",
+      "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -104,7 +104,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32617",
+    "id": null,
     "nickname": "たけのこども"
   },
   "incomplete": false
