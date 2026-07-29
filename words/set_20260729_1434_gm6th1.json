@@ -21,7 +21,7 @@
     },
     {
       "id": "ms5nfo8iqfdj",
-      "question": "インドネシア・パプワニューギニア間",
+      "question": "インドネシア・パプアニューギニア間",
       "answer": "東経141度",
       "explanation": "",
       "imgs_q": [],
@@ -50,7 +50,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32617",
+    "id": null,
     "nickname": "Chiro"
   },
   "incomplete": false
