@@ -149,7 +149,7 @@
       "id": "ms38wact1yfh",
       "question": "読み込みのみで書くことができなく電源が不要",
       "answer": "ROM",
-      "explanation": "",
+      "explanation": "Read Only Memory",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
