@@ -40,7 +40,7 @@
     {
       "id": "mrni9yzak5uf",
       "question": "領海：沿岸（干潮時の海岸線）から【　　】までの範囲",
-      "answer": "１２海里",
+      "answer": "12海里",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -755,7 +755,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32623",
+    "id": null,
     "nickname": "Chiro"
   },
   "incomplete": false
