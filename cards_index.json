@@ -565,5 +565,15 @@
     "has_folder_id": true,
     "published_by": "Chiro",
     "incomplete": false
+  },
+  {
+    "filename": "set_20260729_2150_pbc12j.json",
+    "name": "地理a No.13~14 made by Gemini",
+    "count": 13,
+    "subject": "地理a",
+    "folder_id": "anjeyn33f5",
+    "has_folder_id": true,
+    "published_by": "Chiro",
+    "incomplete": false
   }
 ]
