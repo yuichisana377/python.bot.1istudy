@@ -1,0 +1,48 @@
+{
+  "name": "情報技術概論 浮動小数点数",
+  "cards": [
+    {
+      "id": "ms65d9tk6g7y",
+      "question": "浮動小数点数の式",
+      "answer": "a = m × B e",
+      "explanation": "※eは上付き文字です\na=実数\nm=仮数\nB=基数\ne=指数",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms65uw5dfy06",
+      "question": "単精度浮動小数点数",
+      "answer": "32ビット",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms65v5ho4qph",
+      "question": "倍精度浮動小数点数",
+      "answer": "64ビット",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms65y8831l53",
+      "question": "IEEE",
+      "answer": "符号ビット　1ビット\n指数部　　　8ビット\n仮数部　　　23ビット\nこれを並べる",
+      "explanation": "倍精度だと指数部が11ビット、仮数部が52ビットになる",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "情報技術概論",
+  "folder_id": "pi5vtik4iz",
+  "published_by": {
+    "id": "32628",
+    "nickname": "hara-Kirby"
+  },
+  "incomplete": false
+}
