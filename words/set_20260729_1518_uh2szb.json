@@ -2,9 +2,81 @@
   "name": "地理a 言語・語族",
   "cards": [
     {
-      "id": "ms5p1bocwtqr",
-      "question": "あ",
-      "answer": "い",
+      "id": "mrumizprrf6p",
+      "question": "英語、ドイツ語、オランダ語など。アメリカ北西部、北アメリカ、オーストラリアに分布",
+      "answer": "ゲルマン語派",
+      "explanation": "インド・ヨーロッパ語族",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrumk6r65daq",
+      "question": "フランス語、スペイン語、イタリア語など。ヨーロッパ南部やラテンアメリカに分布",
+      "answer": "ラテン語派",
+      "explanation": "インド・ヨーロッパ語族",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrun1mzq7304",
+      "question": "ロシア語、ウクライナ語、ポーランド語など。ロシア、アメリカ東部に分布",
+      "answer": "スラブ語派",
+      "explanation": "インド・ヨーロッパ語族",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mrunaclppai7",
+      "question": "アラビア語、ヘブライ語など、西アジア～北アフリカに分布する語族",
+      "answer": "アフリカ・アジア語族",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mruo622k5t5z",
+      "question": "フィンランド語、ハンガリー語。ヨーロッパの一部に分布",
+      "answer": "ウラル語族",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mruobi81ej49",
+      "question": "トルコ語、モンゴル語など。トルコ～中央アジア、シベリア～モンゴルに分布している諸語。",
+      "answer": "アルタイ諸語",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mruog0x2ddrb",
+      "question": "中国語、チベット語、タイ語など。中国～インドシナ半島に分布する諸語",
+      "answer": "シナ・チベット諸語",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mruommryb6we",
+      "question": "マレー語、インドネシア語、フィリピノ語、マダガスカル語、マオリ語など。東南アジア島嶼部、マダガスカル、ポリネシアに分布する語族。",
+      "answer": "オーストロネシア語族",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "mruosa9pvhsc",
+      "question": "スワヒリ語など。サハラ砂漠以南の中南アフリカに分布している諸語",
+      "answer": "ニジェール・コルドファン諸語",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
