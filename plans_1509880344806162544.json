@@ -1,16 +1,5 @@
 [
   {
-    "date": "2026-07-22",
-    "subject": "体育1a",
-    "content": "【提出】レポート",
-    "points": 15
-  },
-  {
-    "date": "2026-07-22",
-    "subject": "英語会話a",
-    "content": "【テスト】Speaking テスト"
-  },
-  {
     "date": "2026-09-28",
     "subject": "コンピュータリテラシ",
     "content": "【その他】発表"
@@ -42,12 +31,6 @@
     "date": "2026-07-31",
     "subject": "国語1甲a",
     "content": "【提出】teamsプリント提出",
-    "points": 5
-  },
-  {
-    "date": "2026-07-22",
-    "subject": "化学1a",
-    "content": "【提出】写真課題",
     "points": 5
   },
   {
