@@ -4,8 +4,8 @@
     {
       "id": "ms4b704ms86c",
       "question": "ノルウェー・スウェーデン間の国境",
-      "answer": "スカンディナビア山脈",
-      "explanation": "",
+      "answer": "スカンディナヴィア山脈",
+      "explanation": "ビじゃなくてヴィだから気を付けてね",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -14,7 +14,7 @@
       "id": "ms4b7na82wfz",
       "question": "ドイツ・ポーランド間の国境",
       "answer": "オーデル川",
-      "explanation": "",
+      "explanation": "トじゃないよ",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -104,7 +104,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": null,
+    "id": "32617",
     "nickname": "たけのこども"
   },
   "incomplete": false
