@@ -30,7 +30,7 @@
     },
     {
       "id": "ms65y8831l53",
-      "question": "IEEE",
+      "question": "IEEE754",
       "answer": "符号ビット　1ビット\n指数部　　　8ビット\n仮数部　　　23ビット\nこれを並べる",
       "explanation": "倍精度だと指数部が11ビット、仮数部が52ビットになる",
       "imgs_q": [],
@@ -41,7 +41,7 @@
   "subject": "情報技術概論",
   "folder_id": "pi5vtik4iz",
   "published_by": {
-    "id": "32628",
+    "id": "32615",
     "nickname": "hara-Kirby"
   },
   "incomplete": false
