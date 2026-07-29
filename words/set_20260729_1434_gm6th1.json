@@ -12,7 +12,7 @@
     },
     {
       "id": "ms5nehk3ywd2",
-      "question": "エジプト・スーダン間",
+      "question": "エジプト・スーダンの国境",
       "answer": "北緯22度",
       "explanation": "",
       "imgs_q": [],
@@ -21,7 +21,7 @@
     },
     {
       "id": "ms5nfo8iqfdj",
-      "question": "インドネシア・パプアニューギニア間",
+      "question": "インドネシア・パプワニューギニア間",
       "answer": "東経141度",
       "explanation": "",
       "imgs_q": [],
@@ -30,7 +30,7 @@
     },
     {
       "id": "ms5ngi4takyh",
-      "question": "カナダ・アメリカ合衆国（アラスカ）間",
+      "question": "カナダ・アメリカ合衆国間",
       "answer": "西経141度",
       "explanation": "",
       "imgs_q": [],
@@ -39,7 +39,7 @@
     },
     {
       "id": "ms5nh19hlpuc",
-      "question": "アメリカ合衆国（本国）・カナダ間",
+      "question": "アメリカ合衆国・カナダ間",
       "answer": "北緯49度",
       "explanation": "",
       "imgs_q": [],
@@ -50,7 +50,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": null,
+    "id": "32617",
     "nickname": "Chiro"
   },
   "incomplete": false
