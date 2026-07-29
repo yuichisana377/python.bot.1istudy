@@ -21,7 +21,7 @@
     },
     {
       "id": "mrzt4tzkym3r",
-      "question": "原油は燃料価格は液化天然ガスや石炭と比べて○○",
+      "question": "原油の燃料価格は液化天然ガスや石炭と比べて○○",
       "answer": "割高",
       "explanation": "",
       "imgs_q": [],
@@ -59,7 +59,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32623",
+    "id": null,
     "nickname": "Chiro"
   },
   "incomplete": false
