@@ -174,21 +174,5 @@
     "memo": "残りプリント全部",
     "student_id": "32623",
     "nickname": "たけのこども"
-  },
-  {
-    "date": "2026-07-29",
-    "subject": "地理a",
-    "minutes": 1,
-    "memo": "",
-    "student_id": "32626",
-    "nickname": "むむ"
-  },
-  {
-    "date": "2026-07-29",
-    "subject": "国語1甲a",
-    "minutes": 300,
-    "memo": "",
-    "student_id": "32626",
-    "nickname": "むむ"
   }
 ]
