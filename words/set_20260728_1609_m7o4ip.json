@@ -48,7 +48,7 @@
     },
     {
       "id": "ms4bbdk6an4d",
-      "question": "中学・ロシア間の国境",
+      "question": "中国・ロシア間の国境",
       "answer": "アムール川",
       "explanation": "",
       "imgs_q": [],
@@ -104,7 +104,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32623",
+    "id": null,
     "nickname": "たけのこども"
   },
   "incomplete": false
