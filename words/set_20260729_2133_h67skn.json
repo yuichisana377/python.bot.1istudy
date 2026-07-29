@@ -111,7 +111,7 @@
     },
     {
       "id": "ms62eque9sf8",
-      "question": "アルタイ語族に含まれる主な言語は何か？",
+      "question": "アルタイ諸語に含まれる主な言語は何か？",
       "answer": "トルコ語、モンゴル語",
       "explanation": "中央アジアやシベリア、モンゴルなどに広く分布しています。",
       "imgs_q": [],
@@ -185,7 +185,7 @@
   "subject": "地理a",
   "folder_id": "anjeyn33f5",
   "published_by": {
-    "id": "32618",
+    "id": "32623",
     "nickname": "Chiro"
   },
   "incomplete": false
