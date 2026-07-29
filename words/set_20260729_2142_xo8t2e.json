@@ -76,7 +76,7 @@
     {
       "id": "ms62paq6gww1",
       "question": "旧宗主国の言語を公用語としているコートジボワールやニジェールの公用語は何か？",
-      "answer": "旧宗主国の言語を公用語としているコートジボワールやニジェールの公用語は何か？",
+      "answer": "フランス語",
       "explanation": "アフリカの旧フランス領の国々では、現在もフランス語が公用語として用いられています。",
       "imgs_q": [],
       "imgs_a": [],
@@ -122,7 +122,7 @@
   "subject": "地理a",
   "folder_id": "anjeyn33f5",
   "published_by": {
-    "id": "32618",
+    "id": "32623",
     "nickname": "Chiro"
   },
   "incomplete": false
