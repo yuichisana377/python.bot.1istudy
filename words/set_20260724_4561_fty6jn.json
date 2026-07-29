@@ -183,7 +183,7 @@
     },
     {
       "id": "mrt9ti6mgsmk",
-      "question": "日本は19世紀初めに北方島の実効支配を確立。樺太は雑居地とし、日本ロシアの人々が暮らした。",
+      "question": "日本は19世紀初めにこの条約によって北方島の実効支配を確立。樺太は雑居地とし、日本ロシアの人々が暮らした。",
       "answer": "日露通好条約",
       "explanation": "",
       "imgs_q": [],
@@ -246,8 +246,8 @@
     },
     {
       "id": "mrtazh3lupf4",
-      "question": "世襲的な君主が統治する国家",
-      "answer": "君主国",
+      "question": "世襲的な君主が当時する国家",
+      "answer": "君主制",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -318,7 +318,7 @@
     },
     {
       "id": "mrumbbd8brcv",
-      "question": "中南アフリカの人々など",
+      "question": "中東阿アフリカの人々など",
       "answer": "ネグロイド（アフリカ人）",
       "explanation": "",
       "imgs_q": [],
@@ -345,7 +345,7 @@
     },
     {
       "id": "mrumizprrf6p",
-      "question": "英語、ドイツ語、オランダ語など。ヨーロッパ北西部、北アメリカ、オーストラリアに分布",
+      "question": "英語、ドイツ語、オランダ語など。アメリカ北西部、北アメリカ、オーストラリアに分布",
       "answer": "ゲルマン語派",
       "explanation": "インド・ヨーロッパ語族",
       "imgs_q": [],
@@ -661,8 +661,8 @@
     {
       "id": "mrw5ki82fdc1",
       "question": "自分が修行をすることで、出家をしていない人々も救える。東アジア、モンゴルなどに分布",
-      "answer": "チベット仏教",
-      "explanation": "",
+      "answer": "大乗仏教",
+      "explanation": "これと土着の宗教が結びついたのがチベット仏教",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -755,7 +755,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32623",
+    "id": "32617",
     "nickname": "Chiro"
   },
   "incomplete": false
