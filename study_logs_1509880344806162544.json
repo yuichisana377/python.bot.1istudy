@@ -174,5 +174,13 @@
     "memo": "残りプリント全部",
     "student_id": "32623",
     "nickname": "たけのこども"
+  },
+  {
+    "date": "2026-07-29",
+    "subject": "地理a",
+    "minutes": 180,
+    "memo": "プリントのまとめ",
+    "student_id": "32623",
+    "nickname": "たけのこども"
   }
 ]
