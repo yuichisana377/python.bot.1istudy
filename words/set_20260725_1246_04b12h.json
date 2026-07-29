@@ -21,7 +21,7 @@
     },
     {
       "id": "mrztszmeoewt",
-      "question": "石炭は環境への負荷が○○。",
+      "question": "石炭は環境への負荷が○○○。",
       "answer": "大きい",
       "explanation": "CO₂、NOxの排出量がLNG、石油よりも大きい",
       "imgs_q": [],
@@ -41,7 +41,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32615",
+    "id": null,
     "nickname": "Chiro"
   },
   "incomplete": false
