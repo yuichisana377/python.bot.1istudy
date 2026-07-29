@@ -12,7 +12,7 @@
     },
     {
       "id": "ms5nehk3ywd2",
-      "question": "エジプト・スーダン語",
+      "question": "エジプト・スーダン間",
       "answer": "北緯22度",
       "explanation": "",
       "imgs_q": [],
@@ -50,7 +50,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": "32618",
+    "id": "32623",
     "nickname": "Chiro"
   },
   "incomplete": false
