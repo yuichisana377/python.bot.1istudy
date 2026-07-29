@@ -1,5 +1,5 @@
 {
-  "name": "原油の分布",
+  "name": "地理a 原油の分布",
   "cards": [
     {
       "id": "ms5otk4ffhq3",
@@ -90,7 +90,7 @@
       "imgs_e": []
     }
   ],
-  "subject": null,
+  "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
     "id": "32618",
