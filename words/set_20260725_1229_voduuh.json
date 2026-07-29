@@ -54,13 +54,22 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms66mbs5ls9b",
+      "question": "原油は[　　　　　]に埋まっている",
+      "answer": "背斜構造部",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": null,
-    "nickname": "Chiro"
+    "id": "32628",
+    "nickname": "hara-Kirby"
   },
   "incomplete": false
 }
