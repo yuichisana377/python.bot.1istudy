@@ -1,0 +1,57 @@
+{
+  "name": "地理a 人為的国境の例",
+  "cards": [
+    {
+      "id": "ms5ne6wnzogx",
+      "question": "エジプト・リビア間",
+      "answer": "東経25度",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms5nehk3ywd2",
+      "question": "エジプト・スーダン語",
+      "answer": "北緯22度",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms5nfo8iqfdj",
+      "question": "インドネシア・パプワニューギニア間",
+      "answer": "東経141度",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms5ngi4takyh",
+      "question": "カナダ・アメリカ合衆国間",
+      "answer": "西経141度",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms5nh19hlpuc",
+      "question": "アメリカ合衆国・カナダ間",
+      "answer": "北緯49度",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "地理a",
+  "folder_id": "qujgbh8vui",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  },
+  "incomplete": false
+}
