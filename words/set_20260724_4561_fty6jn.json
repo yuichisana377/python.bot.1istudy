@@ -40,7 +40,7 @@
     {
       "id": "mrni9yzak5uf",
       "question": "領海：沿岸（干潮時の海岸線）から【　　】までの範囲",
-      "answer": "12海里",
+      "answer": "１２海里",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -246,8 +246,8 @@
     },
     {
       "id": "mrtazh3lupf4",
-      "question": "世襲的な君主が統治する国家",
-      "answer": "君主国",
+      "question": "世襲的な君主が当時する国家",
+      "answer": "君主制",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -328,7 +328,7 @@
     {
       "id": "mrumdk0zft55",
       "question": "オーストラリア先住民のアボリジニ",
-      "answer": "オーストラロイド（サフール人）",
+      "answer": "オーストラリアロイド（サフール人）",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -661,8 +661,8 @@
     {
       "id": "mrw5ki82fdc1",
       "question": "自分が修行をすることで、出家をしていない人々も救える。東アジア、モンゴルなどに分布",
-      "answer": "チベット仏教",
-      "explanation": "",
+      "answer": "大乗仏教",
+      "explanation": "これと土着の宗教が結びついたのがチベット仏教",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -755,7 +755,7 @@
   "subject": "地理a",
   "folder_id": "qujgbh8vui",
   "published_by": {
-    "id": null,
+    "id": "32617",
     "nickname": "Chiro"
   },
   "incomplete": false
