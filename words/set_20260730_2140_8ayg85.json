@@ -1,0 +1,48 @@
+{
+  "name": "国語1甲a ⑥ぼんやりとした不安",
+  "cards": [
+    {
+      "id": "ms7hzbr75rk2",
+      "question": "ニヒリズムとは何か",
+      "answer": "虚無主義。すべてのものは無価値であるとする。",
+      "explanation": "『玄鶴山房』や『河童』",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7i2qupbjcm",
+      "question": "誰の「話らしい話のない」小説を、芥川は「文芸的な、あまりに文芸的な」と「純粋」だと肯定したか",
+      "answer": "志賀直哉",
+      "explanation": "芸術の自律性を主張した自己の文学を完全否定",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7i4pdkvm9s",
+      "question": "芥川の服毒自殺は、何を語るものとして深刻な反響を呼んだか",
+      "answer": "時代の危機",
+      "explanation": "芥川の遺書「何か僕の将来に対するただぼんやりとした不安である」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7i4r7l8j71",
+      "question": "芥川の服毒自殺は、何を語るものとして深刻な反響を呼んだか",
+      "answer": "時代の危機",
+      "explanation": "芥川の遺書「何か僕の将来に対するただぼんやりとした不安である」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "国語1甲a",
+  "folder_id": "ul03vnlesn",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  },
+  "incomplete": false
+}
