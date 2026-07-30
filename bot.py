@@ -48,6 +48,7 @@ NO_CACHE_PATHS = {
     "/list_cards",
     "/get_card_set",
     "/list_folders",
+    "/list_order",
     "/channels",
 }
 
@@ -1580,6 +1581,9 @@ def delete_cards():
     except GitHubWriteError as e:
         print(f"[WARN] cards_index からの削除に失敗しました: {e}")
 
+    # ★ 並び順（list_order.json）からも、このデッキのキーを取り除いておく
+    cleanup_list_order(remove_keys={f"deck:{filename}"})
+
     return jsonify({"ok": True})
 # ================================================================
 #  
@@ -1894,7 +1898,98 @@ def delete_folder():
         remove_ids = set([folder_id] + desc_ids)
         new_folders = [f for f in folders if f["id"] not in remove_ids]
         save_card_folders(new_folders, sha)
+
+        # ★ 並び順（list_order.json）からも、削除したフォルダ自身のスコープと、
+        #   他のフォルダ内に残っていた folder: キーの参照を取り除いておく
+        cleanup_list_order(
+            remove_keys=set(f"folder:{fid}" for fid in remove_ids),
+            remove_scopes=remove_ids,
+        )
+
         return jsonify({"ok": True, "deleted_ids": list(remove_ids)})
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+# ================================
+#  Flask API — 一覧（デッキ・フォルダ）の並び順（みんなで共有）
+# ================================
+#  ・フォルダを開いている場所（"__root__" またはフォルダid）ごとに、
+#    その中でのフォルダ・公開済みデッキの並び順（data-keyの配列）を保存する。
+#  ・未公開（各自の下書き）デッキは他人からは見えないデータなので、
+#    ここには含めない（フロント側でも送らないようにフィルタしている）。
+ORDER_FILE = "list_order.json"
+
+def load_list_order():
+    data, sha = github_get(ORDER_FILE)
+    return (data or {}), sha
+
+def save_list_order(order_map, sha=None):
+    if sha is None:
+        _, sha = github_get(ORDER_FILE)
+    github_put(ORDER_FILE, order_map, sha)
+
+def cleanup_list_order(remove_keys=None, remove_scopes=None):
+    """
+    フォルダ・デッキが削除された際に、list_order.json から
+    もう存在しない項目のエントリを取り除いておく（放っておいても表示は壊れないが、
+    ファイルが際限なく肥大化するのを防ぐための後片付け）。
+    ・remove_keys:   各スコープの並び順配列から取り除く要素（例: {"folder:xxx", "deck:yyy.json"}）
+    ・remove_scopes: まるごと削除するスコープ自体（フォルダそのものが削除された場合、
+                     そのフォルダの中の並び順はもう意味がないのでスコープごと消す）
+    ★ 並び順の掃除は本質的な機能ではない（古い項目が残っていても、フロント側の表示時に
+       存在しないものとして自動的に無視されるだけ）ので、失敗しても警告に留め、
+       呼び出し元の本来の削除処理自体は失敗させない。
+    """
+    remove_keys   = set(remove_keys or [])
+    remove_scopes = set(remove_scopes or [])
+    if not remove_keys and not remove_scopes:
+        return
+    try:
+        order_map, sha = load_list_order()
+        changed = False
+        for scope in remove_scopes:
+            if scope in order_map:
+                del order_map[scope]
+                changed = True
+        if remove_keys:
+            for scope, keys in list(order_map.items()):
+                new_keys = [k for k in keys if k not in remove_keys]
+                if len(new_keys) != len(keys):
+                    order_map[scope] = new_keys
+                    changed = True
+        if changed:
+            save_list_order(order_map, sha)
+    except GitHubWriteError as e:
+        print(f"[WARN] list_order のクリーンアップに失敗しました: {e}")
+    except Exception as e:
+        print(f"[WARN] list_order のクリーンアップ中に予期しないエラーが発生しました: {e}")
+
+@app.route("/list_order", methods=["GET"])
+def list_order():
+    try:
+        order_map, _ = load_list_order()
+        return jsonify({"ok": True, "order": order_map})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/save_order", methods=["POST"])
+def save_order():
+    """
+    body: { scope: "__root__" または フォルダid, keys: ["folder:xxx", "deck:yyy", ...] }
+    指定したscope（フォルダの場所）の並び順だけを丸ごと置き換えて保存する。
+    """
+    data  = request.json or {}
+    scope = data.get("scope")
+    keys  = data.get("keys")
+    if not scope or not isinstance(keys, list):
+        return jsonify({"ok": False, "error": "scope と keys は必須です"})
+    try:
+        order_map, sha = load_list_order()
+        order_map[scope] = keys
+        save_list_order(order_map, sha)
+        return jsonify({"ok": True})
     except GitHubWriteError as e:
         return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
     except Exception as e:
