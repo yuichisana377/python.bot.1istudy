@@ -788,6 +788,16 @@ async def help_command(interaction: discord.Interaction):
 # ================================
 TOMORROW_NOTIFY_CHANNEL_KEYS = ("remind_channel_id", "remind_channel_id_dorm")  # 通生・寮生 両方に送信
 
+# ★ フロント側（plan.js）が備考をcontent文字列に埋め込む際の区切り文字列。
+#   通知メッセージには備考を含めず、予定本文だけを送るためここで取り除く。
+NOTE_SEP = "\n📝備考："
+
+def strip_note(content: str) -> str:
+    if not content:
+        return content
+    return content.split(NOTE_SEP)[0]
+
+
 async def send_tomorrow_plans():
     # 実行日が金曜(4)・土曜(5) の場合は「金曜夜」「土曜夜」の通知にあたるため、
     # 予定が無ければ通知自体をスキップする
@@ -801,7 +811,7 @@ async def send_tomorrow_plans():
         if plans:
             msg = "こんばんは！明日の予定です。\n"
             for p in plans:
-                msg += f"・{p['subject']} {p['content']}\n"
+                msg += f"・{p['subject']} {strip_note(p['content'])}\n"
         else:
             if quiet_if_empty:
                 continue
@@ -840,7 +850,7 @@ async def send_today_plans_for(config_key: str):
         if plans:
             msg = "おはようございます！今日の予定です。\n"
             for p in plans:
-                msg += f"・{p['subject']} {p['content']}\n"
+                msg += f"・{p['subject']} {strip_note(p['content'])}\n"
         else:
             if quiet_if_empty:
                 continue
@@ -903,7 +913,7 @@ async def send_weekly_plans():
                 d = datetime.strptime(date_str, "%Y-%m-%d").date()
                 msg += f"\n**{d.strftime('%m/%d')}（{WEEKDAY_JP[d.weekday()]}）**\n"
                 for p in plans_by_date[date_str]:
-                    msg += f"・{p['subject']} {p['content']}\n"
+                    msg += f"・{p['subject']} {strip_note(p['content'])}\n"
         else:
             msg = f"📅 今週（{week_start.strftime('%m/%d')}〜{week_end.strftime('%m/%d')}）の予定はありません。\n"
 
