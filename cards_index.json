@@ -749,11 +749,11 @@
   {
     "filename": "set_20260730_2213_jyyjhn.json",
     "name": "国語1甲a 漢字4-6",
-    "count": 7,
+    "count": 26,
     "subject": "国語1甲a",
     "folder_id": "dxw9nwf80s",
     "has_folder_id": true,
     "published_by": "たけのこども",
-    "incomplete": true
+    "incomplete": false
   }
 ]
