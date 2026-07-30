@@ -1,0 +1,246 @@
+{
+  "name": "漢字4－10",
+  "cards": [
+    {
+      "id": "ms7n86h5lqrg",
+      "question": "クッセツ",
+      "answer": "屈折",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7n8ev5vyzl",
+      "question": "申しコむ",
+      "answer": "申し込む",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7n8r6zj9hl",
+      "question": "ゲイシュン",
+      "answer": "迎春",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7n8y3wpuh2",
+      "question": "ハクシン",
+      "answer": "迫真",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7n94xbv7jn",
+      "question": "アッパク",
+      "answer": "圧迫",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7n9c50sf13",
+      "question": "トウヒ",
+      "answer": "逃避",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7n9ljcl7kj",
+      "question": "ノガれる",
+      "answer": "逃れる",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nawa428kj",
+      "question": "ゼント洋洋",
+      "answer": "前途洋洋",
+      "explanation": "未来が希望に満ち溢れてること。今の僕は言えないことである",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nb4ivwl2a",
+      "question": "トウメイ",
+      "answer": "透明",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nbfyc039r",
+      "question": "チコク",
+      "answer": "遅刻",
+      "explanation": "僕はしたことないよ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nbox9xrw2",
+      "question": "ソウイない",
+      "answer": "相違",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nbv9q4vo5",
+      "question": "ハケン",
+      "answer": "派遣",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nc6yjckxz",
+      "question": "ヒナン訓練",
+      "answer": "避難",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ncwz2zxtf",
+      "question": "ユウエツ",
+      "answer": "優越",
+      "explanation": "a<br>b<br>c",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nddpu3zjf",
+      "question": "シュミ",
+      "answer": "趣味",
+      "explanation": "いい趣味をお持ちですね、は悪口なので覚えておこう",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ndlcqce4x",
+      "question": "ヒッテキ",
+      "answer": "匹敵",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ne5vbmlqq",
+      "question": "ケンガイ",
+      "answer": "圏外",
+      "explanation": "なんか心が痛むからあんまり見たくない",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nembe6st2",
+      "question": "壱二参",
+      "answer": "弐",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nfcxxolxn",
+      "question": "トウシをむき出しにする",
+      "answer": "闘志",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nflj9vju9",
+      "question": "気ジョウブ",
+      "answer": "丈夫",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ng7eulr6a",
+      "question": "鳥取サキュウ",
+      "answer": "砂丘",
+      "explanation": "逆に鳥取って砂丘以外何があるの？",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ngjihtthn",
+      "question": "キヨ",
+      "answer": "寄与",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nh6mdx9az",
+      "question": "タンセイ",
+      "answer": "丹精",
+      "explanation": "心を込めてすること",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nhkmwvxe8",
+      "question": "カン電池",
+      "answer": "乾電池",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nhurwacsv",
+      "question": "ゴカク",
+      "answer": "互角",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ni1jl4fbl",
+      "question": "カイニュウ",
+      "answer": "介入",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": null,
+  "folder_id": "dxw9nwf80s",
+  "published_by": {
+    "id": "32617",
+    "nickname": "山田レットドラゴン太郎"
+  },
+  "incomplete": false
+}
