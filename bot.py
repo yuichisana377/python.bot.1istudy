@@ -874,6 +874,48 @@ async def cleanup_past_plans():
             write_log(guild_id, "cleanup", detail="削除した日付: " + ", ".join(deleted_dates))
             print(f"{guild_id} の過去予定を削除しました。")
 
+WEEKLY_NOTIFY_CHANNEL_KEYS = ("remind_channel_id", "remind_channel_id_dorm")  # 通生・寮生 両方に送信
+WEEKDAY_JP = ["月", "火", "水", "木", "金", "土", "日"]
+
+async def send_weekly_plans():
+    """
+    毎週日曜14:00に、翌日（月曜）から日曜までの「今週の予定」をまとめて通知する。
+    """
+    now = datetime.now(JST)
+    week_start = (now + timedelta(days=1)).date()   # 翌日の月曜
+    week_end = week_start + timedelta(days=6)        # その週の日曜
+
+    for filename in list_all_configs():
+        guild_id = int(filename.replace("config_", "").replace(".json", ""))
+        config = load_config(guild_id)
+        plans = [
+            p for p in load_plans(guild_id)
+            if week_start <= datetime.strptime(p["date"], "%Y-%m-%d").date() <= week_end
+        ]
+
+        if plans:
+            plans_by_date = {}
+            for p in plans:
+                plans_by_date.setdefault(p["date"], []).append(p)
+
+            msg = f"📅 今週（{week_start.strftime('%m/%d')}〜{week_end.strftime('%m/%d')}）の予定です！\n"
+            for date_str in sorted(plans_by_date.keys()):
+                d = datetime.strptime(date_str, "%Y-%m-%d").date()
+                msg += f"\n**{d.strftime('%m/%d')}（{WEEKDAY_JP[d.weekday()]}）**\n"
+                for p in plans_by_date[date_str]:
+                    msg += f"・{p['subject']} {p['content']}\n"
+        else:
+            msg = f"📅 今週（{week_start.strftime('%m/%d')}〜{week_end.strftime('%m/%d')}）の予定はありません。\n"
+
+        for config_key in WEEKLY_NOTIFY_CHANNEL_KEYS:
+            channel_id = config.get(config_key)
+            if not channel_id:
+                continue
+            channel = bot.get_channel(channel_id)
+            if not channel:
+                continue
+            await channel.send(msg + "\n@everyone")
+
 # ================================
 #  Flask API — 予定管理
 # ================================
@@ -2002,6 +2044,7 @@ scheduler.add_job(send_tomorrow_plans,     "cron", hour=20, minute=0)
 scheduler.add_job(send_today_plans_commute, "cron", hour=5,  minute=30)  # 通生（現行時間）
 scheduler.add_job(send_today_plans_dorm,    "cron", hour=7,  minute=20)  # 寮生
 scheduler.add_job(cleanup_past_plans,       "cron", hour=0,  minute=0)
+scheduler.add_job(send_weekly_plans,        "cron", day_of_week="sun", hour=14, minute=0)  # 毎週日曜14:00に今週の予定
 
 started = False
 synced_once = False
