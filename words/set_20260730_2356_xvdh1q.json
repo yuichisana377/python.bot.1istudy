@@ -1,0 +1,246 @@
+{
+  "name": "漢字4－9",
+  "cards": [
+    {
+      "id": "ms7mog38af5y",
+      "question": "ライメイ",
+      "answer": "雷鳴",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7monyals4r",
+      "question": "ヒツジュ",
+      "answer": "必需",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mp11zzvrr",
+      "question": "シンドウ",
+      "answer": "震動",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mp88ilxrw",
+      "question": "ノウム",
+      "answer": "濃霧",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mq17qu946",
+      "question": "ロコツ",
+      "answer": "露骨",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mrw30tp9b",
+      "question": "ダンパツ",
+      "answer": "断髪",
+      "explanation": "力士がやめるときにやるやつ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ms9174uxh",
+      "question": "イセイ",
+      "answer": "為政",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mshlbd1yr",
+      "question": "キョウレツ",
+      "answer": "強烈",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mstvczptu",
+      "question": "二やす",
+      "answer": "煮やす",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mt1fn4ue3",
+      "question": "ボンチ",
+      "answer": "盆地",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mt8ylnnf1",
+      "question": "トウナン",
+      "answer": "盗難",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mtel3jjjm",
+      "question": "監視",
+      "answer": "監視",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mtqnk54p7",
+      "question": "キバン",
+      "answer": "基盤",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mtvnecr2v",
+      "question": "コブ",
+      "answer": "鼓舞",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mu5pnf0im",
+      "question": "ゲキド",
+      "answer": "激怒",
+      "explanation": "メロス",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mudeeerck",
+      "question": "キョウフ",
+      "answer": "恐怖",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mukv0nfta",
+      "question": "オンケイ",
+      "answer": "恩恵",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7muv70s94i",
+      "question": "チエ",
+      "answer": "知恵",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mviu5s6ww",
+      "question": "レンアイ",
+      "answer": "恋愛",
+      "explanation": "相手を恋しく思うこと",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mvqfnmq8y",
+      "question": "メイワク",
+      "answer": "迷惑",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mvwqw5f0n",
+      "question": "ハイリョ",
+      "answer": "配慮",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mwaxtxy47",
+      "question": "キショウ",
+      "answer": "起床",
+      "explanation": "7：20",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mwqt1ud2n",
+      "question": "ヒロウ",
+      "answer": "疲労",
+      "explanation": "土日が近いぞ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mx0f39bhi",
+      "question": "チリョウ",
+      "answer": "治療",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mx8ai0r18",
+      "question": "ジンリョク",
+      "answer": "尽力",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mywf1y1ag",
+      "question": "ゴビ",
+      "answer": "語尾",
+      "explanation": "ゴビ砂漠ではたくさん恐竜の化石が取れる。覚えといて損はない知識",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": null,
+  "folder_id": "dxw9nwf80s",
+  "published_by": {
+    "id": "32617",
+    "nickname": "山田レットドラゴン太郎"
+  },
+  "incomplete": false
+}
