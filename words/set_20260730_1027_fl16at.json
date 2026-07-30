@@ -1,0 +1,66 @@
+{
+  "name": "情報技術概論 技術練習",
+  "cards": [
+    {
+      "id": "ms6u1a9xh4xk",
+      "question": "プログラム内蔵方式とは",
+      "answer": "ソフトウェアを主記憶装置に保存して、順番に読み出して処理を行う方式。",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms6u1ys163lm",
+      "question": "ソフトウェアとは",
+      "answer": "データ及びその処理手順のこと",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms6u2c5btfw0",
+      "question": "ハードウェア",
+      "answer": "コンピュータの機械または回路そのものおよび基本的な機能。",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms6u2oninyup",
+      "question": "制御装置とは",
+      "answer": "プログラムをもとにコンピュータの各装置に指示を出す",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms6u2w1a46yd",
+      "question": "演算装置",
+      "answer": "プログラムをもとに演算を行う",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms6u38xybxyb",
+      "question": "主記憶装置",
+      "answer": "実行するプログラムとデータを格納する装置",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "情報技術概論",
+  "folder_id": "pi5vtik4iz",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  },
+  "incomplete": false
+}
