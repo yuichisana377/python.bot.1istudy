@@ -1,0 +1,93 @@
+{
+  "name": "国語1甲a 早熟な文学少年",
+  "cards": [
+    {
+      "id": "ms7gj78vppkf",
+      "question": "芥川の生後七か月で、母親はどうなったか",
+      "answer": "精神を病んだ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7gk5aw7bus",
+      "question": "母の実家芥川家で育てられた経験は、彼の心に後年まで何を残したか",
+      "answer": "虚無的な影",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7gl61kxeea",
+      "question": "由来ある旧家であった芥川家は何に厳しいが遊芸にも親しんでいたのか",
+      "answer": "行儀作法",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7gm5yd5p93",
+      "question": "行儀作法に厳しいが遊芸に親しむ芥川家の家風の中で、芥川の何が形成されたか",
+      "answer": "感性や感覚の細やかさ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7gnhrqtlk0",
+      "question": "芥川は無試験でどこの高校に進学したか",
+      "answer": "一高",
+      "explanation": "国立",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7gooiybji8",
+      "question": "芥川は高校時代、中学時代と同様になんの幅広い文学に触れたか",
+      "answer": "西洋文学",
+      "explanation": "アナトール・フランス、ボードレールなど",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7gpj90muiu",
+      "question": "芥川は何からすべてを学んだと感じたか",
+      "answer": "本",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7gqb6vg9yf",
+      "question": "芥川は人生よりも何に意義を見出すようになったか",
+      "answer": "芸術",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7gr3g86iee",
+      "question": "芥川は高校を卒業後、どこに入学したか",
+      "answer": "東大の英文科",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "国語1甲a",
+  "folder_id": "ul03vnlesn",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  },
+  "incomplete": false
+}
