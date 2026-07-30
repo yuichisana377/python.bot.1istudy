@@ -1,5 +1,5 @@
 {
-  "name": "漢字4－8",
+  "name": "国語1甲a 漢字4－8",
   "cards": [
     {
       "id": "ms7m53am4xtr",
@@ -236,10 +236,10 @@
       "imgs_e": []
     }
   ],
-  "subject": null,
+  "subject": "国語1甲a",
   "folder_id": "dxw9nwf80s",
   "published_by": {
-    "id": "32617",
+    "id": "32618",
     "nickname": "山田レットドラゴン太郎"
   },
   "incomplete": false
