@@ -54,6 +54,24 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms6u4dzdrt80",
+      "question": "プログラムカウンタとは",
+      "answer": "主記憶装置の番地を格納する",
+      "explanation": "習った？これ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms6u7fgi3m42",
+      "question": "ラムとロムの違いを説明せよ。",
+      "answer": "ラム…揮発性。アクセス時間が早い。主記憶装置などに使われる。\n\nロム…不揮発性。アクセス時間が遅い。補助記憶装置などに使われる。",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報技術概論",
@@ -62,5 +80,5 @@
     "id": "32623",
     "nickname": "たけのこども"
   },
-  "incomplete": false
+  "incomplete": true
 }
