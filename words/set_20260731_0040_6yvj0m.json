@@ -1,0 +1,246 @@
+{
+  "name": "国語1甲a 漢字4-13",
+  "cards": [
+    {
+      "id": "ms7o9rptzho4",
+      "question": "ハンショク",
+      "answer": "繫殖",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oa4h0scqf",
+      "question": "イチヨクを担う。",
+      "answer": "一翼",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oaj0neeir",
+      "question": "タイキュウ消費財。",
+      "answer": "耐久",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oaxaecbpr",
+      "question": "カタを並べる者はいない。",
+      "answer": "肩",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7obzkjrwkh",
+      "question": "問題解決にフシンする。",
+      "answer": "腐心",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7occaazyif",
+      "question": "野菜をクサらせてしまう。",
+      "answer": "腐",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ocmj7i5rw",
+      "question": "毎日トウフを食べる",
+      "answer": "豆腐",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7od32my0yz",
+      "question": "ヒフを清潔に保つ。",
+      "answer": "皮膚",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7odiw1654d",
+      "question": "カンプなきまでにたたく。",
+      "answer": "完膚",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7odwlzj717",
+      "question": "全員の意見がイッチする。",
+      "answer": "一致",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oeb5juabv",
+      "question": "テンポを改装する",
+      "answer": "店舗",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oelnmau7h",
+      "question": "ギャクシュウに出る。",
+      "answer": "逆襲",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oeyw81p26",
+      "question": "エイヨに浴する。",
+      "answer": "栄誉",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ofipgro95",
+      "question": "ゴウカイな投げ技。",
+      "answer": "豪快",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ofxpqne1n",
+      "question": "明治のブンゴウ。",
+      "answer": "文豪",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ogck4sioa",
+      "question": "話題マンサイの雑誌。",
+      "answer": "満載",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ogqpgznkp",
+      "question": "コウキある優勝旗。",
+      "answer": "光輝",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oh2egwarn",
+      "question": "センパイに教えられる。",
+      "answer": "先輩",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ohfdh187b",
+      "question": "オンキョウ効果を確かめる。",
+      "answer": "音響",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ohpn6fzca",
+      "question": "キョウイ的な記録の更新。",
+      "answer": "驚異",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oi2ma2ipu",
+      "question": "キキ迫る光景。",
+      "answer": "鬼気",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oikou79xb",
+      "question": "容姿タンレイな人。",
+      "answer": "端麗",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oitep9t85",
+      "question": "本をモクドクする。",
+      "answer": "黙読",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7oj8roar2g",
+      "question": "コウレイ社会を考える。",
+      "answer": "高齢",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ojh4yhik7",
+      "question": "心臓のコドウ。",
+      "answer": "鼓動",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ojt53nc3v",
+      "question": "お祭りでタイコをたたく。",
+      "answer": "太鼓",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "国語1甲a",
+  "folder_id": "dxw9nwf80s",
+  "published_by": {
+    "id": "32618",
+    "nickname": "Chiro"
+  },
+  "incomplete": false
+}
