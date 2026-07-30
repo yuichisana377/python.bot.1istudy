@@ -1,0 +1,228 @@
+{
+  "name": "漢字4－11",
+  "cards": [
+    {
+      "id": "ms7nn5f091up",
+      "question": "ケン二ン",
+      "answer": "兼任",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nnh633sgj",
+      "question": "ヒボン",
+      "answer": "非凡",
+      "explanation": "高専生のこと。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nnqwu661v",
+      "question": "キョウダン",
+      "answer": "凶弾",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7no3arxvth",
+      "question": "ドクセン禁止法",
+      "answer": "独占",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nobhat7rs",
+      "question": "ツイキュウ",
+      "answer": "追及",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7npat4g20w",
+      "question": "ショウシュウ",
+      "answer": "召集",
+      "explanation": "召集が国会とかで招集が地方議会とか",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7npis1f2zi",
+      "question": "ガンチク",
+      "answer": "含蓄",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nprinlqn1",
+      "question": "トウトツ",
+      "answer": "唐突",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nqk1961v8",
+      "question": "シッコウ機関",
+      "answer": "執行機関",
+      "explanation": "コード31C、被害甚大の人たち",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nr1p07x16",
+      "question": "シュウチャク",
+      "answer": "執着",
+      "explanation": "仏教としてはよくないこと",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nrq1ui7l8",
+      "question": "ケンジツ",
+      "answer": "堅実",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nsecd7fkg",
+      "question": "チュウケン社員",
+      "answer": "中堅社員",
+      "explanation": "一番大変だけど一番楽しいであろう役職",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nsp380i2q",
+      "question": "ヘキガ",
+      "answer": "壁画",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nt0y2mcqs",
+      "question": "イチ",
+      "answer": "壱",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nt9v4vgx1",
+      "question": "キセキ",
+      "answer": "奇跡",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nvbpd7kei",
+      "question": "スウキ",
+      "answer": "数奇",
+      "explanation": "この物語は謎の『石仮面』にまつわる二人の少年の\n\n数奇な運命を追う冒険譚である！",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nvj58wy8h",
+      "question": "オクバ",
+      "answer": "奥歯",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nvor5mymu",
+      "question": "イゲン",
+      "answer": "威厳",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nvwzv1f6c",
+      "question": "ジンモン",
+      "answer": "尋問",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nwewa67nc",
+      "question": "打者イチジュン",
+      "answer": "一巡",
+      "explanation": "一周すること",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nwmjbukk4",
+      "question": "キョガク",
+      "answer": "巨額",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nwvr47kux",
+      "question": "キカ学",
+      "answer": "幾何学",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nz52k0dlz",
+      "question": "厚顔ムチ",
+      "answer": "無恥",
+      "explanation": "こうがんむち。恥知らず。パープルヘイズということである",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7nzbkazj5z",
+      "question": "ゲキタイ",
+      "answer": "撃退",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": null,
+  "folder_id": "dxw9nwf80s",
+  "published_by": {
+    "id": "32617",
+    "nickname": "山田レットドラゴン太郎"
+  },
+  "incomplete": false
+}
