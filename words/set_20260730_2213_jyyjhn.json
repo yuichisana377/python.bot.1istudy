@@ -1,0 +1,66 @@
+{
+  "name": "国語1甲a 漢字4-6",
+  "cards": [
+    {
+      "id": "ms7cgbvubl7f",
+      "question": "好調をイジする",
+      "answer": "維持",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ch3w3g71z",
+      "question": "情報モウが発達する",
+      "answer": "網",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7chrprwytr",
+      "question": "エンガワでうたた寝する",
+      "answer": "縁側",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7cipnuot38",
+      "question": "事のケイイを話す",
+      "answer": "経緯",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7cjlrraib3",
+      "question": "次年度に残金をクり越す",
+      "answer": "繰",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ja3w94i0x",
+      "question": "呉越ドウシュウ",
+      "answer": "同舟",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": "国語1甲a",
+  "folder_id": "dxw9nwf80s",
+  "published_by": {
+    "id": "32623",
+    "nickname": "たけのこども"
+  },
+  "incomplete": true
+}
