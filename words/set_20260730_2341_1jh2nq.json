@@ -1,0 +1,246 @@
+{
+  "name": "漢字4－8",
+  "cards": [
+    {
+      "id": "ms7m53am4xtr",
+      "question": "ケイシャ",
+      "answer": "傾斜",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7m5g7geqg3",
+      "question": "カンゲイ",
+      "answer": "歓迎",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7m5xy5msab",
+      "question": "皇太子デンカ",
+      "answer": "殿下",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7m6d3kws0x",
+      "question": "ゴテン",
+      "answer": "御殿",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7m6nzgeaco",
+      "question": "レイゾク",
+      "answer": "隷属",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7m6uulsxim",
+      "question": "ユウダイ",
+      "answer": "雄大",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7m7tqfj300",
+      "question": "ユウガ",
+      "answer": "優雅",
+      "explanation": "雅人の雅も優雅から来てるらしいよ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7m829uptge",
+      "question": "シユウ",
+      "answer": "雌雄",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7m8dx8bezo",
+      "question": "リダツ",
+      "answer": "離脱",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7m8nuebrik",
+      "question": "コウモク",
+      "answer": "項目",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7m8uhy9yf0",
+      "question": "イライ",
+      "answer": "依頼",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7ma1flav51",
+      "question": "セイジャク",
+      "answer": "静寂",
+      "explanation": "豆知識：漫画とかで静かになるとシーンって入るオノマトペ、実際に静かだと聞こえてくるらしいよ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7maeosmo82",
+      "question": "シンショク",
+      "answer": "寝食",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mamfbu8tr",
+      "question": "ヤマイモ",
+      "answer": "山芋",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mat8hg20j",
+      "question": "シバフ",
+      "answer": "芝生",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mb10f46ci",
+      "question": "ハンモ",
+      "answer": "繁茂",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mb9oy7pdp",
+      "question": "コウヤ",
+      "answer": "荒野",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7md7yl4fvf",
+      "question": "和ガシ",
+      "answer": "菓子",
+      "explanation": "僕は三食団子が一番好き。ちゃんとあれ味の違いあるからな！白とピンクの違いは分かんないけど！！",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mdpjg19cc",
+      "question": "チクセキ",
+      "answer": "蓄積",
+      "explanation": "疲労は土日でリセットしよう",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7me5byjhkk",
+      "question": "シンスイ",
+      "answer": "薪水",
+      "explanation": "すいじのこと",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mekma9f6i",
+      "question": "キハク",
+      "answer": "希薄",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mett58js0",
+      "question": "センドウ",
+      "answer": "扇動",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mf2zgg946",
+      "question": "トッパツ",
+      "answer": "突発",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mfbnztgc8",
+      "question": "バッキン",
+      "answer": "罰金",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mfp8gt0vs",
+      "question": "カジョウ書き",
+      "answer": "箇条",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7mg2wvk3qz",
+      "question": "モハン",
+      "answer": "模範",
+      "explanation": "まぁ僕のことかな",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
+  "subject": null,
+  "folder_id": "dxw9nwf80s",
+  "published_by": {
+    "id": "32617",
+    "nickname": "山田レットドラゴン太郎"
+  },
+  "incomplete": false
+}
