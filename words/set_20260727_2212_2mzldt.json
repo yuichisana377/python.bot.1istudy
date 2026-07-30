@@ -166,8 +166,8 @@
     {
       "id": "ms3935kkmr0a",
       "question": "ディスプレイの1インチあたりの画素数",
-      "answer": "10dpi",
-      "explanation": "",
+      "answer": "解像度",
+      "explanation": "単位はdpi",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
