@@ -216,6 +216,24 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms85kpm63bdb",
+      "question": "ユウレツ",
+      "answer": "優劣",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms85kwnd674q",
+      "question": "ケンイ",
+      "answer": "権威",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": null,
