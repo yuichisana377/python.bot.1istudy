@@ -298,6 +298,20 @@ def save_users(guild_id: int, users: list):
     github_put(f"users_{guild_id}.json", users, sha)
 
 # ================================
+#  Discordアカウント連携（生徒ID ⇔ Discordユーザー）
+#  ★ 個別DM通知のために、StudyLogの生徒IDとDiscordアカウントを
+#     紐付けて保存しておく。{ "1I001": 123456789012345678, ... }
+# ================================
+def load_discord_links(guild_id: int) -> dict:
+    data, _ = github_get(f"discord_links_{guild_id}.json")
+    return data or {}
+
+def save_discord_links(guild_id: int, links: dict, sha=None):
+    if sha is None:
+        _, sha = github_get(f"discord_links_{guild_id}.json")
+    github_put(f"discord_links_{guild_id}.json", links, sha)
+
+# ================================
 #  科目チャンネルユーティリティ
 # ================================
 def get_subject_channels(guild: discord.Guild) -> list:
@@ -766,6 +780,42 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
 
 
 # ================================
+#  /id連携（StudyLogの生徒ID ⇔ Discordアカウント）
+#  ★ これを一度実行してもらうことで、StudyLog側からのDM通知
+#    （3時間タイマー超過など）を本人のDiscordに直接送れるようになる。
+#    タブを閉じていても、他のサイトを見ていても、Discordアプリ側の
+#    通知として届く（Discord自体の通知がオフの場合は届かない）。
+# ================================
+@bot.tree.command(name="id連携", description="StudyLogの生徒IDと自分のDiscordアカウントを連携し、DM通知を受け取れるようにする")
+@app_commands.describe(student_id="StudyLogにログインしている生徒ID（例: 1I001）")
+async def link_student_id(interaction: discord.Interaction, student_id: str):
+    await interaction.response.defer(ephemeral=True)
+    guild_id = interaction.guild.id
+    sid = student_id.strip().upper()
+
+    users = load_users(guild_id)
+    if not any(u["id"] == sid for u in users):
+        await interaction.followup.send(
+            f"生徒ID「{sid}」がStudyLogに登録されていません。IDを確認してもう一度お試しください。",
+            ephemeral=True
+        )
+        return
+
+    try:
+        links = load_discord_links(guild_id)
+        links[sid] = interaction.user.id
+        save_discord_links(guild_id, links)
+    except GitHubWriteError as e:
+        await interaction.followup.send(f"連携の保存に失敗しました（GitHubエラー）: {e}", ephemeral=True)
+        return
+
+    await interaction.followup.send(
+        f"連携が完了しました！ 生徒ID「{sid}」宛の通知をこのDiscordアカウントに送ります。",
+        ephemeral=True
+    )
+
+
+# ================================
 #  /help
 # ================================
 @bot.tree.command(name="help", description="使えるコマンド一覧")
@@ -779,6 +829,7 @@ async def help_command(interaction: discord.Interaction):
         "**/cleanup** — 過去の予定を削除する\n"
         "**/setchannel** — 通知チャンネルを設定する（通生／寮生／お知らせ用を選択可）\n"
         "**/setup_roles** — 通生/寮生 振り分けパネルを投稿する\n"
+        "**/id連携** — StudyLogの生徒IDとDiscordアカウントを連携し、DM通知を受け取れるようにする\n"
         "**webページ** - https://1istudyweb.pages.dev/\n"
     )
     await interaction.response.send_message(msg, ephemeral=True)
@@ -1261,6 +1312,48 @@ def add_user():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/notify_dm", methods=["POST"])
+def notify_dm():
+    """
+    body: { guild_id, student_id, title(省略可), message }
+    ★ 生徒がDiscord上で /id連携 を済ませていれば、botから本人にDMを送る。
+      ブラウザのタブを閉じていても、他のサイトを見ていても、
+      Discordアプリ／PC版の通知として届く
+      （Discord側の通知設定・DM許可がオフの場合は届かない）。
+    """
+    data       = request.json or {}
+    guild_id   = data.get("guild_id")
+    student_id = data.get("student_id")
+    title      = data.get("title") or "StudyLog"
+    message    = data.get("message")
+
+    if not all([guild_id, student_id, message]):
+        return jsonify({"ok": False, "error": "missing fields"})
+
+    try:
+        links = load_discord_links(int(guild_id))
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+    discord_user_id = links.get(str(student_id).strip().upper())
+    if not discord_user_id:
+        # まだ /id連携 していない生徒。呼び出し側（フロント）で
+        # ブラウザ通知にフォールバックできるよう、専用のエラーコードを返す
+        return jsonify({"ok": False, "error": "not_linked"})
+
+    async def _send_dm():
+        user = bot.get_user(int(discord_user_id))
+        if user is None:
+            user = await bot.fetch_user(int(discord_user_id))
+        await user.send(f"**{title}**\n{message}")
+
+    try:
+        future = asyncio.run_coroutine_threadsafe(_send_dm(), bot.loop)
+        future.result(timeout=10)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"dm_failed: {e}"})
 
 # ================================
 #  Flask API — 勉強ログ
