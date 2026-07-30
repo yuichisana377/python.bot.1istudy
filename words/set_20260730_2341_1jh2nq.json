@@ -167,7 +167,7 @@
       "id": "ms7mdpjg19cc",
       "question": "チクセキ",
       "answer": "蓄積",
-      "explanation": "疲労は土日でリセットしよう",
+      "explanation": "疲労の蓄積は土日でリセットしよう",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -239,7 +239,7 @@
   "subject": "国語1甲a",
   "folder_id": "dxw9nwf80s",
   "published_by": {
-    "id": "32617",
+    "id": "32615",
     "nickname": "山田レットドラゴン太郎"
   },
   "incomplete": false
