@@ -794,12 +794,14 @@ async def link_student_id(interaction: discord.Interaction, student_id: str):
     sid = student_id.strip().upper()
 
     users = load_users(guild_id)
-    if not any(u["id"] == sid for u in users):
+    matched = next((u for u in users if u["id"] == sid), None)
+    if not matched:
         await interaction.followup.send(
             f"生徒ID「{sid}」がStudyLogに登録されていません。IDを確認してもう一度お試しください。",
             ephemeral=True
         )
         return
+    nickname = matched.get("nickname", sid)
 
     try:
         links = load_discord_links(guild_id)
@@ -809,10 +811,24 @@ async def link_student_id(interaction: discord.Interaction, student_id: str):
         await interaction.followup.send(f"連携の保存に失敗しました（GitHubエラー）: {e}", ephemeral=True)
         return
 
-    await interaction.followup.send(
-        f"連携が完了しました！ 生徒ID「{sid}」宛の通知をこのDiscordアカウントに送ります。",
-        ephemeral=True
-    )
+    # ★ 連携できたことをその場で本人に確認してもらうため、確認DMを試しに送る
+    try:
+        await interaction.user.send(f"{sid}の{nickname}さんの通知登録が完了しました。")
+        await interaction.followup.send(
+            f"連携が完了しました！ 確認のDMを送信しましたので届いているか確認してください。",
+            ephemeral=True
+        )
+    except discord.Forbidden:
+        await interaction.followup.send(
+            "連携情報は保存しましたが、確認DMを送れませんでした。\n"
+            "サーバーアイコンを右クリック →「プライバシー設定」→「ダイレクトメッセージ」をオンにしてから、もう一度 /id連携 を実行してください。",
+            ephemeral=True
+        )
+    except Exception as e:
+        await interaction.followup.send(
+            f"連携情報は保存しましたが、確認DMの送信中にエラーが発生しました: {e}",
+            ephemeral=True
+        )
 
 
 # ================================
