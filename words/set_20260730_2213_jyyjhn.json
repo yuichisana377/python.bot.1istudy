@@ -63,6 +63,177 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms7jkwjx2wm6",
+      "question": "車のセッショク事故",
+      "answer": "接触",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jl4ky9zyd",
+      "question": "コクソに踏み切る",
+      "answer": "告訴",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jlfdy7goc",
+      "question": "荷物をツめ込んだ箱",
+      "answer": "詰",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jlt12g97i",
+      "question": "コチョウした表現",
+      "answer": "誇張",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jm6befygi",
+      "question": "ショウサイに報告する",
+      "answer": "詳細",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jmfpri9a5",
+      "question": "流行のカヨウ曲",
+      "answer": "歌謡",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jn0s74kx3",
+      "question": "シハンの品で間に合わせる",
+      "answer": "市販",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jn81rq1im",
+      "question": "テンプの才能",
+      "answer": "天賦",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7joc9okdxe",
+      "question": "ゾウヨ税が課せられる",
+      "answer": "贈与",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7joxjyvxth",
+      "question": "記念品のキソウ",
+      "answer": "寄贈",
+      "explanation": "キゾウとも読む",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jpbgm3pgk",
+      "question": "キョリ感を誤る",
+      "answer": "距離",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jpzchb1fx",
+      "question": "作家のソクセキを辿る",
+      "answer": "足跡",
+      "explanation": "あしあと",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jqjo9y4tz",
+      "question": "チョウヤク運動",
+      "answer": "跳躍",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jqwxold1m",
+      "question": "日本ブヨウを習う",
+      "answer": "舞踊",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jr9ymt1fk",
+      "question": "前例をトウシュウする",
+      "answer": "踏襲",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jrshyeecl",
+      "question": "ヒヤク的な進歩",
+      "answer": "飛躍",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jsejf1u7g",
+      "question": "スウケン先の飲食店",
+      "answer": "数軒",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jsqdzsjg5",
+      "question": "両者をヒカクする",
+      "answer": "比較",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms7jte2zceum",
+      "question": "シャクメイを求める",
+      "answer": "釈明",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "国語1甲a",
@@ -71,5 +242,5 @@
     "id": "32623",
     "nickname": "たけのこども"
   },
-  "incomplete": true
+  "incomplete": false
 }
