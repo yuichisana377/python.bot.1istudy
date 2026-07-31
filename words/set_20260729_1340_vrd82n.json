@@ -9,6 +9,24 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms894gaz9n5f",
+      "question": "a+b=2√(ab)",
+      "answer": "そうかそうじょう",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms89hnf1stp6",
+      "question": "(a+b)/(2)=√(ab)",
+      "answer": "そうかそうじょう",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": null,
