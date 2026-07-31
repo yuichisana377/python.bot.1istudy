@@ -825,15 +825,5 @@
     "has_folder_id": true,
     "published_by": "Chiro",
     "incomplete": false
-  },
-  {
-    "filename": "set_20260731_1900_qtuj52.json",
-    "name": "地理a 確認用",
-    "count": 0,
-    "subject": "地理a",
-    "folder_id": null,
-    "has_folder_id": true,
-    "published_by": "Chiro",
-    "incomplete": true
   }
 ]
