@@ -50,6 +50,7 @@ NO_CACHE_PATHS = {
     "/list_folders",
     "/list_order",
     "/channels",
+    "/list_in_progress",
 }
 
 @app.after_request
@@ -1746,6 +1747,136 @@ def delete_cards():
     cleanup_list_order(remove_keys={f"deck:{filename}"})
 
     return jsonify({"ok": True})
+
+# ================================
+#  Flask API — 作成中デッキ（公開予定だがまだ未公開のもの）をみんなで共有表示する
+# ================================
+#  ・カード名だけ入力して「作成」を押した時点で登録し、他の人の一覧にも
+#    「🟠 作成中（〇〇さん）」として表示できるようにする。
+#  ・カード本体（問題・解答）はここには一切含めない（軽量なメタ情報のみ）。
+#  ・実際に公開（save_cards）されたら、対応するエントリはここから取り除く。
+#  ・登録から一定期間（IN_PROGRESS_STALE_DAYS）経っても公開されないものは、
+#    作成を放棄したものとみなして list_in_progress を返す際に自動的に間引く。
+IN_PROGRESS_FILE = "in_progress_decks.json"
+IN_PROGRESS_STALE_DAYS = 14
+
+def load_in_progress():
+    data, sha = github_get(IN_PROGRESS_FILE)
+    return (data or []), sha
+
+def save_in_progress(items, sha=None):
+    if sha is None:
+        _, sha = github_get(IN_PROGRESS_FILE)
+    github_put(IN_PROGRESS_FILE, items, sha)
+
+def _prune_stale_in_progress(items):
+    """登録から IN_PROGRESS_STALE_DAYS 日以上経過したエントリを取り除いた新しいリストを返す。
+    （壊れた/古い形式の created_at は安全側に倒して除外しない）"""
+    now_jst = datetime.now(JST)
+    kept = []
+    for it in items:
+        created_at = it.get("created_at")
+        try:
+            created_dt = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S").replace(tzinfo=JST)
+            if (now_jst - created_dt).days > IN_PROGRESS_STALE_DAYS:
+                continue
+        except Exception:
+            pass
+        kept.append(it)
+    return kept
+
+@app.route("/list_in_progress", methods=["GET"])
+def list_in_progress():
+    try:
+        items, sha = load_in_progress()
+        pruned = _prune_stale_in_progress(items)
+        if len(pruned) != len(items):
+            try:
+                save_in_progress(pruned, sha)
+            except GitHubWriteError as e:
+                print(f"[WARN] in_progress の自動間引き保存に失敗しました: {e}")
+        return jsonify({"ok": True, "items": pruned})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/register_in_progress", methods=["POST"])
+def register_in_progress():
+    """
+    body: { id, name, subject, folder_id, creator_id, creator_nickname }
+    ・id はフロント側で生成しているデッキのローカルID（他人と衝突しない前提）。
+    ・同じ id で既にエントリがある場合は上書きする（念のため）。
+    """
+    data = request.json or {}
+    draft_id = data.get("id")
+    name     = data.get("name")
+    if not draft_id or not name:
+        return jsonify({"ok": False, "error": "id と name は必須です"})
+    entry = {
+        "id": draft_id,
+        "name": name,
+        "subject": data.get("subject"),
+        "folder_id": data.get("folder_id"),
+        "creator_id": data.get("creator_id"),
+        "creator_nickname": data.get("creator_nickname") or "匿名",
+        "created_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    try:
+        items, sha = load_in_progress()
+        items = [it for it in items if it.get("id") != draft_id]
+        items.append(entry)
+        save_in_progress(items, sha)
+        return jsonify({"ok": True})
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/update_in_progress", methods=["POST"])
+def update_in_progress():
+    """
+    body: { id, name?, subject?, folder_id? }
+    作成中デッキの名前変更・フォルダ移動をみんなの表示にも反映する。
+    該当エントリが無ければ（既に公開済み・削除済みなど）何もせず ok:true を返す。
+    """
+    data     = request.json or {}
+    draft_id = data.get("id")
+    if not draft_id:
+        return jsonify({"ok": False, "error": "id は必須です"})
+    try:
+        items, sha = load_in_progress()
+        found = False
+        for it in items:
+            if it.get("id") == draft_id:
+                if "name" in data:      it["name"]      = data["name"]
+                if "subject" in data:   it["subject"]   = data["subject"]
+                if "folder_id" in data: it["folder_id"] = data["folder_id"]
+                found = True
+                break
+        if found:
+            save_in_progress(items, sha)
+        return jsonify({"ok": True, "found": found})
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/remove_in_progress", methods=["POST"])
+def remove_in_progress():
+    """body: { id } — 公開された・削除された・非公開のまま維持することにした等で不要になったエントリを消す。"""
+    data     = request.json or {}
+    draft_id = data.get("id")
+    if not draft_id:
+        return jsonify({"ok": False, "error": "id は必須です"})
+    try:
+        items, sha = load_in_progress()
+        new_items = [it for it in items if it.get("id") != draft_id]
+        if len(new_items) != len(items):
+            save_in_progress(new_items, sha)
+        return jsonify({"ok": True})
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 # ================================================================
 #  
 # ================================================================
