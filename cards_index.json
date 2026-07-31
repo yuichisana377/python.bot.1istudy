@@ -20,12 +20,13 @@
   },
   {
     "filename": "set_20260712_1822_tos2vg.json",
-    "name": "情報基礎 小テスト3",
+    "name": "情報基礎 小テスト3［13〜16］",
     "count": 89,
     "subject": "情報基礎",
     "folder_id": "3y5kzbzknl",
     "has_folder_id": true,
-    "published_by": "小鷹"
+    "published_by": "小鷹",
+    "incomplete": false
   },
   {
     "filename": "set_20260719_1736_telqop.json",
