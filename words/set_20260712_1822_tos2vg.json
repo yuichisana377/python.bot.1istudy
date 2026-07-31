@@ -1,5 +1,5 @@
 {
-  "name": "情報基礎 小テスト3",
+  "name": "情報基礎 小テスト3［13〜16］",
   "cards": [
     {
       "id": "mrh3si6ng9qm",
@@ -806,7 +806,8 @@
   "subject": "情報基礎",
   "folder_id": "3y5kzbzknl",
   "published_by": {
-    "id": "32618",
+    "id": "32615",
     "nickname": "小鷹"
-  }
+  },
+  "incomplete": false
 }
