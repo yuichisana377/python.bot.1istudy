@@ -1,11 +1,462 @@
 {
   "name": "英語コミュニケーション1a COCET 301～350",
-  "cards": [],
+  "cards": [
+    {
+      "id": "msa0hrndypnb",
+      "question": "カーテン，幕",
+      "answer": "curtain",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa0i17f1xk1",
+      "question": "羊毛（ウール）",
+      "answer": "wool",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa0ixrgfoj2",
+      "question": "棒，突き刺す，固定する，粘着する",
+      "answer": "stick",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa0j9jaqiik",
+      "question": "盆（トレイ）",
+      "answer": "tray",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa0jmco89km",
+      "question": "式典，儀式",
+      "answer": "ceremony",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa0k6jxluk1",
+      "question": "ホール，大広間，廊下",
+      "answer": "hall",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa0kuz0qqe8",
+      "question": "すべての，全体の，全体",
+      "answer": "whole",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa0l776ttz9",
+      "question": "粘着性の，粘り気がある",
+      "answer": "sticky",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1uru9x79v",
+      "question": "典型的な，代表的な",
+      "answer": "typical",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1v6iao4i8",
+      "question": "余分の，臨時の，余分",
+      "answer": "extra",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1vtb3qrr0",
+      "question": "丸い，周回，丸める",
+      "answer": "round",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1w4yckv5u",
+      "question": "空の，空にする",
+      "answer": "empty",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1wegumark",
+      "question": "高価な",
+      "answer": "expensive",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1ws6ylwzp",
+      "question": "安い，安っぽい",
+      "answer": "cheap",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1x5st1w4h",
+      "question": "メートル（法）の",
+      "answer": "metric",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1xg74kgh6",
+      "question": "世界の，地球の",
+      "answer": "global",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1xtp89pu4",
+      "question": "独創的な，根源の，原点",
+      "answer": "original",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1y3uyd0km",
+      "question": "均一な，～でさえ",
+      "answer": "even",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1yez2haq4",
+      "question": "細胞，電池",
+      "answer": "cell",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1ypnej8aq",
+      "question": "植物，工場，植える",
+      "answer": "plant",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1yud0t1og",
+      "question": "種",
+      "answer": "seed",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1zinlz5zv",
+      "question": "根，根源，根付く",
+      "answer": "root",
+      "explanation": "√",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1zq98d3jp",
+      "question": "葉",
+      "answer": "leaf",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1zzqxuv2m",
+      "question": "日光",
+      "answer": "sunlight",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa20lm4foqv",
+      "question": "割合，比，比例",
+      "answer": "proportion",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa21046hvny",
+      "question": "安全，安心，防衛",
+      "answer": "security",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa21co23n99",
+      "question": "符号，暗号，符号化する",
+      "answer": "code",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa21ocu7s6n",
+      "question": "シミュレーション",
+      "answer": "simulation",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa21z7qx6b8",
+      "question": "戦い，戦う",
+      "answer": "battle",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa25h80500g",
+      "question": "芸術，美術，技術",
+      "answer": "art",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa26kc29z8r",
+      "question": "洗濯，クリーニング店",
+      "answer": "laundry",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa275azlc65",
+      "question": "ガレージ，自動車修理工場",
+      "answer": "garage",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa27ghaigoz",
+      "question": "基盤，土台",
+      "answer": "platform",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2853wcdg6",
+      "question": "～だけれども",
+      "answer": "although",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2a645eclx",
+      "question": "～する間に，～なのに，（しばらくの）時間",
+      "answer": "while",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2aha5tc73",
+      "question": "もし～なければ",
+      "answer": "unless",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2b2r42ldq",
+      "question": "～かどうか，～であろうとなかろうと",
+      "answer": "whether",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2bfg403rj",
+      "question": "～にもかかわらず",
+      "answer": "despite",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2br1wlui2",
+      "question": "～に反して，対抗して",
+      "answer": "against",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2cvmp1hew",
+      "question": "向こう（反対）側へ（の），～を横切って，向こう側へ，幅が～で",
+      "answer": "across",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2d5vmfe7j",
+      "question": "～まで，～するまで",
+      "answer": "until",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2dj2nvvq1",
+      "question": "～に向かって，～のほうへ",
+      "answer": "toward",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2eqegx6o5",
+      "question": "～の間（中）で",
+      "answer": "among",
+      "explanation": "基本的に3つ以上の間の時に使う（2つはbetween）",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2f6uo1x4w",
+      "question": "上に，上の",
+      "answer": "above",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2fkoh3ucg",
+      "question": "～の下に，～未満で，下のほうに",
+      "answer": "below",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2g50zbd4g",
+      "question": "～のそば（横）に，並んで",
+      "answer": "beside",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2h8hwnxv3",
+      "question": "～以外に，～に加えて，さらに",
+      "answer": "besides",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2hrnk2pm5",
+      "question": "～を越えて，～の向こうに",
+      "answer": "beyond",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2kqwil13w",
+      "question": "下の，下に",
+      "answer": "beneath",
+      "explanation": "似た単語にunderneathがある。でも多分こっちは覚えなくてもいい（はず）※個人の感想です。",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2lrvk3w9a",
+      "question": "～を通して（ずっと），～のいたるところに",
+      "answer": "throughout",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
   "subject": "英語コミュニケーション1a",
   "folder_id": "zuu8l0dnik",
   "published_by": {
     "id": "32615",
     "nickname": "小鷹"
   },
-  "incomplete": true
+  "incomplete": false
 }
