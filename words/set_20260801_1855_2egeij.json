@@ -450,6 +450,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msa9mtzgm55t",
+      "question": "〜を…と解釈する",
+      "answer": "interpret 〜as …",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "英語コミュニケーション1a",
@@ -458,5 +467,5 @@
     "id": "32615",
     "nickname": "小鷹"
   },
-  "incomplete": true
+  "incomplete": false
 }
