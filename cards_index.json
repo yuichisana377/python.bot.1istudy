@@ -882,11 +882,11 @@
   {
     "filename": "set_20260801_1650_g51682.json",
     "name": "英語コミュニケーション1a COCET 351～400",
-    "count": 0,
+    "count": 50,
     "subject": "英語コミュニケーション1a",
     "folder_id": "zuu8l0dnik",
     "has_folder_id": true,
     "published_by": "小鷹",
-    "incomplete": true
+    "incomplete": false
   }
 ]
