@@ -1,6 +1,16 @@
 {
   "name": "英語コミュニケーション1a 教科書の単語・熟語",
-  "cards": [],
+  "cards": [
+    {
+      "id": "msa75ywc00so",
+      "question": "目標",
+      "answer": "goal",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
   "subject": "英語コミュニケーション1a",
   "folder_id": "zuu8l0dnik",
   "published_by": {
