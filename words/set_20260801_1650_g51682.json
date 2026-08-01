@@ -1,11 +1,462 @@
 {
   "name": "英語コミュニケーション1a COCET 351～400",
-  "cards": [],
+  "cards": [
+    {
+      "id": "msa2nwyoj78n",
+      "question": "～を除いて",
+      "answer": "except",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2ptx2e3gl",
+      "question": "～につき，～ごとに",
+      "answer": "per",
+      "explanation": "m/sとかの / の部分",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2q5q6xtc0",
+      "question": "～経由で",
+      "answer": "via",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2qk2uilmu",
+      "question": "～と違って，似ていない",
+      "answer": "unlike",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2qxge0nth",
+      "question": "どんなに～でも，しかしながら",
+      "answer": "however",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2rfvb0tl5",
+      "question": "たぶん，おそらく",
+      "answer": "probably",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2sbtsc34n",
+      "question": "ひょっとすると，おそらく",
+      "answer": "perhaps",
+      "explanation": "maybeより確信度が低い",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2slfpnrz5",
+      "question": "まったく",
+      "answer": "quite",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2tj45ysvu",
+      "question": "～によれば，～に従って",
+      "answer": "according",
+      "explanation": "ほとんど常にaccording toの形で使われる",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2u5ssbnbo",
+      "question": "むしろ，どちらかといえば",
+      "answer": "rather",
+      "explanation": "would rather",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2udo0wdep",
+      "question": "代わりに",
+      "answer": "instead",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2v41sj3x4",
+      "question": "だから，それゆえに",
+      "answer": "therefore",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2vnd4ngdu",
+      "question": "その間に，一方では",
+      "answer": "meanwhile",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2vy9yv0sw",
+      "question": "さもなければ",
+      "answer": "otherwise",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2wdlu00ms",
+      "question": "とにかく，それにもかかわらず",
+      "answer": "anyway",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2wnithevn",
+      "question": "過去，過去の",
+      "answer": "past",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2wxwbzcni",
+      "question": "未来，未来の",
+      "answer": "future",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2yxdwajlp",
+      "question": "研究，研究する，調査する",
+      "answer": "research",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2zhn7e4g1",
+      "question": "実験，実験する",
+      "answer": "experiment",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa301i0x2un",
+      "question": "結果，結果として生ずる",
+      "answer": "result",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa31cgm2tuf",
+      "question": "試行，裁判",
+      "answer": "trial",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa348ccqqe5",
+      "question": "状態，並べる",
+      "answer": "state",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa35ixmtc72",
+      "question": "国，国民",
+      "answer": "nation",
+      "explanation": "the United Nations（国連）",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa368po9x6x",
+      "question": "スケジュール，予定，予定する",
+      "answer": "schedule",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa373yrpag0",
+      "question": "興味，興味を引く",
+      "answer": "interest",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa37aujmnsk",
+      "question": "ユーモア",
+      "answer": "humor",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa38q0psb43",
+      "question": "分野，畑，広場",
+      "answer": "field",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa397urj7ap",
+      "question": "大学",
+      "answer": "university",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa39hrq1b28",
+      "question": "教授",
+      "answer": "professor",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3auqj50f9",
+      "question": "アパート，賃貸マンション",
+      "answer": "apartment",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3bm9sa3va",
+      "question": "寺院，神殿",
+      "answer": "temple",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3bwbn8v8e",
+      "question": "城",
+      "answer": "castle",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3c5g5aj96",
+      "question": "許す，～させる",
+      "answer": "allow",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3hmjhijah",
+      "question": "～の原因になる，原因",
+      "answer": "cause",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3ibt1auh2",
+      "question": "数える，計算する",
+      "answer": "count",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3ijrd2a5b",
+      "question": "含む",
+      "answer": "include",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3iy2exox8",
+      "question": "除外する",
+      "answer": "exclude",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3jcn1vbht",
+      "question": "救う，蓄える，節約する",
+      "answer": "save",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3lj5whfbi",
+      "question": "～につながる，導く，先導，鉛",
+      "answer": "lead",
+      "explanation": "「鉛」のときのみ［led］と発音する",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3myshw6v6",
+      "question": "～に見える，～に思える",
+      "answer": "seem",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3nj4tln89",
+      "question": "～のままでいる",
+      "answer": "remain",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3pckwc0s1",
+      "question": "潜る，飛び込む",
+      "answer": "dive",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3pqaxnt15",
+      "question": "滑る",
+      "answer": "slip",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3qby8j4aj",
+      "question": "溺れる，溺死する",
+      "answer": "drown",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3qo28sbp2",
+      "question": "誇りにしている",
+      "answer": "proud",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3r4ahwk9w",
+      "question": "勇敢な",
+      "answer": "brave",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3t0mvncpa",
+      "question": "穏やかな，落ち着く",
+      "answer": "calm",
+      "explanation": "「カルム」と読まない。［kɑːm］",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3ta2skoxt",
+      "question": "いくつかの",
+      "answer": "several",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3tsq32fso",
+      "question": "公共の，公立の",
+      "answer": "public",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3ulqws9y5",
+      "question": "外国の，異質の",
+      "answer": "foreign",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
   "subject": "英語コミュニケーション1a",
   "folder_id": "zuu8l0dnik",
   "published_by": {
     "id": "32615",
     "nickname": "小鷹"
   },
-  "incomplete": true
+  "incomplete": false
 }
