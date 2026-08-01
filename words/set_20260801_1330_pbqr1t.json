@@ -360,6 +360,87 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms9zrkhm6orb",
+      "question": "規則正しい、正規の",
+      "answer": "regular",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zrmys2m4m",
+      "question": "規則正しい、正規の",
+      "answer": "regular",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zsnlb97vt",
+      "question": "地元の、近くの",
+      "answer": "solar",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zsy2q49h6",
+      "question": "野生の、未開の",
+      "answer": "wild",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9ztdqnlqzv",
+      "question": "自然な、生まれつきの",
+      "answer": "natural",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9ztsub60gy",
+      "question": "仮想の、事実上の",
+      "answer": "virtual",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zu3te441h",
+      "question": "唯一の、独特の",
+      "answer": "unique",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zumw9a0fq",
+      "question": "馬鹿な、愚かな",
+      "answer": "stupid",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zvo0w7657",
+      "question": "予備の、代わりの\n(時間、お金、労力を)割く、節約する",
+      "answer": "spare",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "英語コミュニケーション1a",
