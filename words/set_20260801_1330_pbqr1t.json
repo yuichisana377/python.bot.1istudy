@@ -1,6 +1,16 @@
 {
   "name": "英語コミュニケーション1a COCET 200〜400",
-  "cards": [],
+  "cards": [
+    {
+      "id": "ms9vjnk0p69q",
+      "question": "ポンド",
+      "answer": "pound",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
   "subject": "英語コミュニケーション1a",
   "folder_id": "zuu8l0dnik",
   "published_by": {
