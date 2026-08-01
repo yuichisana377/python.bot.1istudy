@@ -3,7 +3,7 @@
   "cards": [
     {
       "id": "msa1evhs3mqs",
-      "question": "情報とは、何か行動をする時、意思決定の判断材料になることがら（知識や事実など）のこと",
+      "question": "何か行動をする時、意思決定の判断材料になることがら（知識や事実など）のこと",
       "answer": "情報",
       "explanation": "",
       "imgs_q": [],
@@ -41,7 +41,7 @@
   "subject": "情報基礎",
   "folder_id": "3y5kzbzknl",
   "published_by": {
-    "id": "32623",
+    "id": "32615",
     "nickname": "たけのこども"
   },
   "incomplete": true
