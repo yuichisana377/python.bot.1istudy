@@ -261,13 +261,112 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms9znhb13sz4",
+      "question": "活発な、活動中の",
+      "answer": "active",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9znl9ropo5",
+      "question": "活発な、活動中の",
+      "answer": "active",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zo0z8jj9w",
+      "question": "人間の、人間",
+      "answer": "human",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zo3l8esyl",
+      "question": "人間の、人間",
+      "answer": "human",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zoout4r9h",
+      "question": "身体的な、物理的な",
+      "answer": "physical",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zoqphveil",
+      "question": "身体的な、物理的な",
+      "answer": "physical",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zp4jc0lb6",
+      "question": "精神(心)の、知能の",
+      "answer": "mental",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zp6fekvhw",
+      "question": "精神(心)の、知能の",
+      "answer": "mental",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zpgie29uo",
+      "question": "頭が良い",
+      "answer": "smart",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zpqx0l988",
+      "question": "双子の、対の、双子",
+      "answer": "twin",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9zq4w9e56c",
+      "question": "完全な、完璧な",
+      "answer": "perfect",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "英語コミュニケーション1a",
   "folder_id": "zuu8l0dnik",
   "published_by": {
-    "id": "32615",
-    "nickname": "小鷹"
+    "id": "32626",
+    "nickname": "むむ"
   },
   "incomplete": true
 }
