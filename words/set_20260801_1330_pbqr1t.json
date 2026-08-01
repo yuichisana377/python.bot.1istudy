@@ -9,6 +9,33 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms9w4lb3m9gj",
+      "question": "ヘクタール",
+      "answer": "hectare",
+      "explanation": "hectare",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w4vzvv2w4",
+      "question": "ナット（雌ネジ），木の実",
+      "answer": "nut",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w52opifqo",
+      "question": "ボルト",
+      "answer": "bolt",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "英語コミュニケーション1a",
