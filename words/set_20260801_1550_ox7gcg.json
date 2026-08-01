@@ -1,11 +1,21 @@
 {
   "name": "英語コミュニケーション1a COCET 251~300",
-  "cards": [],
+  "cards": [
+    {
+      "id": "msa1imlcxc58",
+      "question": "曲線（カーブ）、曲がる、曲げる",
+      "answer": "curve",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
   "subject": "英語コミュニケーション1a",
   "folder_id": "zuu8l0dnik",
   "published_by": {
-    "id": null,
-    "nickname": "匿名"
+    "id": "32626",
+    "nickname": "むむ"
   },
   "incomplete": true
 }
