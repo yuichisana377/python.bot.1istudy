@@ -337,7 +337,7 @@
     {
       "id": "ms9zsnlb97vt",
       "question": "地元の、近くの",
-      "answer": "solar",
+      "answer": "local",
       "explanation": "",
       "imgs_q": [],
       "imgs_a": [],
@@ -446,7 +446,7 @@
   "subject": "英語コミュニケーション1a",
   "folder_id": "zuu8l0dnik",
   "published_by": {
-    "id": "32626",
+    "id": "32615",
     "nickname": "むむ"
   },
   "incomplete": false
