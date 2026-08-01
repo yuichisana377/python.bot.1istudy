@@ -36,6 +36,168 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms9w5rxdj6wk",
+      "question": "ケーブル",
+      "answer": "cable",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w5vp19hjv",
+      "question": "温室",
+      "answer": "greenhouse",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w64xlufix",
+      "question": "野菜，植物",
+      "answer": "vegetable",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w6ddfn2x8",
+      "question": "肉",
+      "answer": "meat",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w6l10rcz0",
+      "question": "煙，喫煙する",
+      "answer": "smoke",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w6v0uu8lu",
+      "question": "風，うねる，巻く",
+      "answer": "wind",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w72qoi4xx",
+      "question": "扇風機（ファン）",
+      "answer": "fan",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w7hmsbm8d",
+      "question": "騒音，雑音（ノイズ）",
+      "answer": "noise",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w7xrz2le2",
+      "question": "調子，音程",
+      "answer": "tone",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w84vqnflc",
+      "question": "レーダー",
+      "answer": "radar",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w8g0t59s1",
+      "question": "アンテナ，触覚",
+      "answer": "antenna",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w93sm8nrm",
+      "question": "地雷，鉱山",
+      "answer": "mine",
+      "explanation": "Minecraftのmine",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w9lr2rk5o",
+      "question": "石炭",
+      "answer": "coal",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9w9pq56j67",
+      "question": "タール",
+      "answer": "tar",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9wa30yppv9",
+      "question": "鏡，〜を写す，反映する",
+      "answer": "mirror",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9waaephgl6",
+      "question": "賞",
+      "answer": "prize",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9warr608xj",
+      "question": "間違い，間違える",
+      "answer": "mistake",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9wazvwdixx",
+      "question": "感覚，意味",
+      "answer": "sense",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "英語コミュニケーション1a",
