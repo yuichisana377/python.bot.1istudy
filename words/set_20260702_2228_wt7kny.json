@@ -1,5 +1,5 @@
 {
-  "name": "情報基礎 第2回小テスト[7~12]",
+  "name": "情報基礎 7~12（小テスト2）",
   "cards": [
     {
       "id": "mr3iqyxmojfx",
@@ -752,7 +752,8 @@
   "subject": "情報基礎",
   "folder_id": "3y5kzbzknl",
   "published_by": {
-    "id": "32618",
+    "id": "32623",
     "nickname": "Chiro"
-  }
+  },
+  "incomplete": false
 }
