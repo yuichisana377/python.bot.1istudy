@@ -405,6 +405,24 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msa9ieqm9u4w",
+      "question": "〜を解釈する",
+      "answer": "interpret",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa9iyoje9ha",
+      "question": "〜のように見える",
+      "answer": "look like 〜",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "英語コミュニケーション1a",
