@@ -1,6 +1,16 @@
 {
   "name": "確認",
-  "cards": [],
+  "cards": [
+    {
+      "id": "msa2zh61rho6",
+      "question": "A",
+      "answer": "B",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
   "subject": null,
   "folder_id": null,
   "published_by": {
