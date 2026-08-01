@@ -1,12 +1,13 @@
 [
   {
     "filename": "set_20260702_2228_wt7kny.json",
-    "name": "情報基礎 第2回小テスト[7~12]",
+    "name": "情報基礎 7~12（小テスト2）",
     "count": 83,
     "subject": "情報基礎",
     "folder_id": "3y5kzbzknl",
     "has_folder_id": true,
-    "published_by": "Chiro"
+    "published_by": "Chiro",
+    "incomplete": false
   },
   {
     "filename": "set_20260707_2207_8bnw1y.json",
