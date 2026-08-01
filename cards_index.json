@@ -852,12 +852,12 @@
   {
     "filename": "set_20260801_1550_ox7gcg.json",
     "name": "英語コミュニケーション1a COCET 251~300",
-    "count": 1,
+    "count": 50,
     "subject": "英語コミュニケーション1a",
     "folder_id": "zuu8l0dnik",
     "has_folder_id": true,
     "published_by": "むむ",
-    "incomplete": true
+    "incomplete": false
   },
   {
     "filename": "set_20260801_1605_qietut.json",
