@@ -9,6 +9,447 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msa2lr7z05la",
+      "question": "最大（値）、頂点",
+      "answer": "peak",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2m8zdoqzq",
+      "question": "グラフ、グラフにする",
+      "answer": "graph",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2mgxeb6y1",
+      "question": "泡",
+      "answer": "bubble",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2nite6zdl",
+      "question": "経済、節約",
+      "answer": "economy",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2nx9j35tt",
+      "question": "品物、項目",
+      "answer": "item",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2o7a4o7zg",
+      "question": "レンズ",
+      "answer": "lens",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2odv1ai82",
+      "question": "クモの巣",
+      "answer": "web",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2oymtblpn",
+      "question": "得点、楽譜、得点する、採点する",
+      "answer": "score",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2p9ib009u",
+      "question": "輪、車輪",
+      "answer": "wheel",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2pr0xmhbb",
+      "question": "要求、依頼、依頼する、要請する",
+      "answer": "request",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2pxvj75vu",
+      "question": "塩",
+      "answer": "salt",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2q76vfi5l",
+      "question": "カルシウム",
+      "answer": "calcium",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2qgj4tlkx",
+      "question": "袋、カバン",
+      "answer": "bag",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2qumxz6jg",
+      "question": "雨傘",
+      "answer": "umbrella",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2r1fbomi8",
+      "question": "台風",
+      "answer": "typhoon",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2ri7at3vn",
+      "question": "クレーター、噴火口、陥没",
+      "answer": "crater",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2rx1u2d40",
+      "question": "命令、命令する",
+      "answer": "command",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2sciq3i5e",
+      "question": "座席、着席させる",
+      "answer": "seat",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2tjq9x7sq",
+      "question": "等級、学年、成績、等級（成績）を付ける",
+      "answer": "grade",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2tvej6sjw",
+      "question": "輪（状のもの）",
+      "answer": "loop",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2u1q91vco",
+      "question": "点",
+      "answer": "dot",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2uns1o0l0",
+      "question": "～を自発的にやる、ボランティア、自発的な",
+      "answer": "volunteer",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2v9r97fty",
+      "question": "変える、変わる、変化、転換",
+      "answer": "shift",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2vxcd7r7w",
+      "question": "振る、揺する、揺れる、握手する、揺れ、動揺",
+      "answer": "shake",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2wkmvzzuh",
+      "question": "（プラグなどを）差し込む、～に栓をする、栓、プラグ",
+      "answer": "plug",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2x3wdznep",
+      "question": "封をする、密封する、印章",
+      "answer": "seal",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2xo805yga",
+      "question": "揺れる、振る、揺らす、揺れ",
+      "answer": "swing",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2y5ew1g6f",
+      "question": "回転する、回転させる、\n回転",
+      "answer": "spin",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2ynuetzyv",
+      "question": "中止する、取り消す、取り消し",
+      "answer": "cancel",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2z2lenb9t",
+      "question": "薄切りにする、一切れ、一枚",
+      "answer": "slice",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa2zjizkjro",
+      "question": "位置づける、位置する、ランク、順位",
+      "answer": "rank",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa320orrifi",
+      "question": "救う、救助",
+      "answer": "rescue",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa32q2pdad1",
+      "question": "復元する、回収する、回復する",
+      "answer": "recover",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa339x3733y",
+      "question": "急ぐ、急がせる、急ぐこと",
+      "answer": "hurry",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa33me0vm8b",
+      "question": "嫌う、憎む、嫌悪",
+      "answer": "hate",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa343go19n5",
+      "question": "うらやむ、ねたみ、しっと",
+      "answer": "envy",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa34irdoyn4",
+      "question": "失う、（～で）負ける",
+      "answer": "lose",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa3563ghbyn",
+      "question": "勝つ、勝ち取る、（くじなどを）当てる",
+      "answer": "win",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa35mnnk3yr",
+      "question": "反響、こだま、反響する",
+      "answer": "echo",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa35z4mvuet",
+      "question": "粉、粉にする",
+      "answer": "powder",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa36mqb242t",
+      "question": "ゴム",
+      "answer": "rubber",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa36v6jzf5f",
+      "question": "ビタミン",
+      "answer": "vitamin",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa372e6v22r",
+      "question": "ボタン",
+      "answer": "button",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa37fn9c37h",
+      "question": "作業場、研修会",
+      "answer": "workshop",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa37wllnkkq",
+      "question": "鍋、（調理用の）皿",
+      "answer": "pan",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa38bv5e27u",
+      "question": "（調理用）コンロ、暖炉",
+      "answer": "stove",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa392jxrt3q",
+      "question": "（金属の）箔、薄片",
+      "answer": "foil",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa39enx9ecl",
+      "question": "石鹸",
+      "answer": "soap",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa39psetwq1",
+      "question": "コルク",
+      "answer": "cork",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "英語コミュニケーション1a",
@@ -17,5 +458,5 @@
     "id": "32626",
     "nickname": "むむ"
   },
-  "incomplete": true
+  "incomplete": false
 }
