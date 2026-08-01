@@ -198,6 +198,69 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "ms9wch3fdmt5",
+      "question": "リズム",
+      "answer": "rhythm",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9wcu1abmwm",
+      "question": "アクセント，強勢",
+      "answer": "accent",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9wd6z5teem",
+      "question": "バランス，均衡，バランスをとる",
+      "answer": "balance",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9wdprtuwc4",
+      "question": "（日常の）食事，食事制限",
+      "answer": "diet",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9weluvnb2w",
+      "question": "尾，最後",
+      "answer": "tail",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9wex99nds1",
+      "question": "（コンピュータの）バグ，虫",
+      "answer": "bug",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "ms9wfhgfddtk",
+      "question": "蝋（ろう），ワックス",
+      "answer": "wax",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "英語コミュニケーション1a",
