@@ -1,6 +1,25 @@
 {
   "name": "情報基礎 1〜6",
-  "cards": [],
+  "cards": [
+    {
+      "id": "msa1evhs3mqs",
+      "question": "情報とは、何か行動をする時、意思決定の判断材料になることがら（知識や事実など）のこと",
+      "answer": "情報",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msa1fo8q89ow",
+      "question": "事実、資料、数値など",
+      "answer": "データ",
+      "explanation": "↔︎情報…意思決定の判断材料になるもの",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
   "subject": "情報基礎",
   "folder_id": "3y5kzbzknl",
   "published_by": {
