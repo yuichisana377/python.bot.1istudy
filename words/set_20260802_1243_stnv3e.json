@@ -396,6 +396,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbb3a2z95xh",
+      "question": "暗号川受信者が公開した鍵で行い、復号は受信者だけが持つ鍵で行う暗号方式",
+      "answer": "公開鍵暗号",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
