@@ -306,6 +306,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbavms8un4t",
+      "question": "ウェブブラウザで電子メールの送受信を行うサービス",
+      "answer": "ウェブメール",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
