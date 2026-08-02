@@ -405,6 +405,24 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbb3pnrtydr",
+      "question": "公開鍵暗号で、受信者が公開した鍵",
+      "answer": "公開鍵",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msbb478cpfku",
+      "question": "公開鍵暗号で、受信者だけが持つ鍵",
+      "answer": "秘密鍵",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
