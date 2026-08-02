@@ -212,7 +212,7 @@
       "id": "mr790c77ohrg",
       "question": "著作権のうち財産権であるもの。著作物（映画を除く）を公衆に譲ったり、貸したりする権利。",
       "answer": "譲渡権・貸与権",
-      "explanation": "",
+      "explanation": "じょうとけん・たいよけん",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
@@ -752,7 +752,7 @@
   "subject": "情報基礎",
   "folder_id": "3y5kzbzknl",
   "published_by": {
-    "id": "32615",
+    "id": null,
     "nickname": "Chiro"
   },
   "incomplete": false
