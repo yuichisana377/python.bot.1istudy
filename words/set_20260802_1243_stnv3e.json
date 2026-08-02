@@ -216,6 +216,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbamf7ljzbk",
+      "question": "インターネット上のウェブページなどの場所を表す文字列",
+      "answer": "URL",
+      "explanation": "ブラウザのアドレス欄に入力すると、そのウェブページが表示される",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
