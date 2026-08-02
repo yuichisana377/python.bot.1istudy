@@ -383,7 +383,7 @@
       "id": "msbb0qq6qg80",
       "question": "暗号化と復号で同じ鍵を用いる暗号方式",
       "answer": "共通鍵暗号",
-      "explanation": "",
+      "explanation": "送信者ごとに別々の鍵が必要",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
