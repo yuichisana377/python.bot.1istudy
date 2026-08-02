@@ -27,6 +27,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb9wriayzoo",
+      "question": "IPアドレスは、32ビットの【①】進法であらわされた数を、【②】ビットずつに区切り、それぞれ【③】進法で表記する。",
+      "answer": "①2\n②8\n③10",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
