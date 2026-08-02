@@ -279,6 +279,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbau7d5cghq",
+      "question": "メールサーバにある、利用者ごとにメールを保管する場所",
+      "answer": "メールボックス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
