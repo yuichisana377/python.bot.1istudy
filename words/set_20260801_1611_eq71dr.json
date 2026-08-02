@@ -63,6 +63,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb49zrvox3x",
+      "question": "誤った情報や偽の情報を取り除くこと",
+      "answer": "情報の検証",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
