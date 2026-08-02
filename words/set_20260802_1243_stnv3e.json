@@ -18,6 +18,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb9utu8862j",
+      "question": "現在はIPアドレスの不足が心配されている。そのために現在使われている、128ビットでIPアドレスを表す方式",
+      "answer": "IPv6",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
