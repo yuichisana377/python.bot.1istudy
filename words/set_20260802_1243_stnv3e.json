@@ -387,6 +387,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbb13a4rsty",
+      "question": "共通鍵暗号の別名",
+      "answer": "秘密鍵暗号",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
