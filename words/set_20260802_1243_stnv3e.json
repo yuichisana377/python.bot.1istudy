@@ -378,6 +378,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbb0qq6qg80",
+      "question": "暗号化と復号で同じ鍵を用いる暗号方式",
+      "answer": "共通鍵暗号",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
