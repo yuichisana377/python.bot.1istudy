@@ -360,6 +360,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb6lhdk7peq",
+      "question": "特定の個人を識別できないようにするため、復元できないように加工した情報",
+      "answer": "匿名加工情報",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
