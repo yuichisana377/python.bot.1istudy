@@ -450,6 +450,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbbcxqg4zba",
+      "question": "簡単な暗号の例。アルファベットを数文字ずらすもの\n\n例：ENCRYPTION（意味：暗号化）→FODSZQUJPO",
+      "answer": "シーザー暗号",
+      "explanation": "換字法の一つ",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
