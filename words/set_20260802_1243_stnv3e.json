@@ -144,6 +144,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbag8ifro6x",
+      "question": "ウェブページを書く際に使われる言語",
+      "answer": "HTML",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
