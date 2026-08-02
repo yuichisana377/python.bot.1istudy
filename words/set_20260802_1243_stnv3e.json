@@ -121,7 +121,7 @@
     {
       "id": "msbaax9crp8w",
       "question": "LAN内の通信機器にはプライベートIPアドレスを割り当て、そのLANとインターネットをつなぐルータなどにのみグローバルIPアドレスを割り当てる仕組み",
-      "answer": "NAT",
+      "answer": "NAT（Network Address Translation）",
       "explanation": "これはIPv4で使われていたもので、現在利用が進んでいるIPv6では必要がない（不足する心配がないから）",
       "imgs_q": [],
       "imgs_a": [],
@@ -491,7 +491,7 @@
   "subject": "情報基礎",
   "folder_id": "3y5kzbzknl",
   "published_by": {
-    "id": null,
+    "id": "32615",
     "nickname": "小鷹"
   },
   "incomplete": false
