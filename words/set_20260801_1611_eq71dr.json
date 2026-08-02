@@ -72,6 +72,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb4b2v2uw4e",
+      "question": "情報の正しさを信用できる度合い",
+      "answer": "信憑性",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
