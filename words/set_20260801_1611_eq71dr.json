@@ -261,6 +261,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb5srda4bu8",
+      "question": "コンピュータやインターネットなどの情報技術",
+      "answer": "IT",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
