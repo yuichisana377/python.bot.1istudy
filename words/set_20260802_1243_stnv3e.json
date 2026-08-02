@@ -360,6 +360,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbazhkogskg",
+      "question": "暗号文をもとの情報に戻すこと",
+      "answer": "復号",
+      "explanation": "復号「化」ではないので注意",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
