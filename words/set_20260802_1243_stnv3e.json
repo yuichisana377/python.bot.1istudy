@@ -252,6 +252,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbartllhiaw",
+      "question": "電子メールを送受信するソフトウェア",
+      "answer": "メーラ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
