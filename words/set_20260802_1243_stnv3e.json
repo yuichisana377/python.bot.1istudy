@@ -162,6 +162,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbai1x9nusl",
+      "question": "リンク機能を使って互いに関連付けられたテキスト",
+      "answer": "ハイパーテキスト",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
