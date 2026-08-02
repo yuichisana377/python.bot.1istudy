@@ -36,6 +36,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb9xlv0ikgt",
+      "question": "IPの一部で、そのIPアドレスが所属するネットワークを表す部分",
+      "answer": "ネットワーク部",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
