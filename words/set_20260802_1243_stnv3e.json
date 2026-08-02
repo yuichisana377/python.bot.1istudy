@@ -126,6 +126,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbabrtkrt7e",
+      "question": "インターネットで不特定多数の人に情報を発信する通信サービス",
+      "answer": "ワールドワイドウェブ（ＷＷＷ）",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
