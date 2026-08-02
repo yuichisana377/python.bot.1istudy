@@ -108,6 +108,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msba837s3mhg",
+      "question": "IPアドレスの不足に対処するため、LAN内の通信機器に割り当てられているIPアドレス",
+      "answer": "プライベートIPアドレス",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
