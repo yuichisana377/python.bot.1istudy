@@ -36,12 +36,21 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb46evw4vd7",
+      "question": "直接体験して得た情報",
+      "answer": "一次情報",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
   "folder_id": "3y5kzbzknl",
   "published_by": {
-    "id": "32615",
+    "id": "32623",
     "nickname": "たけのこども"
   },
   "incomplete": true
