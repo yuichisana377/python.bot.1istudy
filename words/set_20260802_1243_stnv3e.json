@@ -39,7 +39,7 @@
     },
     {
       "id": "msb9xlv0ikgt",
-      "question": "IPの一部で、そのIPアドレスが所属するネットワークを表す部分",
+      "question": "IPアドレスの一部で、そのIPアドレスが所属するネットワークを表す部分",
       "answer": "ネットワーク部",
       "explanation": "",
       "imgs_q": [],
