@@ -270,6 +270,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb5t8elerwa",
+      "question": "ITとほぼ同じ意味で、情報通信技術",
+      "answer": "ICT",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
