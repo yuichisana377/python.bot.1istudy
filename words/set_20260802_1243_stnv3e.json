@@ -468,6 +468,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbbff7dxvst",
+      "question": "暗号の仕組みを用いて、メールなどの発信者が本人であることを証明するための方法",
+      "answer": "デジタル署名",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
