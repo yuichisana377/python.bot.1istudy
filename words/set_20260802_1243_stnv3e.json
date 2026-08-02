@@ -333,6 +333,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbaydi95oqm",
+      "question": "暗号のもとの情報",
+      "answer": "平文",
+      "explanation": "「へいぶん」ではなく「ひらぶん」",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
