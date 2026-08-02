@@ -410,7 +410,7 @@
       "id": "msbb3pnrtydr",
       "question": "公開鍵暗号で、受信者が公開した鍵",
       "answer": "公開鍵",
-      "explanation": "",
+      "explanation": "同じ受信者に対しては送信者が複数でも公開鍵一つでよくなり、管理が楽",
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
