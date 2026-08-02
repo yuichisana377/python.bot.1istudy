@@ -135,6 +135,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbafensl9jb",
+      "question": "ＷＷＷでは、【①】や【②】というプロトコルが使われ、【③】と呼ばれる単位で情報が発信される",
+      "answer": "①HTTP\n②HTTPS\n③ウェブページ",
+      "explanation": "HTTPSは、HTTPによる通信を、SSLという暗号化などの技術を使って、より安全に利用できるようにしたプロトコルのこと",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
