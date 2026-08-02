@@ -135,6 +135,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb4ljnqxt94",
+      "question": "情報の表現形式を変更すると、何がある",
+      "answer": "失われる情報と付け加わる情報",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
