@@ -54,6 +54,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb9znfttkjd",
+      "question": "IPアドレスは、ネットワーク部とホスト部から構成され、【①】と呼ばれるビット列で区別している",
+      "answer": "①サブネットマスク",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
