@@ -369,6 +369,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb6tz622mig",
+      "question": "住所、氏名、性別、生年月日",
+      "answer": "基本4情報",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
