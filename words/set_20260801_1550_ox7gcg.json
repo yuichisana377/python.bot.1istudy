@@ -255,7 +255,7 @@
     },
     {
       "id": "msa2y5ew1g6f",
-      "question": "回転する、回転させる、\n回転",
+      "question": "回転する、回転させる、回転",
       "answer": "spin",
       "explanation": "",
       "imgs_q": [],
@@ -455,7 +455,7 @@
   "subject": "英語コミュニケーション1a",
   "folder_id": "zuu8l0dnik",
   "published_by": {
-    "id": "32626",
+    "id": "32615",
     "nickname": "むむ"
   },
   "incomplete": false
