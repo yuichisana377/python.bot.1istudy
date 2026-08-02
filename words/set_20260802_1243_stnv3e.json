@@ -99,6 +99,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msba6xzr161r",
+      "question": "グローバルIPアドレスを管理している組織",
+      "answer": "ICANN（アイキャン）",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
