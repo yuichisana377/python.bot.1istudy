@@ -45,6 +45,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb47o5uudxb",
+      "question": "他人から聞いたり他の人がまとめたりした情報",
+      "answer": "二次情報",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
