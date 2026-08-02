@@ -378,6 +378,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb6vun1lr59",
+      "question": "事業者が利用者の個人情報を第三者に提供する際、利用者が許諾した情報のみ提供する",
+      "answer": "オプトイン",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
