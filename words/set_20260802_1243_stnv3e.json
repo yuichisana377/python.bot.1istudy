@@ -369,6 +369,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbazzkty78n",
+      "question": "暗号化・復号に使われるデータや手順",
+      "answer": "鍵",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
