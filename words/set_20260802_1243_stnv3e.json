@@ -234,6 +234,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbar1dir52e",
+      "question": "ネットワークを使って、メッセージやファイルなどのデジタル情報を交換するシステム",
+      "answer": "電子メール",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
