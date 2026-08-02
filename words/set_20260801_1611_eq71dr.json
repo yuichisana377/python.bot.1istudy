@@ -225,6 +225,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb5pcmovcx0",
+      "question": "何かを改善しようとすると、その対価に別の要素が悪くなると言うような状態のこと",
+      "answer": "トレードオフ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
