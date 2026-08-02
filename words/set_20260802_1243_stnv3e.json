@@ -63,6 +63,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msba10ckv7nr",
+      "question": "IPアドレスのような覚えにくい数字の列の代わりに、人にとってわかりやすい文字列を使ったもの",
+      "answer": "ドメイン名",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
