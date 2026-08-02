@@ -888,15 +888,5 @@
     "has_folder_id": true,
     "published_by": "小鷹",
     "incomplete": false
-  },
-  {
-    "filename": "set_20260802_0937_ope8hq.json",
-    "name": "確認",
-    "count": 0,
-    "subject": null,
-    "folder_id": null,
-    "has_folder_id": true,
-    "published_by": "Chiro",
-    "incomplete": true
   }
 ]
