@@ -306,6 +306,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb65kilbr8u",
+      "question": "倫理・文化・社会の問題を理解した上で、責任を持って前向きにデジタル技術を利用する規範",
+      "answer": "デジタルシティズンシップ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
