@@ -432,6 +432,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbb8sdb45fk",
+      "question": "SSLを改良したもの",
+      "answer": "TSL",
+      "explanation": "現在はSSLではなくこちらが広く使われている",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
