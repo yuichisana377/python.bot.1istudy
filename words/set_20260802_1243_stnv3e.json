@@ -270,6 +270,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbatrwmpxjn",
+      "question": "電子メールの受け渡しを行うサーバ",
+      "answer": "メールサーバ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
