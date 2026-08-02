@@ -207,6 +207,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msbakwhn1egk",
+      "question": "ウェブページを提供するサーバ",
+      "answer": "ウェブサーバ",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
