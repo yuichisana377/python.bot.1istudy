@@ -351,6 +351,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb6kqmsf7xq",
+      "question": "人種や病歴など、不当な差別や偏見などの不利益を受ける可能性があり、取り扱いに配慮が必要な個人情報",
+      "answer": "要配慮個人情報",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
