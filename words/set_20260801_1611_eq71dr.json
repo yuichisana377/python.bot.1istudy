@@ -189,6 +189,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb4ugg8a4by",
+      "question": "問題解決のプロセス。PDCAサイクルでは何を繰り返すか",
+      "answer": "Plan（計画）、Do（実行）、Check（評価）、Act（改善）",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
