@@ -72,6 +72,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msba31n7r9ry",
+      "question": "ドメイン名は、左から【①】、【②】、【③】、【④】となっている",
+      "answer": "①サーバやサービスの名前\n②組織名\n③組織の種類\n④国名",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
