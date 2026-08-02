@@ -333,6 +333,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb6ax6yfn1s",
+      "question": "それだけで個人を特定・識別できたら、他の情報と組み合わせるなどで個人を特定・識別できたりする情報を含むもの",
+      "answer": "個人情報",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
