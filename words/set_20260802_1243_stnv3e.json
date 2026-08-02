@@ -9,6 +9,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb9szzk5e16",
+      "question": "32ビットでIPアドレスを表す方式",
+      "answer": "IPv4",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
