@@ -504,6 +504,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb7ukpgqos1",
+      "question": "他人のID・パスワードの不正使用やその他の方法で、アクセス権のないコンピュータに不正にアクセスする行為を禁止する法律",
+      "answer": "不正アクセス禁止法",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
