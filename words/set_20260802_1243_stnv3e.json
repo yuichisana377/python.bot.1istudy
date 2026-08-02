@@ -399,7 +399,7 @@
     },
     {
       "id": "msbb3a2z95xh",
-      "question": "暗号川受信者が公開した鍵で行い、復号は受信者だけが持つ鍵で行う暗号方式",
+      "question": "暗号化は受信者が公開した鍵で行い、復号は受信者だけが持つ鍵で行う暗号方式",
       "answer": "公開鍵暗号",
       "explanation": "",
       "imgs_q": [],
@@ -491,7 +491,7 @@
   "subject": "情報基礎",
   "folder_id": "3y5kzbzknl",
   "published_by": {
-    "id": "32615",
+    "id": null,
     "nickname": "小鷹"
   },
   "incomplete": false
