@@ -99,6 +99,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb4eslsi3xu",
+      "question": "情報を表現する手段としてのメディア",
+      "answer": "表現メディア",
+      "explanation": "文字、画像、動画、音声など",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
