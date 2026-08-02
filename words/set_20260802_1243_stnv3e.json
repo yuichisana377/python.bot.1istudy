@@ -45,6 +45,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msb9yrikr3pd",
+      "question": "IPアドレスの一部で、そのIPアドレスが属するネットワーク内のコンピュータを識別する部分",
+      "answer": "ホスト部",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "情報基礎",
