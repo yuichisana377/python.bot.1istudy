@@ -502,5 +502,13 @@
     "subject": "情報基礎",
     "items": [],
     "note": "定期テスト"
+  },
+  "period_holiday:2026-08-03:3": {
+    "key": "period_holiday:2026-08-03:3",
+    "type": "period_holiday",
+    "date": "2026-08-03",
+    "period": 3,
+    "reason": "休み",
+    "note": ""
   }
 }
