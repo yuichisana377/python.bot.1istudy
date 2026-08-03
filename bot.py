@@ -866,6 +866,16 @@ def strip_note(content: str) -> str:
     return content.split(NOTE_SEP)[0]
 
 
+def is_holiday(guild_id: int, date_str: str) -> bool:
+    """
+    指定した日付が「休校」（時間割の holiday:YYYY-MM-DD オーバーライド）に
+    設定されているかどうかを返す。
+    """
+    tt = load_timetable(guild_id)
+    ov = tt.get(f"holiday:{date_str}")
+    return bool(ov) and ov.get("type") == "holiday"
+
+
 async def send_tomorrow_plans():
     # 実行日が金曜(4)・土曜(5) の場合は「金曜夜」「土曜夜」の通知にあたるため、
     # 予定が無ければ通知自体をスキップする
@@ -881,7 +891,8 @@ async def send_tomorrow_plans():
             for p in plans:
                 msg += f"・{p['subject']} {strip_note(p['content'])}\n"
         else:
-            if quiet_if_empty:
+            # 明日が休校で、かつ予定も入っていない場合は通知自体をスキップする
+            if quiet_if_empty or is_holiday(guild_id, tomorrow):
                 continue
             msg = "こんばんは！明日の予定はありません。\n"
 
@@ -920,7 +931,8 @@ async def send_today_plans_for(config_key: str):
             for p in plans:
                 msg += f"・{p['subject']} {strip_note(p['content'])}\n"
         else:
-            if quiet_if_empty:
+            # 今日が休校で、かつ予定も入っていない場合は通知自体をスキップする
+            if quiet_if_empty or is_holiday(guild_id, today):
                 continue
             msg = "おはようございます！今日の予定はありません。\n"
         await channel.send(msg + "@everyone")
