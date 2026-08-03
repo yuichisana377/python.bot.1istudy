@@ -1290,6 +1290,38 @@ def set_holiday():
     write_log(int(guild_id), "edit", detail=f"休校設定: {data.get('date')} {data.get('reason')}")
     return jsonify({"ok": True})
 
+@app.route("/set_period_holiday", methods=["POST"])
+def set_period_holiday():
+    """
+    1コマだけの休み（period_holiday）。
+    ★ これまでこのエンドポイントが未実装だったため、フロント側
+       （Timetable.js）が保存に失敗してもエラーを握りつぶしてしまい、
+       localStorageにしか残らず「他の端末では反映されない／たまに消える」
+       原因になっていた。/set_holiday と同じ要領でサーバー側
+       （timetable_{guild_id}.json）に保存する。
+    """
+    data     = request.json
+    guild_id = data.get("guild_id")
+    key      = data.get("key")
+    period   = data.get("period")
+    if not all([guild_id, key]) or period is None:
+        return jsonify({"ok": False, "error": "missing fields"})
+    tt = load_timetable(int(guild_id))
+    tt[key] = {
+        "key":    key,
+        "type":   "period_holiday",
+        "date":   data.get("date"),
+        "period": period,
+        "reason": data.get("reason", "休み"),
+        "note":   data.get("note", ""),
+    }
+    try:
+        save_timetable(int(guild_id), tt)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    write_log(int(guild_id), "edit", detail=f"1コマ休み設定: {data.get('date')} {period}限 {data.get('reason')}")
+    return jsonify({"ok": True})
+
 @app.route("/delete_timetable", methods=["POST"])
 def delete_timetable():
     data     = request.json
@@ -1305,6 +1337,89 @@ def delete_timetable():
         except GitHubWriteError as e:
             return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
         write_log(int(guild_id), "edit", detail=f"時間割変更削除: {key}")
+    return jsonify({"ok": True})
+
+# ================================
+#  Flask API — 学期ごとの基本時間割（前期・後期など）
+# ================================
+#  ・「前期」「後期」のように、期間ごとにまるごと違う基本時間割（曜日×時限の
+#    科目・持ち物）を切り替えられるようにするための機能。
+#  ・1件 = { id, name, start_date, end_date, timetable: {mon:[...],...} }
+#  ・start_date〜end_date に対象日が入っていれば、その学期の時間割を
+#    ベースとして使う（フロント側 Timetable.js の getTimetableForDate 参照）。
+#  ・既存の change / holiday / period_holiday オーバーライドは、この学期の
+#    ベース時間割の上にそのまま重ねて適用されるので、前期のデータをいじらずに
+#    後期分を新規に追加・編集できる。
+def load_terms(guild_id: int):
+    data, _ = github_get(f"terms_{guild_id}.json")
+    return data or {}
+
+def save_terms(guild_id: int, terms: dict):
+    _, sha = github_get(f"terms_{guild_id}.json")
+    github_put(f"terms_{guild_id}.json", terms, sha)
+
+@app.route("/list_terms", methods=["GET"])
+def list_terms():
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    terms = load_terms(int(guild_id))
+    return jsonify({"ok": True, "terms": list(terms.values())})
+
+@app.route("/save_term", methods=["POST"])
+def save_term():
+    data       = request.json or {}
+    guild_id   = data.get("guild_id")
+    name       = data.get("name")
+    start_date = data.get("start_date")
+    end_date   = data.get("end_date")
+    timetable  = data.get("timetable")
+    if not all([guild_id, name, start_date, end_date]) or not isinstance(timetable, dict):
+        return jsonify({"ok": False, "error": "missing fields"})
+    if end_date < start_date:
+        return jsonify({"ok": False, "error": "終了日は開始日以降にしてください"})
+
+    terms = load_terms(int(guild_id))
+    term_id = data.get("id") or f"term_{time.time_ns()}"
+
+    # ★ 期間の重複チェック（自分自身は除く）。前期・後期が重なると
+    #   どちらの時間割を使うべきか曖昧になるため保存前に弾く。
+    for tid, t in terms.items():
+        if tid == term_id:
+            continue
+        if start_date <= t.get("end_date", "") and t.get("start_date", "") <= end_date:
+            return jsonify({"ok": False, "error": f"「{t.get('name')}」（{t.get('start_date')}〜{t.get('end_date')}）と期間が重なっています"})
+
+    terms[term_id] = {
+        "id":         term_id,
+        "name":       name,
+        "start_date": start_date,
+        "end_date":   end_date,
+        "timetable":  timetable,
+    }
+    try:
+        save_terms(int(guild_id), terms)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    write_log(int(guild_id), "edit", detail=f"学期時間割保存: {name}（{start_date}〜{end_date}）")
+    return jsonify({"ok": True, "id": term_id})
+
+@app.route("/delete_term", methods=["POST"])
+def delete_term():
+    data     = request.json or {}
+    guild_id = data.get("guild_id")
+    term_id  = data.get("id")
+    if not all([guild_id, term_id]):
+        return jsonify({"ok": False, "error": "missing fields"})
+    terms = load_terms(int(guild_id))
+    if term_id in terms:
+        name = terms[term_id].get("name", term_id)
+        del terms[term_id]
+        try:
+            save_terms(int(guild_id), terms)
+        except GitHubWriteError as e:
+            return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+        write_log(int(guild_id), "edit", detail=f"学期時間割削除: {name}")
     return jsonify({"ok": True})
 
 # ================================
