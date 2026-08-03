@@ -1,6 +1,16 @@
 {
   "name": "その他 英検二級単語帳",
-  "cards": [],
+  "cards": [
+    {
+      "id": "msdvrdmmkct6",
+      "question": "improve",
+      "answer": "～を向上させる、よくなる",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
   "subject": "その他",
   "folder_id": null,
   "published_by": {
