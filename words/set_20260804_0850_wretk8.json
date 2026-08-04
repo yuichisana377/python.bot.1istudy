@@ -252,6 +252,24 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msdwi5m5pj4h",
+      "question": "provide",
+      "answer": "～を供給する",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msdwijakttc4",
+      "question": "reduce",
+      "answer": "～を減らす、～を変える",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "その他",
