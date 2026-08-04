@@ -1646,6 +1646,9 @@ def uncomplete_task():
 # ================================
 CARDS_DIR = "words"
 CARDS_INDEX_FILE = "cards_index.json"
+# ★ 追加：CardMakerのフロントエンドURL。Discord通知に「該当デッキへ飛ぶリンク」を
+#   付けるために使う（Cardmaker.js 側で ?deck=<filename> を見て自動で移動する）。
+CARDMAKER_URL = "https://1istudyweb.pages.dev/Cardmaker.html"
 
 def list_card_files():
     url     = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CARDS_DIR}"
@@ -1831,7 +1834,22 @@ def save_cards():
             guild = bot.get_guild(guild_id_int)
             if guild:
                 action = "更新" if is_update else "公開"
-                msg = f"📇 単語カード「{name}」が{publisher_nickname}さんによって{action}されました！（{len(cards)}問）"
+                # ★ 追加：通知から直接そのデッキの場所まで飛べるよう、CardMakerへの
+                #   リンクに ?deck=<filename> を付与する。Cardmaker.js 側がこのパラメータを
+                #   見て、該当デッキのあるフォルダまで自動的に移動しハイライト表示する。
+                # ★ 修正：プレーンテキストの「[デッキ名](url)」はDiscordの通常メッセージでは
+                #   マスクされたリンクとして描画されない（そのまま文字列として表示されてしまう）ため、
+                #   埋め込み（Embed）のdescriptionにマスクリンクとして書く形に変更した。
+                #   Embed内であれば [表示テキスト](url) がちゃんとクリック可能なリンクになる。
+                deck_url = f"{CARDMAKER_URL}?deck={filename}"
+                embed = discord.Embed(
+                    title=f"📇 単語カードが{action}されました",
+                    description=(
+                        f"[{name}]({deck_url})\n"
+                        f"{publisher_nickname}さんによって{action}（{len(cards)}問）"
+                    ),
+                    color=discord.Color.blue(),
+                )
 
                 target_channel = get_subject_channel_by_name(guild, subject) if subject else None
                 if not target_channel:
@@ -1841,7 +1859,7 @@ def save_cards():
 
                 if target_channel:
                     asyncio.run_coroutine_threadsafe(
-                        target_channel.send(msg), bot.loop
+                        target_channel.send(embed=embed), bot.loop
                     ).result(timeout=10)
         except Exception as e:
             print(f"[WARN] save_cards notify failed: {e}")
