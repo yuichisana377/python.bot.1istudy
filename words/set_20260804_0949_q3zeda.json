@@ -1,6 +1,16 @@
 {
   "name": "その他 実験",
-  "cards": [],
+  "cards": [
+    {
+      "id": "msdxy8cljkwm",
+      "question": "A",
+      "answer": "B",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
   "subject": "その他",
   "folder_id": null,
   "published_by": {
