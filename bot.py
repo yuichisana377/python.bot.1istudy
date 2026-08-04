@@ -1790,6 +1790,14 @@ def save_cards():
     publisher_nickname = data.get("publisher_nickname") or "匿名"
     silent   = data.get("silent", False)  # ★ 追加：trueなら通知しない
     incomplete = bool(data.get("incomplete", False))  # ★ 追加：未完成フラグ（みんなに表示するため保存する）
+    # ★ 追加：フロント側（Cardmaker.js）が「これがこのデッキにとって初めての
+    #   『公開して保存』かどうか」を明示的に伝えてくるフラグ。
+    #   ・「作成中」として announceNewDeckToServer 経由で先にファイルだけ
+    #     登録済みのデッキは、実際に公開したタイミングでも filename が
+    #     既に存在するため、is_update（＝ファイルの有無）だけで判定すると
+    #     「更新されました」という誤った通知文言になってしまう。
+    #   ・first_publish が明示的に渡されていれば、通知文言の判定はそちらを優先する。
+    first_publish = data.get("first_publish")
 
     if not name or not isinstance(cards, list):
         return jsonify({"ok": False, "error": "name と cards は必須です"})
@@ -1833,7 +1841,13 @@ def save_cards():
             guild_id_int = int(guild_id)
             guild = bot.get_guild(guild_id_int)
             if guild:
-                action = "更新" if is_update else "公開"
+                # ★ 修正：is_update（＝ファイルが既に存在するか）だけで「更新」と
+                #   判定すると、「作成中」として先に登録されていたデッキを
+                #   初めて公開したときも「更新されました」と表示されてしまっていた。
+                #   first_publish が明示的に true で渡されてきた場合は、
+                #   filenameの有無に関わらず「公開（新規）」として扱う。
+                is_actual_update = is_update and not bool(first_publish)
+                action = "更新" if is_actual_update else "公開"
                 # ★ 追加：通知から直接そのデッキの場所まで飛べるよう、CardMakerへの
                 #   リンクに ?deck=<filename> を付与する。Cardmaker.js 側がこのパラメータを
                 #   見て、該当デッキのあるフォルダまで自動的に移動しハイライト表示する。
