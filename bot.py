@@ -186,6 +186,88 @@ def list_all_configs():
     ]
 
 # ================================
+#  ★ 入力チェック：制御文字・不可視文字・壊れた符号位置を弾く
+#  ─────────────────────────────────────────────
+#  Cardmaker.js の findBugChars() / warnIfBugChars()（フロント側チェック）と
+#  完全に同じ判定基準をサーバー側にも移植したもの。
+#  フロント側のチェックは devtools 等で直接APIを叩けば素通りしてしまうため、
+#  「制御文字などを弾く」という判断自体はサーバー側でも独立して行う必要がある。
+#  ・①②③ ㈱㈲㈹ ㍾㍽㎜㎡ などの「機種依存文字」は許可（見た目が出るため）。
+#  ・弾くのは主に次の3種類：
+#    1) 制御文字（RLO/LROなどの双方向制御・Unicodeタグ文字など）
+#    2) 見た目に何も表示されないが実害の大きい文字
+#       （ゼロ幅スペース／Word Joiner／BOMなど）
+#    3) 壊れた符号位置（孤立サロゲート・非文字コードポイント）
+#       → GitHub等でエラーになったり読み込めなくなったりする原因
+# ================================
+BUG_CHAR_RANGES = [
+    (0xE000, 0xF8FF),    # 私用領域（外字・gaiji）
+    (0xFDD0, 0xFDEF),    # 非文字コードポイント
+]
+BUG_CHAR_CODES = {0xFFFE, 0xFFFF}  # 非文字コードポイント（BMP末尾）
+
+INVISIBLE_CHAR_RANGES = [
+    (0x200B, 0x200C),    # ゼロ幅スペース、ZWNJ（※200Dは含まない＝ZWJは許可）
+    (0x2060, 0x2064),    # Word Joiner、不可視の演算子記号など
+    (0x2066, 0x2069),    # 双方向テキストの分離文字（LRI/RLI/FSI/PDI）
+    (0x202A, 0x202E),    # 双方向テキストの埋め込み・上書き（LRE/RLE/PDF/LRO/RLO）
+    (0xE0000, 0xE007F),  # Unicodeタグ文字（見えないままテキストを埋め込める）
+]
+INVISIBLE_CHAR_CODES = {0x00AD, 0x180E, 0xFEFF}  # ソフトハイフン／モンゴル母音分離符／BOM
+
+
+def _is_allowed_invisible(cp: int) -> bool:
+    if cp == 0x200D:
+        return True  # ZWJ（絵文字結合）
+    if 0xFE00 <= cp <= 0xFE0F:
+        return True  # VS1-16（異体字・絵文字表示指定）
+    if 0xE0100 <= cp <= 0xE01EF:
+        return True  # VS17-256（IVS用）
+    return False
+
+
+def find_bug_chars(s):
+    """文字列中の「バグ文字」だけを重複なく抽出して返す（無ければ空リスト）"""
+    if not s:
+        return []
+    found = []
+    for ch in str(s):
+        cp = ord(ch)
+        if _is_allowed_invisible(cp):
+            continue
+        is_ctrl = cp < 0x20 and ch not in ("\t", "\n", "\r")
+        is_del  = cp == 0x7F
+        # Python の str は既にUnicodeなので「孤立サロゲート」はサロゲートペア分解後には
+        # 通常出現しないが、外部（JSON等）から紛れ込むケースに備えて同じ範囲を弾いておく。
+        is_lone_sg = 0xD800 <= cp <= 0xDFFF
+        is_range = any(s0 <= cp <= e0 for s0, e0 in BUG_CHAR_RANGES) or cp in BUG_CHAR_CODES
+        is_invis = any(s0 <= cp <= e0 for s0, e0 in INVISIBLE_CHAR_RANGES) or cp in INVISIBLE_CHAR_CODES
+        if (is_ctrl or is_del or is_lone_sg or is_range or is_invis) and ch not in found:
+            found.append(ch)
+    return found
+
+
+def reject_if_bug_chars(fields: dict):
+    """
+    fields: { "表示用フィールド名": 値 } の辞書。
+    いずれかの値に禁止文字が含まれていれば、Flaskのjsonレスポンス（エラー）を返す。
+    問題なければ None を返す。
+    呼び出し側は `err = reject_if_bug_chars(...); if err: return err` の形で使う。
+    """
+    for field_name, value in fields.items():
+        if value is None:
+            continue
+        bad = find_bug_chars(value)
+        if bad:
+            return jsonify({
+                "ok": False,
+                "error": f"{field_name} に使用できない文字が含まれています（制御文字・不可視文字など）: "
+                         + " ".join(bad)
+            })
+    return None
+
+
+# ================================
 #  予定データ
 # ================================
 def load_plans(guild_id: int):
@@ -1057,6 +1139,10 @@ def add_schedule():
     if not all([guild_id, date, subject, category, content]):
         return jsonify({"ok": False, "error": "missing fields"})
 
+    err = reject_if_bug_chars({"科目": subject, "カテゴリ": category, "内容": content})
+    if err:
+        return err
+
     if points is not None:
         try:
             points = int(points)
@@ -1093,8 +1179,15 @@ def add_study_log():
 
     student_id = data.get("student_id")
     subject    = data.get("subject")
+    memo       = data.get("memo")
+    nickname   = data.get("nickname")
     if not student_id or not subject:
         return jsonify({"ok": False, "error": "missing fields"})
+
+    # --- ★ 制御文字・不可視文字・壊れた符号位置を弾く ---
+    err = reject_if_bug_chars({"科目": subject, "メモ": memo, "ニックネーム": nickname})
+    if err:
+        return err
 
     # --- ★ date はクライアントの値を信用せず、サーバー（JST）の「今日」を使う ---
     #     → PCの時計を進めても戻しても、記録される日付は実際の日付のまま変わらない
@@ -1102,9 +1195,9 @@ def add_study_log():
         "date": datetime.now(JST).strftime("%Y-%m-%d"),
         "subject": subject,
         "minutes": minutes,
-        "memo": data.get("memo"),
+        "memo": memo,
         "student_id": student_id,
-        "nickname": data.get("nickname")
+        "nickname": nickname
     }
 
     logs = load_study_logs(guild_id)
@@ -1157,6 +1250,11 @@ def edit_schedule():
 
     if not all([guild_id, target]):
         return jsonify({"ok": False, "error": "missing fields"})
+
+    err = reject_if_bug_chars({"科目": new_subject, "カテゴリ": new_category, "内容": new_content})
+    if err:
+        return err
+
     guild_id = int(guild_id)
     guild    = bot.get_guild(guild_id)
     plans    = load_plans(guild_id)
@@ -1285,6 +1383,11 @@ def update_timetable():
     key      = data.get("key")
     if not all([guild_id, key]):
         return jsonify({"ok": False, "error": "missing fields"})
+
+    err = reject_if_bug_chars({"科目": data.get("subject"), "備考": data.get("note")})
+    if err:
+        return err
+
     tt = load_timetable(int(guild_id))
     tt[key] = {
         "key":     key,
@@ -1413,6 +1516,10 @@ def save_term():
     if end_date < start_date:
         return jsonify({"ok": False, "error": "終了日は開始日以降にしてください"})
 
+    err = reject_if_bug_chars({"学期名": name})
+    if err:
+        return err
+
     terms = load_terms(int(guild_id))
     term_id = data.get("id") or f"term_{time.time_ns()}"
 
@@ -1481,6 +1588,9 @@ def add_user():
         return jsonify({"ok": False, "error": "missing fields"})
     if len(nickname) > 16:
         return jsonify({"ok": False, "error": "nickname too long"})
+    err = reject_if_bug_chars({"ニックネーム": nickname})
+    if err:
+        return err
     try:
         users = load_users(int(guild_id))
         if any(u["id"] == user_id for u in users):
@@ -1596,6 +1706,10 @@ def complete_task():
 
     if not student_id or not task_id:
         return jsonify({"ok": False, "error": "missing fields"})
+
+    err = reject_if_bug_chars({"ニックネーム": nickname})
+    if err:
+        return err
 
     # --- ★ points はクライアントから受け取らず、サーバー側の予定データから引き直す ---
     #     （クライアントが任意の points を送っても無視される）
@@ -1841,6 +1955,18 @@ def save_cards():
     if not name or not isinstance(cards, list):
         return jsonify({"ok": False, "error": "name と cards は必須です"})
 
+    # --- ★ 制御文字・不可視文字・壊れた符号位置を弾く（デッキ名・各カードの本文） ---
+    check_fields = {"デッキ名": name, "公開者ニックネーム": publisher_nickname}
+    for i, c in enumerate(cards):
+        if not isinstance(c, dict):
+            continue
+        check_fields[f"カード{i+1}の問題文"] = c.get("question")
+        check_fields[f"カード{i+1}の解答"]   = c.get("answer")
+        check_fields[f"カード{i+1}の解説"]   = c.get("explanation")
+    err = reject_if_bug_chars(check_fields)
+    if err:
+        return err
+
     is_update = bool(filename)
     if not filename:
         filename = generate_card_filename()
@@ -2009,13 +2135,23 @@ def register_in_progress():
     name     = data.get("name")
     if not draft_id or not name:
         return jsonify({"ok": False, "error": "id と name は必須です"})
+
+    creator_nickname = data.get("creator_nickname") or "匿名"
+    err = reject_if_bug_chars({
+        "デッキ名": name,
+        "科目": data.get("subject"),
+        "作成者ニックネーム": creator_nickname,
+    })
+    if err:
+        return err
+
     entry = {
         "id": draft_id,
         "name": name,
         "subject": data.get("subject"),
         "folder_id": data.get("folder_id"),
         "creator_id": data.get("creator_id"),
-        "creator_nickname": data.get("creator_nickname") or "匿名",
+        "creator_nickname": creator_nickname,
         "created_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S"),
     }
     try:
@@ -2185,6 +2321,10 @@ def upload_notice():
     if content is None or not content.strip():
         return jsonify({"ok": False, "error": "内容が空です"})
 
+    err = reject_if_bug_chars({"内容": content, "アップロード者": uploader})
+    if err:
+        return err
+
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{NOTICES_DIR}/{filename}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
@@ -2350,6 +2490,10 @@ def save_folder():
 
     if not name:
         return jsonify({"ok": False, "error": "name は必須です"})
+
+    err = reject_if_bug_chars({"フォルダ名": name})
+    if err:
+        return err
 
     try:
         folders, sha = load_card_folders()
