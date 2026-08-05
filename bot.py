@@ -275,6 +275,24 @@ def save_completed_tasks(guild_id: int, tasks: dict, sha=None):
     github_put(f"completed_tasks_{guild_id}.json", tasks, sha)
 
 
+def _task_id_of_plan(plan: dict) -> str:
+    """フロント（StudyLog.js）の `${p.date}_${p.subject}_${p.content}` と全く同じ規則でIDを作る"""
+    return f"{plan.get('date')}_{plan.get('subject')}_{plan.get('content')}"
+
+def find_task_points(guild_id: int, task_id: str):
+    """
+    task_id に対応する予定（課題）をサーバー側の plans から探し、
+    本来のポイント数を返す。クライアントが自己申告する points は一切信用しない。
+    見つからない場合は None を返す（＝そもそも存在しない課題IDとして扱う）。
+    """
+    plans = load_plans(guild_id)
+    for p in plans:
+        if _task_id_of_plan(p) == task_id:
+            pts = p.get("points")
+            return pts if pts is not None else DEFAULT_TASK_POINTS
+    return None
+
+
 def _normalize_task_entry(entry):
     """旧形式（文字列）・旧dict形式（points/nicknameなし）・新形式を統一する"""
     if isinstance(entry, str):
@@ -1059,17 +1077,33 @@ def add_schedule():
             ).result(timeout=10)
     return jsonify({"ok": ok, "message": msg})
 
+MAX_LOG_MINUTES = 180  # ★ 1回のログで許容する最大分数（タイマーの3時間上限と合わせる）
+
 @app.route("/add_study_log", methods=["POST"])
 def add_study_log():
-    data = request.json
+    data = request.json or {}
     guild_id = int(data.get("guild_id"))
 
+    # --- ★ minutes の検証（不正な値・異常に大きい値を拒否） ---
+    minutes = data.get("minutes")
+    if not isinstance(minutes, int) or isinstance(minutes, bool):
+        return jsonify({"ok": False, "error": "invalid minutes"})
+    if minutes < 1 or minutes > MAX_LOG_MINUTES:
+        return jsonify({"ok": False, "error": f"minutes must be between 1 and {MAX_LOG_MINUTES}"})
+
+    student_id = data.get("student_id")
+    subject    = data.get("subject")
+    if not student_id or not subject:
+        return jsonify({"ok": False, "error": "missing fields"})
+
+    # --- ★ date はクライアントの値を信用せず、サーバー（JST）の「今日」を使う ---
+    #     → PCの時計を進めても戻しても、記録される日付は実際の日付のまま変わらない
     entry = {
-        "date": data.get("date"),
-        "subject": data.get("subject"),
-        "minutes": data.get("minutes"),
+        "date": datetime.now(JST).strftime("%Y-%m-%d"),
+        "subject": subject,
+        "minutes": minutes,
         "memo": data.get("memo"),
-        "student_id": data.get("student_id"),
+        "student_id": student_id,
         "nickname": data.get("nickname")
     }
 
@@ -1554,15 +1588,20 @@ def get_completed_tasks():
 
 @app.route("/complete_task", methods=["POST"])
 def complete_task():
-    data       = request.json
+    data       = request.json or {}
     guild_id   = int(data.get("guild_id"))
     student_id = data.get("student_id")
     task_id    = data.get("task_id")
-    points     = int(data.get("points"))
     nickname   = data.get("nickname")  # ★ ニックネームを受け取る
 
     if not student_id or not task_id:
         return jsonify({"ok": False, "error": "missing fields"})
+
+    # --- ★ points はクライアントから受け取らず、サーバー側の予定データから引き直す ---
+    #     （クライアントが任意の points を送っても無視される）
+    points = find_task_points(guild_id, task_id)
+    if points is None:
+        return jsonify({"ok": False, "error": "task not found"})
 
     # --- 達成済み課題保存（達成日・ポイント・ニックネーム付き） ---
     done = load_completed_tasks(guild_id)
@@ -1576,7 +1615,7 @@ def complete_task():
     if task_id not in existing_ids:
         normalized.append({
             "id":       task_id,
-            "date":     str(_date.today()),
+            "date":     datetime.now(JST).strftime("%Y-%m-%d"),
             "points":   points,
             "nickname": nickname,  # ★ ニックネームを保存
         })
