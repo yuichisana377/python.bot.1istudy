@@ -63,6 +63,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msfwmifi2uvs",
+      "question": "instead",
+      "answer": "その代わりに、そうではなくて",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "その他",
