@@ -1,6 +1,16 @@
 {
   "name": "その他 一枚目裏一行目",
-  "cards": [],
+  "cards": [
+    {
+      "id": "msfwixuqzpsl",
+      "question": "various",
+      "answer": "さまざまな、いくつかの",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    }
+  ],
   "subject": "その他",
   "folder_id": "hwqc0tpvhh",
   "published_by": {
