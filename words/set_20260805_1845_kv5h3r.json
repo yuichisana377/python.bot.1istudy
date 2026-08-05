@@ -252,6 +252,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msfx0ieov9m1",
+      "question": "mention",
+      "answer": "～に言及する、～と言う",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "その他",
