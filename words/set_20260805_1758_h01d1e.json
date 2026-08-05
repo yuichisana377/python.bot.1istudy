@@ -207,6 +207,24 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msfvkh5kc386",
+      "question": "theory",
+      "answer": "理論、学説、原理、推測",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
+    },
+    {
+      "id": "msfvl3c7xkr7",
+      "question": "issue",
+      "answer": "問題（点）、発行（物）、発表",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "その他",
