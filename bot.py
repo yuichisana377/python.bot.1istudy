@@ -1164,6 +1164,26 @@ def add_schedule():
     return jsonify({"ok": ok, "message": msg})
 
 MAX_LOG_MINUTES = 180  # ★ 1回のログで許容する最大分数（タイマーの3時間上限と合わせる）
+MANUAL_COOLDOWN_SEC = 60  # ★ 手入力：同じ教科の連続記録は前回から1分あける（不正防止）
+
+def _parse_log_time(log):
+    """ログの正確な時刻（"time"）をdatetimeに変換する。無ければNone。"""
+    t = log.get("time")
+    if not t:
+        return None
+    try:
+        return datetime.strptime(t, "%Y-%m-%d %H:%M:%S").replace(tzinfo=JST)
+    except Exception:
+        return None
+
+def _latest_log_time(candidates):
+    """candidates（ログのリスト）の中で最も新しい時刻を返す。無ければNone。"""
+    latest = None
+    for l in candidates:
+        t = _parse_log_time(l)
+        if t and (latest is None or t > latest):
+            latest = t
+    return latest
 
 @app.route("/add_study_log", methods=["POST"])
 def add_study_log():
@@ -1181,6 +1201,7 @@ def add_study_log():
     subject    = data.get("subject")
     memo       = data.get("memo")
     nickname   = data.get("nickname")
+    method     = data.get("method")  # ★ "timer" または "manual"（フロント側から送信）
     if not student_id or not subject:
         return jsonify({"ok": False, "error": "missing fields"})
 
@@ -1189,10 +1210,47 @@ def add_study_log():
     if err:
         return err
 
-    # --- ★ date はクライアントの値を信用せず、サーバー（JST）の「今日」を使う ---
-    #     → PCの時計を進めても戻しても、記録される日付は実際の日付のまま変わらない
+    now_jst = datetime.now(JST)
+    logs = load_study_logs(guild_id)
+
+    # --- ★ 不正防止：前回の記録からの実経過時間チェック（サーバー側の最終防衛）---
+    #   クライアント側（StudyLog.js）でも同様のチェックを行っているが、
+    #   devtools等で直接APIを叩けば素通りしてしまうため、サーバー側でも
+    #   独立して判定する。
+    #   ・タイマー記録：本人の（教科を問わない）前回の記録から、今回記録
+    #     しようとしている分数以上の実時間が経過していないと拒否する
+    #     （タイマーの経過時間を改ざんして即座に長時間記録するのを防止）
+    #   ・手入力：同じ教科での連続記録は、前回の記録から1分経過していないと拒否
+    my_logs = [l for l in logs if l.get("student_id") == student_id]
+
+    if method == "timer":
+        last_time = _latest_log_time(my_logs)
+        if last_time:
+            elapsed_sec  = (now_jst - last_time).total_seconds()
+            required_sec = minutes * 60
+            if elapsed_sec < required_sec:
+                remain_min = int((required_sec - elapsed_sec) // 60) + 1
+                return jsonify({
+                    "ok": False,
+                    "error": f"前回の記録からまだ十分な時間が経過していません（あと約{remain_min}分待つ必要があります）"
+                })
+    elif method == "manual":
+        same_subject_logs = [l for l in my_logs if l.get("subject") == subject]
+        last_time = _latest_log_time(same_subject_logs)
+        if last_time:
+            elapsed_sec = (now_jst - last_time).total_seconds()
+            if elapsed_sec < MANUAL_COOLDOWN_SEC:
+                remain_sec = int(MANUAL_COOLDOWN_SEC - elapsed_sec) + 1
+                return jsonify({
+                    "ok": False,
+                    "error": f"同じ教科の記録は、前回から1分経ってから行えます（あと{remain_sec}秒）"
+                })
+
+    # --- ★ date/time はクライアントの値を信用せず、サーバー（JST）の値を使う ---
+    #     → PCの時計を進めても戻しても、記録される日時は実際の日時のまま変わらない
     entry = {
-        "date": datetime.now(JST).strftime("%Y-%m-%d"),
+        "date": now_jst.strftime("%Y-%m-%d"),
+        "time": now_jst.strftime("%Y-%m-%d %H:%M:%S"),  # ★ 不正防止チェック用の正確な時刻
         "subject": subject,
         "minutes": minutes,
         "memo": memo,
@@ -1200,10 +1258,8 @@ def add_study_log():
         "nickname": nickname
     }
 
-    logs = load_study_logs(guild_id)
-
     # 30日以上前のログを削除
-    now = datetime.now(JST).date()
+    now = now_jst.date()
     logs = [
         l for l in logs
         if (now - datetime.strptime(l["date"], "%Y-%m-%d").date()).days <= 30
