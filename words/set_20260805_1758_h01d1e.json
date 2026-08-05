@@ -225,6 +225,15 @@
       "imgs_q": [],
       "imgs_a": [],
       "imgs_e": []
+    },
+    {
+      "id": "msfvlugj2wq1",
+      "question": "subject",
+      "answer": "話題、学科、主題、被験者",
+      "explanation": "",
+      "imgs_q": [],
+      "imgs_a": [],
+      "imgs_e": []
     }
   ],
   "subject": "その他",
