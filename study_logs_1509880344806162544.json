@@ -1,13 +1,5 @@
 [
   {
-    "date": "2026-07-05",
-    "subject": "化学1a",
-    "minutes": 60,
-    "memo": "",
-    "student_id": "32632",
-    "nickname": "ゆうらんせん"
-  },
-  {
     "date": "2026-07-06",
     "subject": "化学1a",
     "minutes": 40,
@@ -126,5 +118,13 @@
     "memo": "buturiyattemasita",
     "student_id": "32617",
     "nickname": "山田レットドラゴン太郎"
+  },
+  {
+    "date": "2026-08-05",
+    "subject": "物理1a",
+    "minutes": 28,
+    "memo": "",
+    "student_id": "32623",
+    "nickname": "たけのこども"
   }
 ]
