@@ -33,7 +33,9 @@
   {
     "id": "32619",
     "nickname": "アン",
-    "created_at": "2026-07-01"
+    "created_at": "2026-07-01",
+    "password_hash": "27c734b87212dda8aaa58c0af4baebaf11a65d9301d907717cb1eaf4543a8e1d",
+    "password_salt": "8029d5f2b59546a09402a97c82f4e167"
   },
   {
     "id": "32627",
