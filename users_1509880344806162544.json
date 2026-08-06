@@ -2,7 +2,9 @@
   {
     "id": "32618",
     "nickname": "Chiro",
-    "created_at": "2026-06-28"
+    "created_at": "2026-06-28",
+    "password_hash": "fde0997cca7e6c5949134abb153745dbf6785e9c1076b46cddf986aaffe0acd2",
+    "password_salt": "64b671ab8f0b270e5e015e7af4e0be23"
   },
   {
     "id": "32623",
