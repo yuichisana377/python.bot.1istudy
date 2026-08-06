@@ -2068,8 +2068,109 @@ def confirm_password_change():
     return jsonify({"ok": True})
 
 # ================================
-#  Flask API — 勉強ログ
+#  ★ パスワードの再設定（パスワードを忘れた場合／未ログイン）
+#  ─────────────────────────────
+#  上の request_password_change_code / confirm_password_change は
+#  「ログイン済み本人」が使う想定（session_tokenで本人確認）。
+#  こちらはログインする手段（＝パスワード）自体を忘れた人向けなので、
+#  session_token を要求できない。代わりに学籍番号(id)を渡してもらい、
+#  同じくDiscord DMの確認コードで本人確認する（/id連携が必須）。
+#  確認コードの保存先・有効期限・連打防止クールダウンは change 用と共有する
+#  （どちらの経路でも「そのstudent_id宛にDMを送った」という事実は同じであり、
+#    未使用のコードを両エンドポイントのどちらからでも消費できて問題ないため）。
 # ================================
+@app.route("/request_password_reset_code", methods=["POST"])
+def request_password_reset_code():
+    """
+    body: { guild_id, id }
+    未ログイン状態で、学籍番号だけを頼りに確認コードをDiscord DMで受け取る。
+    """
+    data       = request.json or {}
+    guild_id   = data.get("guild_id")
+    student_id = (data.get("id") or "").strip().upper()
+    if not guild_id or not student_id:
+        return jsonify({"ok": False, "error": "missing fields"})
+
+    guild_id = int(guild_id)
+    user = find_user(guild_id, student_id)
+    if not user:
+        return jsonify({"ok": False, "error": "user_not_found"})
+
+    key = _pw_code_key(guild_id, student_id)
+    now = time.time()
+    existing = PASSWORD_CHANGE_CODES.get(key)
+    if existing and (now - existing["requested_at"] < PASSWORD_CHANGE_CODE_COOLDOWN_SEC):
+        remain = int(PASSWORD_CHANGE_CODE_COOLDOWN_SEC - (now - existing["requested_at"])) + 1
+        return jsonify({"ok": False, "error": "too_soon", "retry_after_sec": remain})
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    PASSWORD_CHANGE_CODES[key] = {
+        "code": code,
+        "expires": now + PASSWORD_CHANGE_CODE_TTL_SEC,
+        "requested_at": now,
+    }
+
+    try:
+        send_discord_dm(
+            guild_id, student_id,
+            "パスワード再設定の確認コード",
+            f"確認コード: {code}\n（10分間有効です。心当たりが無ければこのメッセージは無視してください）",
+        )
+    except ValueError:
+        del PASSWORD_CHANGE_CODES[key]
+        return jsonify({"ok": False, "error": "not_linked"})
+    except Exception as e:
+        del PASSWORD_CHANGE_CODES[key]
+        return jsonify({"ok": False, "error": f"dm_failed: {e}"})
+
+    return jsonify({"ok": True})
+
+@app.route("/confirm_password_reset", methods=["POST"])
+def confirm_password_reset():
+    """
+    body: { guild_id, id, code, new_password }
+    確認コード＋新しいパスワードを受け取り、一致していればパスワードを更新する。
+    ★ session_token は使わない（そもそも持っていないから困っている）ので、
+      本人確認はこの確認コードだけが担う。
+    """
+    data         = request.json or {}
+    guild_id     = data.get("guild_id")
+    student_id   = (data.get("id") or "").strip().upper()
+    code         = (data.get("code") or "").strip()
+    new_password = data.get("new_password") or ""
+    if not guild_id or not student_id or not code:
+        return jsonify({"ok": False, "error": "missing fields"})
+    if len(new_password) < 4:
+        return jsonify({"ok": False, "error": "password must be at least 4 characters"})
+
+    guild_id = int(guild_id)
+
+    key   = _pw_code_key(guild_id, student_id)
+    entry = PASSWORD_CHANGE_CODES.get(key)
+    if not entry:
+        return jsonify({"ok": False, "error": "code_not_requested"})
+    if time.time() > entry["expires"]:
+        del PASSWORD_CHANGE_CODES[key]
+        return jsonify({"ok": False, "error": "code_expired"})
+    if not hmac.compare_digest(code, entry["code"]):
+        return jsonify({"ok": False, "error": "wrong_code"})
+
+    try:
+        users  = load_users(guild_id)
+        target = next((u for u in users if u.get("id") == student_id), None)
+        if not target:
+            return jsonify({"ok": False, "error": "user_not_found"})
+        pw_hash, pw_salt = hash_password(new_password)
+        target["password_hash"] = pw_hash
+        target["password_salt"] = pw_salt
+        save_users(guild_id, users)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+
+    del PASSWORD_CHANGE_CODES[key]  # ★ 使い切ったコードは即座に無効化（使い回し防止）
+    return jsonify({"ok": True})
+
+
 @app.route("/list_study_logs", methods=["GET"])
 def list_study_logs():
     guild_id = request.args.get("guild_id")
