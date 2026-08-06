@@ -26,7 +26,9 @@
   {
     "id": "32628",
     "nickname": "hara-Kirby",
-    "created_at": "2026-06-30"
+    "created_at": "2026-06-30",
+    "password_hash": "73e471ab48c28bb5d19c628e26f68d7bc2b2f3967897db6a3dcd9c4d533f9ba4",
+    "password_salt": "6ad18058b801c6fdf59defbe630ff2b1"
   },
   {
     "id": "32619",
