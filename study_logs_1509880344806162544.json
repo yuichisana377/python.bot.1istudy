@@ -216,5 +216,14 @@
     "memo": "課題終わらせた",
     "student_id": "32623",
     "nickname": "たけのこども"
+  },
+  {
+    "date": "2026-08-06",
+    "time": "2026-08-06 12:02:50",
+    "subject": "物理1a",
+    "minutes": 1,
+    "memo": "",
+    "student_id": "32618",
+    "nickname": "Chiro"
   }
 ]
