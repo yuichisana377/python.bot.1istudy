@@ -14,6 +14,9 @@ import requests
 import base64
 import asyncio
 import time
+import hashlib
+import hmac
+import secrets
 
 # ================================
 #  設定
@@ -397,6 +400,92 @@ def load_users(guild_id: int):
 def save_users(guild_id: int, users: list):
     _, sha = github_get(f"users_{guild_id}.json")
     github_put(f"users_{guild_id}.json", users, sha)
+
+def find_user(guild_id: int, student_id: str):
+    users = load_users(guild_id)
+    return next((u for u in users if u.get("id") == student_id), None)
+
+# ================================
+#  ★ パスワード関連ユーティリティ
+#  ─────────────────────────────
+#  パスワードは絶対に平文のまま保存しない。
+#  users_{guild_id}.json はGitHubリポジトリ経由で保存されており、
+#  そのリポジトリは他の人にも共有されているため、平文で置くと
+#  リポジトリを見られる人全員にパスワードが漏れてしまう。
+#  そのため PBKDF2-HMAC-SHA256（ソルト付き・十分な反復回数）で
+#  ハッシュ化した値だけを保存し、元のパスワードはサーバーのメモリ上
+#  ですら検証の一瞬しか扱わない。
+# ================================
+PBKDF2_ITERATIONS = 210_000
+
+def hash_password(password: str, salt_hex: str = None):
+    """(hash_hex, salt_hex) を返す。salt_hex を渡さなければ新規のソルトを生成する。"""
+    if salt_hex is None:
+        salt_hex = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), PBKDF2_ITERATIONS
+    )
+    return dk.hex(), salt_hex
+
+def verify_password(password: str, salt_hex: str, expected_hash_hex: str) -> bool:
+    if not salt_hex or not expected_hash_hex:
+        return False
+    actual_hash_hex, _ = hash_password(password, salt_hex)
+    # ★ タイミング攻撃対策のため、単純な == ではなく定数時間比較を使う
+    return hmac.compare_digest(actual_hash_hex, expected_hash_hex)
+
+# ================================
+#  ★ ログインセッション（署名付きトークン方式・状態を持たない）
+#  ─────────────────────────────
+#  最初は「サーバーのメモリ上でトークンを管理する」方式で実装していたが、
+#  Renderの無料枠は一定時間アクセスが無いとプロセスごと再起動され、
+#  メモリの中身（＝発行済みトークン一覧）が消えてしまう。
+#  そうなると「少し間を空けてアクセスしただけで全員ログアウトされる」
+#  という実用上まずい挙動になるため、トークン自体に
+#  「guild_id・student_id・発行時刻」を埋め込み、HMAC署名を付けて
+#  改ざんを検知する方式に変更した（JWTの簡易版のようなもの）。
+#  ・SESSION_SECRET はプロセス再起動をまたいでも変わらないよう、
+#    環境変数として設定することを強く推奨する（TOKENやGITHUB_TOKENと同様）。
+#    未設定の場合はプロセスごとにランダム値を使うため、その場合は結局
+#    再起動のたびに全員ログアウトされる（が、パスワード自体は漏れない）。
+#  ・トークンは有効期限が来るまで有効であり続ける。パスワード変更時に
+#    「以前発行したトークンを強制的に無効化する」仕組みは持たない
+#    （このアプリの規模ではオーバーエンジニアリングと判断）。
+#    より厳密に失効させたい場合は、失効リストをGitHub等に保存する方式に
+#    拡張できる。
+# ================================
+SESSION_SECRET = os.getenv("SESSION_SECRET")
+if not SESSION_SECRET:
+    SESSION_SECRET = secrets.token_hex(32)
+    print("[WARN] 環境変数 SESSION_SECRET が未設定です。プロセス再起動のたびに"
+          "全ユーザーのログインセッションが無効になります。Renderの環境変数に"
+          "SESSION_SECRET（ランダムな文字列）を設定することを推奨します。")
+
+SESSION_TTL_SEC = 60 * 60 * 24 * 30  # 30日間ログイン状態を維持
+
+def create_session(guild_id: int, student_id: str) -> str:
+    payload = json.dumps({"g": guild_id, "s": student_id, "t": int(time.time())}, separators=(",", ":"))
+    payload_b64 = base64.urlsafe_b64encode(payload.encode()).decode()
+    sig = hmac.new(SESSION_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{sig}"
+
+def resolve_session(token, guild_id: int):
+    """有効な署名付きトークンなら student_id を返す。無効・期限切れ・改ざんなら None。"""
+    if not token or "." not in token:
+        return None
+    try:
+        payload_b64, sig = token.rsplit(".", 1)
+        expected_sig = hmac.new(SESSION_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()).decode())
+        if payload.get("g") != guild_id:
+            return None
+        if time.time() - payload.get("t", 0) > SESSION_TTL_SEC:
+            return None
+        return payload.get("s")
+    except Exception:
+        return None
 
 # ================================
 #  Discordアカウント連携（生徒ID ⇔ Discordユーザー）
@@ -1190,6 +1279,18 @@ def add_study_log():
     data = request.json or {}
     guild_id = int(data.get("guild_id"))
 
+    # --- ★ 本人確認：クライアントが自己申告する student_id は一切信用せず、
+    #     /login で発行済みのセッショントークンから本人の student_id を
+    #     特定する（なりすまし防止）。 ---
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    # --- ★ nickname もクライアントの自己申告ではなく、サーバー側のユーザー
+    #     データから引き直す（表示名の詐称防止） ---
+    user = find_user(guild_id, student_id)
+    nickname = user["nickname"] if user else data.get("nickname")
+
     # --- ★ minutes の検証（不正な値・異常に大きい値を拒否） ---
     minutes = data.get("minutes")
     if not isinstance(minutes, int) or isinstance(minutes, bool):
@@ -1197,12 +1298,10 @@ def add_study_log():
     if minutes < 1 or minutes > MAX_LOG_MINUTES:
         return jsonify({"ok": False, "error": f"minutes must be between 1 and {MAX_LOG_MINUTES}"})
 
-    student_id = data.get("student_id")
-    subject    = data.get("subject")
-    memo       = data.get("memo")
-    nickname   = data.get("nickname")
-    method     = data.get("method")  # ★ "timer" または "manual"（フロント側から送信）
-    if not student_id or not subject:
+    subject = data.get("subject")
+    memo    = data.get("memo")
+    method  = data.get("method")  # ★ "timer" または "manual"（フロント側から送信）
+    if not subject:
         return jsonify({"ok": False, "error": "missing fields"})
 
     # --- ★ 制御文字・不可視文字・壊れた符号位置を弾く ---
@@ -1629,7 +1728,13 @@ def get_users():
         return jsonify({"ok": False, "error": "missing guild_id"})
     try:
         users = load_users(int(guild_id))
-        return jsonify({"ok": True, "users": users})
+        # ★ password_hash / password_salt は絶対に外部に出さない。
+        #   このAPIは認証なしで誰でも呼べるので、公開してよい項目だけに絞る。
+        public_users = [
+            {"id": u.get("id"), "nickname": u.get("nickname"), "created_at": u.get("created_at")}
+            for u in users
+        ]
+        return jsonify({"ok": True, "users": public_users})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -1639,20 +1744,136 @@ def add_user():
     guild_id = data.get("guild_id")
     user_id  = data.get("id", "").strip().upper()
     nickname = data.get("nickname", "").strip()
+    password = data.get("password") or ""
     created  = data.get("created_at") or datetime.now(JST).strftime("%Y-%m-%d")
     if not all([guild_id, user_id, nickname]):
         return jsonify({"ok": False, "error": "missing fields"})
     if len(nickname) > 16:
         return jsonify({"ok": False, "error": "nickname too long"})
+    # ★ ログインにパスワードを必須化。新規登録時に必ず設定させる。
+    if len(password) < 4:
+        return jsonify({"ok": False, "error": "password must be at least 4 characters"})
     err = reject_if_bug_chars({"ニックネーム": nickname})
     if err:
         return err
     try:
-        users = load_users(int(guild_id))
+        guild_id = int(guild_id)
+        users = load_users(guild_id)
         if any(u["id"] == user_id for u in users):
             return jsonify({"ok": False, "error": "already_exists"})
-        users.append({"id": user_id, "nickname": nickname, "created_at": created})
-        save_users(int(guild_id), users)
+        # ★ パスワードは平文で保存せず、ソルト付きハッシュのみ保存する
+        #   （users_{guild_id}.json はGitHub上のリポジトリに保存され、
+        #     そのリポジトリは他の人にも共有されているため）
+        pw_hash, pw_salt = hash_password(password)
+        users.append({
+            "id":            user_id,
+            "nickname":      nickname,
+            "created_at":    created,
+            "password_hash": pw_hash,
+            "password_salt": pw_salt,
+        })
+        save_users(guild_id, users)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/login", methods=["POST"])
+def login():
+    """
+    body: { guild_id, id, password }
+    成功時: { ok: true, session_token, student: {id, nickname} }
+    ★ ここで発行する session_token が「本人確認の唯一の証明」になる。
+      以後、勉強ログ追加や課題達成などポイントに関わる操作は、この
+      トークンから student_id を特定する（クライアントが送ってくる
+      student_id は信用しない）。
+    """
+    data       = request.json or {}
+    guild_id   = data.get("guild_id")
+    student_id = (data.get("id") or "").strip().upper()
+    password   = data.get("password") or ""
+    if not guild_id or not student_id or not password:
+        return jsonify({"ok": False, "error": "missing fields"})
+    try:
+        guild_id = int(guild_id)
+        user = find_user(guild_id, student_id)
+        if not user:
+            return jsonify({"ok": False, "error": "user_not_found"})
+        if not user.get("password_hash"):
+            # ★ このパスワード必須化より前に作られた既存アカウント。
+            #   まだパスワードが設定されていないので、初回設定フローに誘導する。
+            return jsonify({"ok": False, "error": "password_not_set"})
+        if not verify_password(password, user.get("password_salt"), user.get("password_hash")):
+            return jsonify({"ok": False, "error": "wrong_password"})
+        token = create_session(guild_id, student_id)
+        return jsonify({
+            "ok": True,
+            "session_token": token,
+            "student": {"id": user["id"], "nickname": user["nickname"]},
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/set_password", methods=["POST"])
+def set_password():
+    """
+    既存ユーザー（パスワード必須化より前に登録され、まだパスワードが
+    設定されていない生徒）が、初めてパスワードを設定するための専用エンドポイント。
+    ★ 既にパスワードが設定済みのアカウントには使えない
+      （他人のIDを知っているだけで勝手にパスワードを上書き＝乗っ取り
+        されるのを防ぐため。パスワードの変更は /change_password を使う）。
+    """
+    data       = request.json or {}
+    guild_id   = data.get("guild_id")
+    student_id = (data.get("id") or "").strip().upper()
+    password   = data.get("password") or ""
+    if not guild_id or not student_id:
+        return jsonify({"ok": False, "error": "missing fields"})
+    if len(password) < 4:
+        return jsonify({"ok": False, "error": "password must be at least 4 characters"})
+    try:
+        guild_id = int(guild_id)
+        users = load_users(guild_id)
+        target = next((u for u in users if u.get("id") == student_id), None)
+        if not target:
+            return jsonify({"ok": False, "error": "user_not_found"})
+        if target.get("password_hash"):
+            return jsonify({"ok": False, "error": "already_set"})
+        pw_hash, pw_salt = hash_password(password)
+        target["password_hash"] = pw_hash
+        target["password_salt"] = pw_salt
+        save_users(guild_id, users)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/change_password", methods=["POST"])
+def change_password():
+    """
+    ログイン済み（session_tokenを持っている）本人が、現在のパスワードを
+    確認した上で新しいパスワードに変更する。
+    """
+    data         = request.json or {}
+    guild_id     = data.get("guild_id")
+    token        = data.get("session_token")
+    old_password = data.get("old_password") or ""
+    new_password = data.get("new_password") or ""
+    if not guild_id or len(new_password) < 4:
+        return jsonify({"ok": False, "error": "invalid_input"})
+    try:
+        guild_id = int(guild_id)
+        student_id = resolve_session(token, guild_id)
+        if not student_id:
+            return jsonify({"ok": False, "error": "not_logged_in"})
+        users = load_users(guild_id)
+        target = next((u for u in users if u.get("id") == student_id), None)
+        if not target:
+            return jsonify({"ok": False, "error": "user_not_found"})
+        if not verify_password(old_password, target.get("password_salt"), target.get("password_hash")):
+            return jsonify({"ok": False, "error": "wrong_password"})
+        pw_hash, pw_salt = hash_password(new_password)
+        target["password_hash"] = pw_hash
+        target["password_salt"] = pw_salt
+        save_users(guild_id, users)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -1666,17 +1887,23 @@ def notify_dm():
       Discordアプリ／PC版の通知として届く
       （Discord側の通知設定・DM許可がオフの場合は届かない）。
     """
-    data       = request.json or {}
-    guild_id   = data.get("guild_id")
-    student_id = data.get("student_id")
-    title      = data.get("title") or "StudyLog"
-    message    = data.get("message")
+    data    = request.json or {}
+    guild_id = data.get("guild_id")
+    title   = data.get("title") or "StudyLog"
+    message = data.get("message")
 
-    if not all([guild_id, student_id, message]):
+    if not all([guild_id, message]):
         return jsonify({"ok": False, "error": "missing fields"})
 
+    # --- ★ 本人確認：他人の student_id を指定して勝手にDMを送りつけられない
+    #     ようにする（session_token から本人の student_id を特定する） ---
+    guild_id   = int(guild_id)
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
     try:
-        links = load_discord_links(int(guild_id))
+        links = load_discord_links(guild_id)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -1754,18 +1981,21 @@ def get_completed_tasks():
 
 @app.route("/complete_task", methods=["POST"])
 def complete_task():
-    data       = request.json or {}
-    guild_id   = int(data.get("guild_id"))
-    student_id = data.get("student_id")
-    task_id    = data.get("task_id")
-    nickname   = data.get("nickname")  # ★ ニックネームを受け取る
+    data     = request.json or {}
+    guild_id = int(data.get("guild_id"))
 
-    if not student_id or not task_id:
+    # --- ★ 本人確認：session_token から student_id を特定する（なりすまし防止） ---
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    task_id = data.get("task_id")
+    if not task_id:
         return jsonify({"ok": False, "error": "missing fields"})
 
-    err = reject_if_bug_chars({"ニックネーム": nickname})
-    if err:
-        return err
+    # ★ ニックネームもクライアントの自己申告ではなく、サーバー側のユーザーデータから引く
+    user     = find_user(guild_id, student_id)
+    nickname = user["nickname"] if user else None
 
     # --- ★ points はクライアントから受け取らず、サーバー側の予定データから引き直す ---
     #     （クライアントが任意の points を送っても無視される）
@@ -1815,12 +2045,16 @@ def uncomplete_task():
     そのタスクに付与されていたポイント分を累計ポイントから減算する。
     （ポイントが0未満にならないようガードする）
     """
-    data       = request.json
-    guild_id   = int(data.get("guild_id"))
-    student_id = data.get("student_id")
-    task_id    = data.get("task_id")
+    data     = request.json or {}
+    guild_id = int(data.get("guild_id"))
 
-    if not student_id or not task_id:
+    # --- ★ 本人確認：session_token から student_id を特定する（なりすまし防止） ---
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    task_id = data.get("task_id")
+    if not task_id:
         return jsonify({"ok": False, "error": "missing fields"})
 
     done = load_completed_tasks(guild_id)
