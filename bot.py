@@ -1878,10 +1878,31 @@ def change_password():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
+def send_discord_dm(guild_id: int, student_id: str, title: str, message: str):
+    """
+    指定した生徒（Discord連携済み）に、botからDMを送る共通処理。
+    ・連携していない場合は ValueError("not_linked") を送出する。
+    ・送信自体に失敗した場合はその例外をそのまま送出する。
+    """
+    links = load_discord_links(guild_id)
+    discord_user_id = links.get(str(student_id).strip().upper())
+    if not discord_user_id:
+        raise ValueError("not_linked")
+
+    async def _send():
+        user = bot.get_user(int(discord_user_id))
+        if user is None:
+            user = await bot.fetch_user(int(discord_user_id))
+        await user.send(f"**{title}**\n{message}")
+
+    future = asyncio.run_coroutine_threadsafe(_send(), bot.loop)
+    future.result(timeout=10)
+
+
 @app.route("/notify_dm", methods=["POST"])
 def notify_dm():
     """
-    body: { guild_id, student_id, title(省略可), message }
+    body: { guild_id, title(省略可), message }
     ★ 生徒がDiscord上で /id連携 を済ませていれば、botから本人にDMを送る。
       ブラウザのタブを閉じていても、他のサイトを見ていても、
       Discordアプリ／PC版の通知として届く
@@ -1903,28 +1924,148 @@ def notify_dm():
         return jsonify({"ok": False, "error": "not_logged_in"})
 
     try:
-        links = load_discord_links(guild_id)
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
-
-    discord_user_id = links.get(str(student_id).strip().upper())
-    if not discord_user_id:
+        send_discord_dm(guild_id, student_id, title, message)
+        return jsonify({"ok": True})
+    except ValueError:
         # まだ /id連携 していない生徒。呼び出し側（フロント）で
         # ブラウザ通知にフォールバックできるよう、専用のエラーコードを返す
         return jsonify({"ok": False, "error": "not_linked"})
-
-    async def _send_dm():
-        user = bot.get_user(int(discord_user_id))
-        if user is None:
-            user = await bot.fetch_user(int(discord_user_id))
-        await user.send(f"**{title}**\n{message}")
-
-    try:
-        future = asyncio.run_coroutine_threadsafe(_send_dm(), bot.loop)
-        future.result(timeout=10)
-        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": f"dm_failed: {e}"})
+
+
+# ================================
+#  ★ アカウント設定（ニックネーム変更・パスワード変更）
+#  ─────────────────────────────
+#  ・ニックネーム変更はログイン済み（session_token）であれば即座に可能。
+#  ・パスワード変更は、それより一段重要な操作なので、
+#    「今この端末を触っている人が、本当にそのアカウントの持ち主の
+#      Discordも操作できるか」を追加で確認する。
+#    6桁の確認コードをDiscord DMで送り、それを入力させてから
+#    初めて変更を反映する（Discord連携＝/id連携 が済んでいる生徒のみ使える）。
+#  ・コードは短時間（10分）だけ有効なメモリ上の値。プロセス再起動で
+#    消えても「もう一度コードを送ってもらう」だけで済むため、
+#    ログインセッションと違って永続化の必要はないと判断した。
+# ================================
+PASSWORD_CHANGE_CODES = {}      # f"{guild_id}:{student_id}" -> {"code","expires","requested_at"}
+PASSWORD_CHANGE_CODE_TTL_SEC = 10 * 60   # コードの有効期限：10分
+PASSWORD_CHANGE_CODE_COOLDOWN_SEC = 60   # 連続でコードを要求できないようにする（DM連打防止）
+
+def _pw_code_key(guild_id: int, student_id: str) -> str:
+    return f"{guild_id}:{student_id}"
+
+@app.route("/change_nickname", methods=["POST"])
+def change_nickname():
+    data     = request.json or {}
+    guild_id = data.get("guild_id")
+    nickname = (data.get("nickname") or "").strip()
+    if not guild_id or not nickname:
+        return jsonify({"ok": False, "error": "missing fields"})
+    if len(nickname) > 16:
+        return jsonify({"ok": False, "error": "nickname too long"})
+    err = reject_if_bug_chars({"ニックネーム": nickname})
+    if err:
+        return err
+
+    guild_id   = int(guild_id)
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    try:
+        users  = load_users(guild_id)
+        target = next((u for u in users if u.get("id") == student_id), None)
+        if not target:
+            return jsonify({"ok": False, "error": "user_not_found"})
+        target["nickname"] = nickname
+        save_users(guild_id, users)
+        return jsonify({"ok": True, "nickname": nickname})
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+
+@app.route("/request_password_change_code", methods=["POST"])
+def request_password_change_code():
+    """ログイン済み本人が、パスワード変更用の確認コードをDiscord DMで受け取る。"""
+    data     = request.json or {}
+    guild_id = data.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing fields"})
+
+    guild_id   = int(guild_id)
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    key = _pw_code_key(guild_id, student_id)
+    now = time.time()
+    existing = PASSWORD_CHANGE_CODES.get(key)
+    if existing and (now - existing["requested_at"] < PASSWORD_CHANGE_CODE_COOLDOWN_SEC):
+        remain = int(PASSWORD_CHANGE_CODE_COOLDOWN_SEC - (now - existing["requested_at"])) + 1
+        return jsonify({"ok": False, "error": "too_soon", "retry_after_sec": remain})
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    PASSWORD_CHANGE_CODES[key] = {
+        "code": code,
+        "expires": now + PASSWORD_CHANGE_CODE_TTL_SEC,
+        "requested_at": now,
+    }
+
+    try:
+        send_discord_dm(
+            guild_id, student_id,
+            "パスワード変更の確認コード",
+            f"確認コード: {code}\n（10分間有効です。心当たりが無ければこのメッセージは無視してください）",
+        )
+    except ValueError:
+        del PASSWORD_CHANGE_CODES[key]
+        return jsonify({"ok": False, "error": "not_linked"})
+    except Exception as e:
+        del PASSWORD_CHANGE_CODES[key]
+        return jsonify({"ok": False, "error": f"dm_failed: {e}"})
+
+    return jsonify({"ok": True})
+
+@app.route("/confirm_password_change", methods=["POST"])
+def confirm_password_change():
+    """確認コード＋新しいパスワードを受け取り、一致していればパスワードを更新する。"""
+    data         = request.json or {}
+    guild_id     = data.get("guild_id")
+    code         = (data.get("code") or "").strip()
+    new_password = data.get("new_password") or ""
+    if not guild_id or not code:
+        return jsonify({"ok": False, "error": "missing fields"})
+    if len(new_password) < 4:
+        return jsonify({"ok": False, "error": "password must be at least 4 characters"})
+
+    guild_id   = int(guild_id)
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    key   = _pw_code_key(guild_id, student_id)
+    entry = PASSWORD_CHANGE_CODES.get(key)
+    if not entry:
+        return jsonify({"ok": False, "error": "code_not_requested"})
+    if time.time() > entry["expires"]:
+        del PASSWORD_CHANGE_CODES[key]
+        return jsonify({"ok": False, "error": "code_expired"})
+    if not hmac.compare_digest(code, entry["code"]):
+        return jsonify({"ok": False, "error": "wrong_code"})
+
+    try:
+        users  = load_users(guild_id)
+        target = next((u for u in users if u.get("id") == student_id), None)
+        if not target:
+            return jsonify({"ok": False, "error": "user_not_found"})
+        pw_hash, pw_salt = hash_password(new_password)
+        target["password_hash"] = pw_hash
+        target["password_salt"] = pw_salt
+        save_users(guild_id, users)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+
+    del PASSWORD_CHANGE_CODES[key]  # ★ 使い切ったコードは即座に無効化（使い回し防止）
+    return jsonify({"ok": True})
 
 # ================================
 #  Flask API — 勉強ログ
