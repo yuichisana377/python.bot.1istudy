@@ -9,7 +9,9 @@
   {
     "id": "32623",
     "nickname": "たけのこども",
-    "created_at": "2026-06-28"
+    "created_at": "2026-06-28",
+    "password_hash": "e554964c881b408231d34d429c39de65ba0a82a3c5119b4f0a260473bbec73c3",
+    "password_salt": "f7daabdc03f294e2ea8f1b050866c7c5"
   },
   {
     "id": "32617",
