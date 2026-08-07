@@ -1,1 +1,8 @@
-{}
+{
+  "32618": {
+    "state": "running",
+    "run_start_epoch": 1786105600263,
+    "accumulated_sec": 0,
+    "next_checkpoint_sec": 10800
+  }
+}
