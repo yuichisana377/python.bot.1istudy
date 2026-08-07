@@ -1,7 +1,7 @@
 {
   "32618": {
-    "state": "paused",
-    "run_start_epoch": null,
+    "state": "running",
+    "run_start_epoch": 1786091730107,
     "accumulated_sec": 6538.344,
     "stopped_epoch": null
   }
