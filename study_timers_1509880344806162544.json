@@ -1,8 +1,8 @@
 {
   "32618": {
-    "state": "running",
-    "run_start_epoch": 1786071440371,
-    "accumulated_sec": 0,
-    "stopped_epoch": null
+    "state": "awaiting_confirm",
+    "run_start_epoch": null,
+    "accumulated_sec": 10800,
+    "stopped_epoch": 1786082291518
   }
 }
