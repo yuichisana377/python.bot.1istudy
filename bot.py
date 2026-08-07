@@ -352,19 +352,17 @@ async def async_save_study_logs(guild_id: int, logs: list):
 #
 #  study_timers_{guild_id}.json の中身: { student_id: エントリ, ... }
 #  エントリ:
-#    state             : "running" | "paused" | "awaiting_confirm"
+#    state             : "running" | "paused"
 #    run_start_epoch   : 現在の計測区間が始まった時刻（ms epoch、running時のみ値あり）
 #    accumulated_sec   : 直近の計測区間を含まない、これまでの累計秒
-#    stopped_epoch     : 3時間経過で自動停止した時刻（ms epoch、awaiting_confirm時のみ）
+#    next_checkpoint_sec : 次に「3時間経過」の自動休憩を入れる累計秒のライン
+#    pause_reason      : "manual"（自分で休憩） / "checkpoint"（3時間経過での自動休憩）
 # ================================
-TIMER_LIMIT_SEC = 10800  # 3時間で自動停止
-TIMER_GRACE_SEC = 1800   # 自動停止後、30分以内に保存されなければ破棄
-MSG_TIMER_STOPPED = (
-    "3時間が経過したため、タイマーを自動的に停止しました。"
-    "アプリを開いて内容を確認し、保存してください。"
-    "（30分以内に保存しないと自動的に破棄されます）"
+TIMER_CHECKPOINT_SEC = 10800  # 3時間ごとに自動的に休憩へ切り替える
+MSG_TIMER_AUTO_PAUSED = (
+    "3時間が経過したため、自動的に休憩（一時停止）にしました。"
+    "アプリの「再開」から続きを計測できます。"
 )
-MSG_TIMER_DISCARDED = "保存されないまま30分以上経過したため、計測を破棄しました。"
 
 def load_study_timers(guild_id: int) -> dict:
     data, _ = github_get(f"study_timers_{guild_id}.json")
@@ -387,9 +385,9 @@ async def async_save_study_timers(guild_id: int, timers: dict, sha=None):
 def _finalize_study_timer(entry, now_ms):
     """
     エントリを現在時刻(now_ms)で評価し、必要なら状態遷移させる（副作用なしの純粋関数）。
-    戻り値: (新しいエントリ or None, 通知種別 "stopped"/"discarded"/None)
-    ・running で3時間以上経過 → awaiting_confirm に遷移し "stopped" を通知
-    ・awaiting_confirm で30分以上放置 → 削除(None)し "discarded" を通知
+    戻り値: (新しいエントリ or None, 通知種別 "auto_paused"/None)
+    ・running で累計3時間（の倍数）に達するたびに → paused へ遷移し "auto_paused" を通知
+      （保存を強制したり破棄したりはしない。休憩と同様、いつでも「再開」で続きから計測できる）
     ・それ以外（paused 等）はそのまま
     """
     if not entry:
@@ -404,21 +402,16 @@ def _finalize_study_timer(entry, now_ms):
             elapsed = accumulated + (now_ms - run_start) / 1000.0
         else:
             elapsed = accumulated
-        if elapsed >= TIMER_LIMIT_SEC:
+        checkpoint = entry.get("next_checkpoint_sec", TIMER_CHECKPOINT_SEC) or TIMER_CHECKPOINT_SEC
+        if elapsed >= checkpoint:
             new_entry = dict(entry)
-            new_entry["accumulated_sec"] = TIMER_LIMIT_SEC
+            new_entry["accumulated_sec"] = int(round(elapsed))
             new_entry["run_start_epoch"] = None
-            new_entry["state"] = "awaiting_confirm"
-            new_entry["stopped_epoch"] = now_ms
-            return new_entry, "stopped"
-        return entry, None
-
-    if state == "awaiting_confirm":
-        stopped_epoch = entry.get("stopped_epoch")
-        if stopped_epoch is None:
-            stopped_epoch = now_ms
-        if now_ms - stopped_epoch >= TIMER_GRACE_SEC * 1000:
-            return None, "discarded"
+            new_entry["state"] = "paused"
+            new_entry["pause_reason"] = "checkpoint"
+            # ★ 再開後さらに3時間動かしたら、また同じように自動休憩を挟む
+            new_entry["next_checkpoint_sec"] = checkpoint + TIMER_CHECKPOINT_SEC
+            return new_entry, "auto_paused"
         return entry, None
 
     # paused など：変化なし
@@ -433,7 +426,7 @@ def _try_notify_timer(guild_id, student_id, message):
 
 def _sync_timer_entry(guild_id, student_id):
     """
-    現在のタイマーエントリを取得し、3時間経過／30分放置による自動遷移が
+    現在のタイマーエントリを取得し、3時間経過による自動休憩への遷移が
     必要ならその場で適用・保存・通知してから返す。
     どのエンドポイントも、まずこれを呼んでから自分の処理を行う。
     戻り値: (timers辞書（最新）, 現在のエントリ or None)
@@ -450,10 +443,8 @@ def _sync_timer_entry(guild_id, student_id):
             timers[student_id] = new_entry
         try:
             save_study_timers(guild_id, timers)
-            if notify_kind == "stopped":
-                _try_notify_timer(guild_id, student_id, MSG_TIMER_STOPPED)
-            elif notify_kind == "discarded":
-                _try_notify_timer(guild_id, student_id, MSG_TIMER_DISCARDED)
+            if notify_kind == "auto_paused":
+                _try_notify_timer(guild_id, student_id, MSG_TIMER_AUTO_PAUSED)
         except GitHubWriteError as e:
             print(f"[WARN] study_timers 保存に失敗しました: {e}")
             # 保存に失敗した場合は通知せず、次回アクセス時に再評価される
@@ -477,6 +468,7 @@ def _timer_entry_json(entry, now_ms=None):
         "elapsed_sec": int(elapsed),
         "run_start_epoch": run_start,
         "accumulated_sec": int(round(accumulated)),  # ★ 端数（ミリ秒由来）が残らないよう常に整数化
+        "pause_reason": entry.get("pause_reason") if state == "paused" else None,
     }
 
 def _timer_auth_from_json():
@@ -493,7 +485,7 @@ def _timer_auth_from_json():
 
 @app.route("/timer_state", methods=["GET"])
 def timer_state():
-    """現在のタイマー状態を返す（端末を問わず常に最新・かつ3時間/30分判定を反映済み）。"""
+    """現在のタイマー状態を返す（端末を問わず常に最新・かつ3時間ごとの自動休憩判定を反映済み）。"""
     guild_id = request.args.get("guild_id")
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
@@ -513,7 +505,7 @@ def timer_start():
     タイマー開始。
     ・誰も動かしていなければ新規に開始する
     ・既に他端末で計測中なら、その記録にそのまま合流する（新規に作らない）
-    ・一時停止中／保存確認待ちの場合は開始せず、その状態を返す
+    ・一時停止中の場合は開始せず、その状態を返す
       （フロント側はそれに合わせて画面を出し分ける）
     """
     guild_id, student_id, err = _timer_auth_from_json()
@@ -528,7 +520,7 @@ def timer_start():
             "state": "running",
             "run_start_epoch": now_ms,
             "accumulated_sec": 0,
-            "stopped_epoch": None,
+            "next_checkpoint_sec": TIMER_CHECKPOINT_SEC,
         }
         timers[student_id] = new_entry
         try:
@@ -544,14 +536,14 @@ def timer_start():
         resp.update(_timer_entry_json(entry, now_ms))
         return jsonify(resp)
 
-    # paused / awaiting_confirm：新規開始はせず、現在の状態を伝える
+    # paused：新規開始はせず、現在の状態を伝える
     resp = {"ok": False, "error": "already_" + str(entry.get("state"))}
     resp.update(_timer_entry_json(entry, now_ms))
     return jsonify(resp)
 
 @app.route("/timer_pause", methods=["POST"])
 def timer_pause():
-    """計測中 → 一時停止。他端末にも即座に反映される。"""
+    """計測中 → 一時停止（自分の意思での休憩）。他端末にも即座に反映される。"""
     guild_id, student_id, err = _timer_auth_from_json()
     if err:
         return err
@@ -571,6 +563,7 @@ def timer_pause():
     new_entry["accumulated_sec"] = accumulated
     new_entry["run_start_epoch"] = None
     new_entry["state"] = "paused"
+    new_entry["pause_reason"] = "manual"
     timers[student_id] = new_entry
     try:
         save_study_timers(guild_id, timers)
@@ -583,7 +576,7 @@ def timer_pause():
 
 @app.route("/timer_resume", methods=["POST"])
 def timer_resume():
-    """一時停止 → 再開。他端末にも即座に反映される。"""
+    """一時停止 → 再開（3時間経過による自動休憩からの再開も含む）。他端末にも即座に反映される。"""
     guild_id, student_id, err = _timer_auth_from_json()
     if err:
         return err
@@ -598,6 +591,10 @@ def timer_resume():
     new_entry = dict(entry)
     new_entry["run_start_epoch"] = now_ms
     new_entry["state"] = "running"
+    new_entry.pop("pause_reason", None)
+    if "next_checkpoint_sec" not in new_entry:
+        # ★ 古い形式のデータ互換用（次のチェックポイントが無ければ現在値+3時間に設定）
+        new_entry["next_checkpoint_sec"] = (new_entry.get("accumulated_sec", 0) or 0) + TIMER_CHECKPOINT_SEC
     timers[student_id] = new_entry
     try:
         save_study_timers(guild_id, timers)
@@ -612,10 +609,9 @@ def timer_resume():
 def timer_stop():
     """
     サーバー側のタイマー状態を消す。
-    ・ユーザーが手動で「停止」した直後（この後はクライアント側の確認画面で
-      保存／破棄を決めるので、サーバー側で計測中として残す必要はない）
-    ・自動停止（awaiting_confirm）を保存・破棄し終えた後の後片付け
-    のどちらでも使う、現在の状態を問わない汎用クリア用エンドポイント。
+    ユーザーが手動で「停止」した直後（この後はクライアント側の確認画面で
+    保存／破棄を決めるので、サーバー側で計測中／休憩中として残す必要はない）
+    に使う、現在の状態を問わない汎用クリア用エンドポイント。
     """
     guild_id, student_id, err = _timer_auth_from_json()
     if err:
@@ -1491,11 +1487,11 @@ async def send_weekly_plans():
             await channel.send(msg + "\n@everyone")
 
 # ================================
-#  ★ 勉強タイマーの定期チェック（3時間経過／30分放置の検知）
+#  ★ 勉強タイマーの定期チェック（3時間経過ごとの自動休憩の検知）
 #  ─────────────────────────────
 #  クライアントのタブが開いているかどうかに関係なく、サーバー側で
-#  一定間隔ごとに全ギルドの study_timers を評価し、3時間経過による
-#  自動停止・30分放置による自動破棄を確実に検知してDM通知する。
+#  一定間隔ごとに全ギルドの study_timers を評価し、累計3時間ごとの
+#  自動休憩（一時停止）への切り替えを確実に検知してDM通知する。
 #  （各APIエンドポイント側でもアクセス時に同じ判定を行っているため、
 #    この定期ジョブは「誰もアプリを開かなかった場合」の保険として働く。
 #    2重で判定しても _finalize_study_timer は冪等なので問題ない）
@@ -1540,8 +1536,7 @@ async def check_study_timers():
             continue
 
         for student_id, kind in notifications:
-            msg = MSG_TIMER_STOPPED if kind == "stopped" else MSG_TIMER_DISCARDED
-            _try_notify_timer(guild_id, student_id, msg)
+            _try_notify_timer(guild_id, student_id, MSG_TIMER_AUTO_PAUSED)
 
 # ================================
 #  Flask API — 予定管理
@@ -1600,7 +1595,7 @@ def add_schedule():
             ).result(timeout=10)
     return jsonify({"ok": ok, "message": msg})
 
-MAX_LOG_MINUTES = 180  # ★ 1回のログで許容する最大分数（タイマーの3時間上限と合わせる）
+BASE_MAX_LOG_MINUTES = 180  # ★ タイマーを使っていない場合（手入力等）の上限。タイマー使用時は自動休憩を挟むたびに+3時間される
 MANUAL_COOLDOWN_SEC = 60  # ★ 手入力：同じ教科の連続記録は前回から1分あける（不正防止）
 
 def _parse_log_time(log):
@@ -1640,11 +1635,22 @@ def add_study_log():
     nickname = user["nickname"] if user else data.get("nickname")
 
     # --- ★ minutes の検証（不正な値・異常に大きい値を拒否） ---
+    #   上限は固定180分ではなく、実際にタイマーで自動休憩（3時間ごとの
+    #   チェックポイント）を何回挟んだかに応じて「3時間 → 6時間 → 9時間…」
+    #   と自動的に引き上がる（study_timersのnext_checkpoint_secを参照）。
+    #   タイマーを使っていない（手入力等）場合は基本の3時間が上限。
     minutes = data.get("minutes")
     if not isinstance(minutes, int) or isinstance(minutes, bool):
         return jsonify({"ok": False, "error": "invalid minutes"})
-    if minutes < 1 or minutes > MAX_LOG_MINUTES:
-        return jsonify({"ok": False, "error": f"minutes must be between 1 and {MAX_LOG_MINUTES}"})
+
+    timer_entry = load_study_timers(guild_id).get(student_id)
+    if timer_entry and timer_entry.get("next_checkpoint_sec"):
+        max_log_minutes = int(timer_entry["next_checkpoint_sec"] // 60)
+    else:
+        max_log_minutes = BASE_MAX_LOG_MINUTES
+
+    if minutes < 1 or minutes > max_log_minutes:
+        return jsonify({"ok": False, "error": f"minutes must be between 1 and {max_log_minutes}"})
 
     subject = data.get("subject")
     memo    = data.get("memo")
@@ -3517,7 +3523,7 @@ scheduler.add_job(send_today_plans_commute, "cron", hour=5,  minute=30)  # 通�
 scheduler.add_job(send_today_plans_dorm,    "cron", hour=7,  minute=20)  # 寮生
 scheduler.add_job(cleanup_past_plans,       "cron", hour=0,  minute=0)
 scheduler.add_job(send_weekly_plans,        "cron", day_of_week="sun", hour=14, minute=0)  # 毎週日曜14:00に今週の予定
-scheduler.add_job(check_study_timers,       "interval", minutes=1)  # ★ 勉強タイマーの3時間経過／30分放置チェック（最大1分遅れで検知）
+scheduler.add_job(check_study_timers,       "interval", minutes=1)  # ★ 勉強タイマーの3時間ごとの自動休憩チェック（最大1分遅れで検知）
 
 started = False
 synced_once = False
