@@ -510,5 +510,12 @@
     "period": 3,
     "reason": "休み",
     "note": ""
+  },
+  "holiday:2026-08-08": {
+    "key": "holiday:2026-08-08",
+    "type": "holiday",
+    "date": "2026-08-08",
+    "reason": "休校",
+    "note": "夏休み"
   }
 }
