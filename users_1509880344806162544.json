@@ -52,7 +52,9 @@
   {
     "id": "32615",
     "nickname": "小鷹",
-    "created_at": "2026-07-12"
+    "created_at": "2026-07-12",
+    "password_hash": "b08d1dd6849d889b49a9a51ab3af131e0220bb921700b28f68e60ab11bb8126a",
+    "password_salt": "0d409b744f6461eaaa2c2e5bd287282b"
   },
   {
     "id": "32626",
