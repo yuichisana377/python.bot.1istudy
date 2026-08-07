@@ -793,6 +793,73 @@ def save_discord_links(guild_id: int, links: dict, sha=None):
     github_put(f"discord_links_{guild_id}.json", links, sha)
 
 # ================================
+#  ★ アカウント連携コード（なりすまし対策）
+#  ─────────────────────────────
+#  以前は Discord 上で `/id連携 <生徒ID>` を実行するだけで、誰でも
+#  好きな生徒IDを自分のDiscordアカウントに紐付けられてしまっていた。
+#  生徒IDは推測しやすい形式（例: 1I001）な上、StudyLog自体に
+#  ログインしていなくても実行できたため、他人になりすまして通知を
+#  横取りしたり、パスワード再設定の確認コードを自分宛に届かせて
+#  本人のアカウントごと乗っ取ることが可能だった。
+#
+#  対策：連携には「StudyLog側で既にログイン（パスワード認証）済み
+#  であること」を証明する、短時間だけ有効なワンタイムコードを要求する。
+#    1) 生徒がStudyLogにログインした状態で連携コードを発行する
+#       （/generate_link_code）→ その生徒のstudent_idに紐付いた
+#       ランダムな8桁コードが発行される（5分間だけ有効・1回使い切り）
+#    2) 生徒はDiscord上で `/id連携 <発行されたコード>` を実行する
+#       → コードが有効なら、そのコードに紐付いていたstudent_idと
+#         「今コマンドを実行したDiscordユーザー」を連携する
+#  コードを知らない第三者は、他人の生徒IDを知っていても連携できない。
+# ================================
+LINK_CODE_TTL_SEC      = 5 * 60   # コードの有効期限：5分
+LINK_CODE_COOLDOWN_SEC = 30       # 連続発行の連打防止（クールダウン）
+
+LINK_CODES = {}             # code(str) -> {"guild_id", "student_id", "expires"}
+LINK_CODE_LAST_ISSUED = {}  # f"{guild_id}:{student_id}" -> 直近の発行時刻（連打防止用）
+
+def _generate_link_code() -> str:
+    # Discord上で打ち込みやすいよう、紛らわしい文字(0/O, 1/I等)を除いた
+    # 大文字+数字の8桁。5分の有効期限内に総当たりで的中させるのは非現実的な文字数。
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    while True:
+        code = "".join(secrets.choice(alphabet) for _ in range(8))
+        if code not in LINK_CODES:
+            return code
+
+def issue_link_code(guild_id: int, student_id: str) -> dict:
+    """StudyLogにログイン済み（session_token検証済み）の本人だけが呼び出す想定。"""
+    key = f"{guild_id}:{student_id}"
+    now = time.time()
+    last = LINK_CODE_LAST_ISSUED.get(key)
+    if last and (now - last < LINK_CODE_COOLDOWN_SEC):
+        remain = int(LINK_CODE_COOLDOWN_SEC - (now - last)) + 1
+        raise ValueError(f"too_soon:{remain}")
+
+    # 同じ生徒に対して未使用の古いコードが残っていれば無効化しておく
+    for c in [c for c, v in LINK_CODES.items()
+              if v["guild_id"] == guild_id and v["student_id"] == student_id]:
+        del LINK_CODES[c]
+
+    code = _generate_link_code()
+    LINK_CODES[code] = {"guild_id": guild_id, "student_id": student_id, "expires": now + LINK_CODE_TTL_SEC}
+    LINK_CODE_LAST_ISSUED[key] = now
+    return {"code": code, "expires_in_sec": LINK_CODE_TTL_SEC}
+
+def consume_link_code(guild_id: int, code: str):
+    """有効なコードなら student_id を返し、コードを消費（削除）する。無効なら None。"""
+    entry = LINK_CODES.get(code)
+    if not entry:
+        return None
+    if entry["guild_id"] != guild_id:
+        return None
+    if time.time() > entry["expires"]:
+        del LINK_CODES[code]
+        return None
+    del LINK_CODES[code]  # ★ 1回使い切り（使い回し防止）
+    return entry["student_id"]
+
+# ================================
 #  科目チャンネルユーティリティ
 # ================================
 def get_subject_channels(guild: discord.Guild) -> list:
@@ -1266,19 +1333,33 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
 #    （3時間タイマー超過など）を本人のDiscordに直接送れるようになる。
 #    タブを閉じていても、他のサイトを見ていても、Discordアプリ側の
 #    通知として届く（Discord自体の通知がオフの場合は届かない）。
+#
+#  ★ なりすまし対策：以前は生徒IDを直接指定するだけで誰でも連携でき
+#    てしまっていたため、StudyLog側（Webアプリ）にログイン済みの状態
+#    でのみ発行できるワンタイムコード（/generate_link_code, 5分間有効・
+#    1回使い切り）を要求する方式に変更した。生徒IDを知っているだけの
+#    第三者はコードを発行できないため、なりすまし連携はできない。
 # ================================
-@bot.tree.command(name="id連携", description="StudyLogの生徒IDと自分のDiscordアカウントを連携し、DM通知を受け取れるようにする")
-@app_commands.describe(student_id="StudyLogにログインしている生徒ID（例: 1I001）")
-async def link_student_id(interaction: discord.Interaction, student_id: str):
+@bot.tree.command(name="id連携", description="StudyLogで発行した連携コードを使って、DiscordアカウントをStudyLogと連携する")
+@app_commands.describe(code="StudyLogにログインした状態で発行した連携コード（8桁・5分間有効）")
+async def link_student_id(interaction: discord.Interaction, code: str):
     await interaction.response.defer(ephemeral=True)
     guild_id = interaction.guild.id
-    sid = student_id.strip().upper()
+
+    sid = consume_link_code(guild_id, code.strip().upper())
+    if not sid:
+        await interaction.followup.send(
+            "連携コードが無効か、期限切れです。StudyLogに再度ログインして、もう一度コードを発行してから "
+            "「/id連携 コード」を実行してください。",
+            ephemeral=True
+        )
+        return
 
     users = load_users(guild_id)
     matched = next((u for u in users if u["id"] == sid), None)
     if not matched:
         await interaction.followup.send(
-            f"生徒ID「{sid}」がStudyLogに登録されていません。IDを確認してもう一度お試しください。",
+            "連携コードに対応する生徒データが見つかりませんでした。お手数ですがStudyLogでもう一度コードを発行してください。",
             ephemeral=True
         )
         return
@@ -1302,7 +1383,8 @@ async def link_student_id(interaction: discord.Interaction, student_id: str):
     except discord.Forbidden:
         await interaction.followup.send(
             "連携情報は保存しましたが、確認DMを送れませんでした。\n"
-            "サーバーアイコンを右クリック →「プライバシー設定」→「ダイレクトメッセージ」をオンにしてから、もう一度 /id連携 を実行してください。",
+            "サーバーアイコンを右クリック →「プライバシー設定」→「ダイレクトメッセージ」をオンにしてから、"
+            "StudyLogでもう一度コードを発行し /id連携 を実行してください。",
             ephemeral=True
         )
     except Exception as e:
@@ -1326,7 +1408,7 @@ async def help_command(interaction: discord.Interaction):
         "**/cleanup** — 過去の予定を削除する\n"
         "**/setchannel** — 通知チャンネルを設定する（通生／寮生／お知らせ用を選択可）\n"
         "**/setup_roles** — 通生/寮生 振り分けパネルを投稿する\n"
-        "**/id連携** — StudyLogの生徒IDとDiscordアカウントを連携し、DM通知を受け取れるようにする\n"
+        "**/id連携** — StudyLogにログインして発行した連携コードを使い、DiscordアカウントをStudyLogと連携する（DM通知を受け取れるようになる）\n"
         "**webページ** - https://1istudyweb.pages.dev/\n"
     )
     await interaction.response.send_message(msg, ephemeral=True)
@@ -2231,6 +2313,37 @@ def change_password():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/generate_link_code", methods=["POST"])
+def generate_link_code():
+    """
+    body: { guild_id, session_token }
+    成功時: { ok: true, code, expires_in_sec }
+    ★ StudyLogにログイン済み（session_token検証済み）の本人だけが、
+      Discord連携用のワンタイムコードを発行できる。このコードを
+      Discord上で `/id連携 <code>` に入力すると連携が完了する。
+      生徒IDだけを知っている第三者はこのAPIを呼べない（session_tokenが
+      無いため）ので、なりすまし連携はできない。
+    """
+    data     = request.json or {}
+    guild_id = data.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing fields"})
+
+    guild_id   = int(guild_id)
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    try:
+        result = issue_link_code(guild_id, student_id)
+        return jsonify({"ok": True, **result})
+    except ValueError as e:
+        msg = str(e)
+        if msg.startswith("too_soon:"):
+            return jsonify({"ok": False, "error": "too_soon", "retry_after_sec": int(msg.split(":", 1)[1])})
+        return jsonify({"ok": False, "error": msg})
+
 
 def send_discord_dm(guild_id: int, student_id: str, title: str, message: str):
     """
