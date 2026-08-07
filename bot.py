@@ -54,6 +54,7 @@ NO_CACHE_PATHS = {
     "/list_order",
     "/channels",
     "/list_in_progress",
+    "/timer_state",
 }
 
 @app.after_request
@@ -334,6 +335,297 @@ async def async_load_study_logs(guild_id: int):
 async def async_save_study_logs(guild_id: int, logs: list):
     _, sha = await async_github_get(f"study_logs_{guild_id}.json")
     await async_github_put(f"study_logs_{guild_id}.json", logs, sha)
+
+# ================================
+#  ★ 勉強タイマー状態（複数端末で共有）
+#  ─────────────────────────────
+#  以前はブラウザのlocalStorageだけにタイマーの開始時刻を保存していたため、
+#  ①別端末・別ブラウザで開いても状態が見えず、二重に計測を始められてしまう
+#  ②タブを閉じる／バックグラウンドに置くとJSが止まり、「3時間経過」の検知が
+#    ブラウザの復帰まで遅れる（＝精度が低い。時には全く違う経過時間で
+#    「破棄」判定されてしまう）
+#  という2つの問題があった。
+#  → 開始・一時停止・再開の「時刻」そのものをサーバー（GitHub）で管理し、
+#    どの端末で開いても同じ状態を見られるようにする。
+#    3時間経過の判定・DM通知も、クライアントのタブが開いているかに関係なく
+#    サーバー側の定期ジョブ（check_study_timers）で正確に行う。
+#
+#  study_timers_{guild_id}.json の中身: { student_id: エントリ, ... }
+#  エントリ:
+#    state             : "running" | "paused" | "awaiting_confirm"
+#    run_start_epoch   : 現在の計測区間が始まった時刻（ms epoch、running時のみ値あり）
+#    accumulated_sec   : 直近の計測区間を含まない、これまでの累計秒
+#    stopped_epoch     : 3時間経過で自動停止した時刻（ms epoch、awaiting_confirm時のみ）
+# ================================
+TIMER_LIMIT_SEC = 10800  # 3時間で自動停止
+TIMER_GRACE_SEC = 1800   # 自動停止後、30分以内に保存されなければ破棄
+MSG_TIMER_STOPPED = (
+    "3時間が経過したため、タイマーを自動的に停止しました。"
+    "アプリを開いて内容を確認し、保存してください。"
+    "（30分以内に保存しないと自動的に破棄されます）"
+)
+MSG_TIMER_DISCARDED = "保存されないまま30分以上経過したため、計測を破棄しました。"
+
+def load_study_timers(guild_id: int) -> dict:
+    data, _ = github_get(f"study_timers_{guild_id}.json")
+    return data or {}
+
+def save_study_timers(guild_id: int, timers: dict, sha=None):
+    if sha is None:
+        _, sha = github_get(f"study_timers_{guild_id}.json")
+    github_put(f"study_timers_{guild_id}.json", timers, sha)
+
+async def async_load_study_timers(guild_id: int) -> dict:
+    data, _ = await async_github_get(f"study_timers_{guild_id}.json")
+    return data or {}
+
+async def async_save_study_timers(guild_id: int, timers: dict, sha=None):
+    if sha is None:
+        _, sha = await async_github_get(f"study_timers_{guild_id}.json")
+    await async_github_put(f"study_timers_{guild_id}.json", timers, sha)
+
+def _finalize_study_timer(entry, now_ms):
+    """
+    エントリを現在時刻(now_ms)で評価し、必要なら状態遷移させる（副作用なしの純粋関数）。
+    戻り値: (新しいエントリ or None, 通知種別 "stopped"/"discarded"/None)
+    ・running で3時間以上経過 → awaiting_confirm に遷移し "stopped" を通知
+    ・awaiting_confirm で30分以上放置 → 削除(None)し "discarded" を通知
+    ・それ以外（paused 等）はそのまま
+    """
+    if not entry:
+        return None, None
+
+    state = entry.get("state")
+
+    if state == "running":
+        run_start = entry.get("run_start_epoch")
+        accumulated = entry.get("accumulated_sec", 0) or 0
+        if run_start is not None:
+            elapsed = accumulated + (now_ms - run_start) / 1000.0
+        else:
+            elapsed = accumulated
+        if elapsed >= TIMER_LIMIT_SEC:
+            new_entry = dict(entry)
+            new_entry["accumulated_sec"] = TIMER_LIMIT_SEC
+            new_entry["run_start_epoch"] = None
+            new_entry["state"] = "awaiting_confirm"
+            new_entry["stopped_epoch"] = now_ms
+            return new_entry, "stopped"
+        return entry, None
+
+    if state == "awaiting_confirm":
+        stopped_epoch = entry.get("stopped_epoch")
+        if stopped_epoch is None:
+            stopped_epoch = now_ms
+        if now_ms - stopped_epoch >= TIMER_GRACE_SEC * 1000:
+            return None, "discarded"
+        return entry, None
+
+    # paused など：変化なし
+    return entry, None
+
+def _try_notify_timer(guild_id, student_id, message):
+    """通知はベストエフォート。失敗してもタイマーの状態遷移自体は成立させる。"""
+    try:
+        send_discord_dm(guild_id, student_id, "StudyLog", message)
+    except Exception as e:
+        print(f"[WARN] study_timer DM通知に失敗しました（student_id={student_id}）: {e}")
+
+def _sync_timer_entry(guild_id, student_id):
+    """
+    現在のタイマーエントリを取得し、3時間経過／30分放置による自動遷移が
+    必要ならその場で適用・保存・通知してから返す。
+    どのエンドポイントも、まずこれを呼んでから自分の処理を行う。
+    戻り値: (timers辞書（最新）, 現在のエントリ or None)
+    """
+    timers = load_study_timers(guild_id)
+    now_ms = int(time.time() * 1000)
+    entry = timers.get(student_id)
+    new_entry, notify_kind = _finalize_study_timer(entry, now_ms)
+
+    if new_entry != entry:
+        if new_entry is None:
+            timers.pop(student_id, None)
+        else:
+            timers[student_id] = new_entry
+        try:
+            save_study_timers(guild_id, timers)
+            if notify_kind == "stopped":
+                _try_notify_timer(guild_id, student_id, MSG_TIMER_STOPPED)
+            elif notify_kind == "discarded":
+                _try_notify_timer(guild_id, student_id, MSG_TIMER_DISCARDED)
+        except GitHubWriteError as e:
+            print(f"[WARN] study_timers 保存に失敗しました: {e}")
+            # 保存に失敗した場合は通知せず、次回アクセス時に再評価される
+
+    return timers, new_entry
+
+def _timer_entry_json(entry, now_ms=None):
+    if now_ms is None:
+        now_ms = int(time.time() * 1000)
+    if not entry:
+        return {"state": "idle", "elapsed_sec": 0, "run_start_epoch": None, "accumulated_sec": 0}
+    state = entry.get("state")
+    accumulated = entry.get("accumulated_sec", 0) or 0
+    run_start = entry.get("run_start_epoch")
+    if state == "running" and run_start is not None:
+        elapsed = accumulated + (now_ms - run_start) / 1000.0
+    else:
+        elapsed = accumulated
+    return {
+        "state": state,
+        "elapsed_sec": int(elapsed),
+        "run_start_epoch": run_start,
+        "accumulated_sec": accumulated,
+    }
+
+def _timer_auth_from_json():
+    """POST系タイマーAPI共通：JSONボディからguild_id・session_tokenを検証する。"""
+    data = request.json or {}
+    guild_id = data.get("guild_id")
+    if not guild_id:
+        return None, None, jsonify({"ok": False, "error": "missing guild_id"})
+    guild_id = int(guild_id)
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return None, None, jsonify({"ok": False, "error": "not_logged_in"})
+    return guild_id, student_id, None
+
+@app.route("/timer_state", methods=["GET"])
+def timer_state():
+    """現在のタイマー状態を返す（端末を問わず常に最新・かつ3時間/30分判定を反映済み）。"""
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    guild_id = int(guild_id)
+    student_id = resolve_session(request.args.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    _, entry = _sync_timer_entry(guild_id, student_id)
+    resp = {"ok": True, "server_now": int(time.time() * 1000)}
+    resp.update(_timer_entry_json(entry))
+    return jsonify(resp)
+
+@app.route("/timer_start", methods=["POST"])
+def timer_start():
+    """
+    タイマー開始。
+    ・誰も動かしていなければ新規に開始する
+    ・既に他端末で計測中なら、その記録にそのまま合流する（新規に作らない）
+    ・一時停止中／保存確認待ちの場合は開始せず、その状態を返す
+      （フロント側はそれに合わせて画面を出し分ける）
+    """
+    guild_id, student_id, err = _timer_auth_from_json()
+    if err:
+        return err
+
+    timers, entry = _sync_timer_entry(guild_id, student_id)
+    now_ms = int(time.time() * 1000)
+
+    if entry is None:
+        new_entry = {
+            "state": "running",
+            "run_start_epoch": now_ms,
+            "accumulated_sec": 0,
+            "stopped_epoch": None,
+        }
+        timers[student_id] = new_entry
+        try:
+            save_study_timers(guild_id, timers)
+        except GitHubWriteError as e:
+            return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+        resp = {"ok": True, "created": True}
+        resp.update(_timer_entry_json(new_entry, now_ms))
+        return jsonify(resp)
+
+    if entry.get("state") == "running":
+        resp = {"ok": True, "created": False, "joined": True}
+        resp.update(_timer_entry_json(entry, now_ms))
+        return jsonify(resp)
+
+    # paused / awaiting_confirm：新規開始はせず、現在の状態を伝える
+    resp = {"ok": False, "error": "already_" + str(entry.get("state"))}
+    resp.update(_timer_entry_json(entry, now_ms))
+    return jsonify(resp)
+
+@app.route("/timer_pause", methods=["POST"])
+def timer_pause():
+    """計測中 → 一時停止。他端末にも即座に反映される。"""
+    guild_id, student_id, err = _timer_auth_from_json()
+    if err:
+        return err
+
+    timers, entry = _sync_timer_entry(guild_id, student_id)
+    if not entry or entry.get("state") != "running":
+        resp = {"ok": False, "error": "not_running"}
+        resp.update(_timer_entry_json(entry))
+        return jsonify(resp)
+
+    now_ms = int(time.time() * 1000)
+    accumulated = (entry.get("accumulated_sec", 0) or 0) + (now_ms - entry["run_start_epoch"]) / 1000.0
+    new_entry = dict(entry)
+    new_entry["accumulated_sec"] = accumulated
+    new_entry["run_start_epoch"] = None
+    new_entry["state"] = "paused"
+    timers[student_id] = new_entry
+    try:
+        save_study_timers(guild_id, timers)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+
+    resp = {"ok": True}
+    resp.update(_timer_entry_json(new_entry, now_ms))
+    return jsonify(resp)
+
+@app.route("/timer_resume", methods=["POST"])
+def timer_resume():
+    """一時停止 → 再開。他端末にも即座に反映される。"""
+    guild_id, student_id, err = _timer_auth_from_json()
+    if err:
+        return err
+
+    timers, entry = _sync_timer_entry(guild_id, student_id)
+    if not entry or entry.get("state") != "paused":
+        resp = {"ok": False, "error": "not_paused"}
+        resp.update(_timer_entry_json(entry))
+        return jsonify(resp)
+
+    now_ms = int(time.time() * 1000)
+    new_entry = dict(entry)
+    new_entry["run_start_epoch"] = now_ms
+    new_entry["state"] = "running"
+    timers[student_id] = new_entry
+    try:
+        save_study_timers(guild_id, timers)
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+
+    resp = {"ok": True}
+    resp.update(_timer_entry_json(new_entry, now_ms))
+    return jsonify(resp)
+
+@app.route("/timer_stop", methods=["POST"])
+def timer_stop():
+    """
+    サーバー側のタイマー状態を消す。
+    ・ユーザーが手動で「停止」した直後（この後はクライアント側の確認画面で
+      保存／破棄を決めるので、サーバー側で計測中として残す必要はない）
+    ・自動停止（awaiting_confirm）を保存・破棄し終えた後の後片付け
+    のどちらでも使う、現在の状態を問わない汎用クリア用エンドポイント。
+    """
+    guild_id, student_id, err = _timer_auth_from_json()
+    if err:
+        return err
+
+    timers = load_study_timers(guild_id)
+    if student_id in timers:
+        timers.pop(student_id, None)
+        try:
+            save_study_timers(guild_id, timers)
+        except GitHubWriteError as e:
+            return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    return jsonify({"ok": True})
 
 # ================================
 #  ポイント データ
@@ -1194,6 +1486,59 @@ async def send_weekly_plans():
             if not channel:
                 continue
             await channel.send(msg + "\n@everyone")
+
+# ================================
+#  ★ 勉強タイマーの定期チェック（3時間経過／30分放置の検知）
+#  ─────────────────────────────
+#  クライアントのタブが開いているかどうかに関係なく、サーバー側で
+#  一定間隔ごとに全ギルドの study_timers を評価し、3時間経過による
+#  自動停止・30分放置による自動破棄を確実に検知してDM通知する。
+#  （各APIエンドポイント側でもアクセス時に同じ判定を行っているため、
+#    この定期ジョブは「誰もアプリを開かなかった場合」の保険として働く。
+#    2重で判定しても _finalize_study_timer は冪等なので問題ない）
+# ================================
+async def check_study_timers():
+    now_ms = int(time.time() * 1000)
+    for filename in list_all_configs():
+        try:
+            guild_id = int(filename.replace("config_", "").replace(".json", ""))
+        except ValueError:
+            continue
+
+        try:
+            timers = await async_load_study_timers(guild_id)
+        except Exception as e:
+            print(f"[WARN] study_timers 読み込みに失敗しました（guild_id={guild_id}）: {e}")
+            continue
+        if not timers:
+            continue
+
+        new_timers = dict(timers)
+        notifications = []
+        changed = False
+        for student_id, entry in timers.items():
+            new_entry, notify_kind = _finalize_study_timer(entry, now_ms)
+            if new_entry != entry:
+                changed = True
+                if new_entry is None:
+                    new_timers.pop(student_id, None)
+                else:
+                    new_timers[student_id] = new_entry
+            if notify_kind:
+                notifications.append((student_id, notify_kind))
+
+        if not changed:
+            continue
+
+        try:
+            await async_save_study_timers(guild_id, new_timers)
+        except GitHubWriteError as e:
+            print(f"[WARN] study_timers 保存に失敗しました（guild_id={guild_id}）。次回のチェックで再試行します: {e}")
+            continue
+
+        for student_id, kind in notifications:
+            msg = MSG_TIMER_STOPPED if kind == "stopped" else MSG_TIMER_DISCARDED
+            _try_notify_timer(guild_id, student_id, msg)
 
 # ================================
 #  Flask API — 予定管理
@@ -3169,6 +3514,7 @@ scheduler.add_job(send_today_plans_commute, "cron", hour=5,  minute=30)  # 通�
 scheduler.add_job(send_today_plans_dorm,    "cron", hour=7,  minute=20)  # 寮生
 scheduler.add_job(cleanup_past_plans,       "cron", hour=0,  minute=0)
 scheduler.add_job(send_weekly_plans,        "cron", day_of_week="sun", hour=14, minute=0)  # 毎週日曜14:00に今週の予定
+scheduler.add_job(check_study_timers,       "interval", minutes=1)  # ★ 勉強タイマーの3時間経過／30分放置チェック（最大1分遅れで検知）
 
 started = False
 synced_once = False
