@@ -476,7 +476,7 @@ def _timer_entry_json(entry, now_ms=None):
         "state": state,
         "elapsed_sec": int(elapsed),
         "run_start_epoch": run_start,
-        "accumulated_sec": accumulated,
+        "accumulated_sec": int(round(accumulated)),  # ★ 端数（ミリ秒由来）が残らないよう常に整数化
     }
 
 def _timer_auth_from_json():
@@ -563,7 +563,10 @@ def timer_pause():
         return jsonify(resp)
 
     now_ms = int(time.time() * 1000)
-    accumulated = (entry.get("accumulated_sec", 0) or 0) + (now_ms - entry["run_start_epoch"]) / 1000.0
+    # ★ ここで整数に丸めておかないと、次にJSON化された際に小数点以下
+    #   （ミリ秒由来の端数）が残り、表示側で「00:00:16.885」のように
+    #   秒の桁に小数が出てしまう。
+    accumulated = int(round((entry.get("accumulated_sec", 0) or 0) + (now_ms - entry["run_start_epoch"]) / 1000.0))
     new_entry = dict(entry)
     new_entry["accumulated_sec"] = accumulated
     new_entry["run_start_epoch"] = None
