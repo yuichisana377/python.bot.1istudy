@@ -2557,54 +2557,12 @@ def _oauth_result_page(success: bool, message: str) -> str:
 
 def _oauth_login_success_page(student_id: str, nickname: str, token: str) -> str:
     """
-    Discordログイン成功時：ブラウザのlocalStorageにセッションを書き込んでから
-    StudyLog.htmlへ遷移する。色（アバターカラー）はLogin.js/StudyLog.jsと
-    同じ計算式をここでもJS側で行い、表示の一貫性を保つ。
+    ★ 未使用（過去の実装の名残）。
+    APIドメイン上でlocalStorageに書き込んでもフロントエンドドメインからは
+    見えないため使用しない。ログイン成功時は _handle_discord_login_callback から
+    フロントエンドへ session_token をクエリパラメータで渡す方式に統一している。
     """
-    sid_js  = json.dumps(student_id)
-    nick_js = json.dumps(nickname)
-    tok_js  = json.dumps(token)
-    return f"""<!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ログイン中…</title></head>
-<body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;
-             min-height:100vh;margin:0;background:#f1f5f9;">
-  <div style="background:#fff;border-radius:16px;padding:32px;max-width:360px;width:90%;
-              text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.15);">
-    <div style="font-size:40px;color:#16a34a;margin-bottom:12px;">✓</div>
-    <div style="font-size:15px;color:#334155;">Discordでログインしました。移動しています…</div>
-  </div>
-  <script>
-    // ★ Login.js / StudyLog.js の paletteFor() と同じ計算式（表示色を一致させるため）
-    const AVATAR_COLORS = [
-      {{ color: "#dbeafe", text: "#1e40af" }},
-      {{ color: "#dcfce7", text: "#166534" }},
-      {{ color: "#fce7f3", text: "#9d174d" }},
-      {{ color: "#ffedd5", text: "#9a3412" }},
-      {{ color: "#fef9c3", text: "#854d0e" }},
-      {{ color: "#ede9fe", text: "#6d28d9" }},
-      {{ color: "#fee2e2", text: "#991b1b" }},
-      {{ color: "#f0fdf4", text: "#15803d" }},
-    ];
-    function paletteFor(id) {{
-      let hash = 0;
-      for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-      return AVATAR_COLORS[hash % AVATAR_COLORS.length];
-    }}
-    const p = paletteFor({sid_js});
-    const session = {{
-      student_id:    {sid_js},
-      nickname:      {nick_js},
-      color:         p.color,
-      text_color:    p.text,
-      session_token: {tok_js},
-      logged_in_at:  new Date().toISOString(),
-    }};
-    try {{ localStorage.setItem("sl_session", JSON.stringify(session)); }} catch(e) {{}}
-    location.href = "https://1istudyweb.pages.dev/StudyLog";
-  </script>
-</body></html>"""
+    raise NotImplementedError("this helper is no longer used; see _handle_discord_login_callback")
 
 
 @app.route("/discord_oauth_callback", methods=["GET"])
@@ -2702,6 +2660,13 @@ def _handle_discord_login_callback(guild_id: int, discord_user_id: int, discord_
       （/id連携 のコード方式で作られたDM通知用の紐付け）はログイン用途では
       一切信用しない。discord_login_links（ログイン専用・別ファイル）に
       登録済みの場合のみ、そのままログインさせる。
+
+    ★ このエンドポイント自体はAPIドメイン（python-bot-1istudy.onrender.com）
+      で動いているため、ここで直接localStorageにセッションを書き込んでも
+      フロントエンド（1istudyweb.pages.dev）からは見えない（ドメインが違うと
+      localStorageは共有されない）。そのため、セッション情報はURLの
+      クエリパラメータとしてフロントエンドへ渡し、フロントエンド自身の
+      JS（Login.js）がそちらのドメイン上でlocalStorageに保存する。
     """
     login_links = load_discord_login_links(guild_id)
     student_id = next((sid for sid, did in login_links.items() if int(did) == discord_user_id), None)
@@ -2710,7 +2675,13 @@ def _handle_discord_login_callback(guild_id: int, discord_user_id: int, discord_
         user = find_user(guild_id, student_id)
         if user:
             token = create_session(guild_id, student_id)
-            return _oauth_login_success_page(student_id, user.get("nickname", student_id), token)
+            nickname = user.get("nickname", student_id)
+            qs = urlencode({
+                "discord_session_token": token,
+                "student_id": student_id,
+                "nickname": nickname,
+            })
+            return redirect(f"https://1istudyweb.pages.dev/Login?{qs}")
         # ユーザーデータが見つからない（削除された等）→ 登録し直しへフォールバック
 
     # 初回、またはデータ不整合 → 学籍番号入力（登録）ステップへ
@@ -2736,23 +2707,25 @@ def discord_reg_info():
 @app.route("/discord_complete_registration", methods=["POST"])
 def discord_complete_registration():
     """
-    body: { guild_id, dtoken, student_id, nickname(新規登録時のみ必須), password(既存アカウントの場合のみ必須) }
+    body: { guild_id, dtoken, student_id, nickname(新規登録時のみ必須) }
     成功時: { ok: true, session_token, student: {id, nickname} }
     ★ dtoken は Discordの認可を実際に済ませていないと手に入らない
       （＝「このDiscordアカウントの持ち主である」ことは既に確認済み）。
-      その上で、
-      ・既に存在する学籍番号を指定した場合は、これまで通りパスワードで
-        本人確認する（他人の学籍番号を勝手に乗っ取れないようにするため。
-        以前の /id連携 の脆弱性と同じ構造の問題を防ぐ）。
-      ・存在しない学籍番号なら、新規生徒として登録する（パスワード不要）。
+      ・既に存在する学籍番号を指定した場合 → パスワード確認なしでそのまま紐付ける
+      ・存在しない学籍番号なら、新規生徒として登録する
       成功時のみ dtoken を破棄する（失敗時は同じdtokenで再試行できる）。
+
+      ⚠ 注意：学籍番号を知っているだけで既存アカウントに連携できてしまうため、
+        他人の学籍番号を知っている第三者がなりすましてログインできてしまう
+        リスクがある（本人確認手段はDiscordの認可のみで、学籍番号の所有権は
+        検証していない）。運用上リスクがあると感じた場合は、パスワード確認や
+        通知の追加を検討すること。
     """
     data       = request.json or {}
     guild_id   = data.get("guild_id")
     dtoken     = data.get("dtoken")
     student_id = (data.get("student_id") or "").strip().upper()
     nickname   = (data.get("nickname") or "").strip()
-    password   = data.get("password") or ""
 
     if not guild_id or not dtoken or not student_id:
         return jsonify({"ok": False, "error": "missing fields"})
@@ -2769,16 +2742,10 @@ def discord_complete_registration():
         existing = next((u for u in users if u.get("id") == student_id), None)
 
         if existing:
-            # --- 既存の学籍番号 → パスワードで本人確認してから紐付ける ---
-            if not existing.get("password_hash"):
-                return jsonify({"ok": False, "error": "password_not_set"})
-            if not password:
-                return jsonify({"ok": False, "error": "password_required"})
-            if not verify_password(password, existing.get("password_salt"), existing.get("password_hash")):
-                return jsonify({"ok": False, "error": "wrong_password"})
+            # --- 既存の学籍番号 → パスワード確認なしでそのまま紐付ける ---
             final_nickname = existing.get("nickname", student_id)
         else:
-            # --- 新しい学籍番号 → 新規生徒として登録（パスワード不要） ---
+            # --- 新しい学籍番号 → 新規生徒として登録 ---
             if not nickname:
                 return jsonify({"ok": False, "error": "nickname_required"})
             if len(nickname) > 16:
@@ -2821,6 +2788,7 @@ def discord_complete_registration():
         return jsonify({"ok": False, "error": f"github_error: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
 
 
 def send_discord_dm(guild_id: int, student_id: str, title: str, message: str):
