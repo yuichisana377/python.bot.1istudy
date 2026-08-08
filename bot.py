@@ -2551,7 +2551,7 @@ def _oauth_result_page(success: bool, message: str) -> str:
     <div style="font-size:15px;color:#334155;line-height:1.6;">{message}</div>
     <div style="font-size:12px;color:#94a3b8;margin-top:16px;">3秒後にStudyLogへ戻ります…</div>
   </div>
-  <script>setTimeout(function() {{ location.href = "/StudyLog.html"; }}, 3000);</script>
+  <script>setTimeout(function() {{ location.href = "https://1istudyweb.pages.dev/StudyLog"; }}, 3000);</script>
 </body></html>"""
 
 
@@ -2602,7 +2602,7 @@ def _oauth_login_success_page(student_id: str, nickname: str, token: str) -> str
       logged_in_at:  new Date().toISOString(),
     }};
     try {{ localStorage.setItem("sl_session", JSON.stringify(session)); }} catch(e) {{}}
-    location.href = "/StudyLog.html";
+    location.href = "https://1istudyweb.pages.dev/StudyLog";
   </script>
 </body></html>"""
 
