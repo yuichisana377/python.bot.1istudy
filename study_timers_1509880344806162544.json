@@ -1,8 +1,9 @@
 {
   "32618": {
-    "state": "running",
-    "run_start_epoch": 1786151928684,
-    "accumulated_sec": 0,
-    "next_checkpoint_sec": 10800
+    "state": "paused",
+    "run_start_epoch": null,
+    "accumulated_sec": 16,
+    "next_checkpoint_sec": 10800,
+    "pause_reason": "manual"
   }
 }
