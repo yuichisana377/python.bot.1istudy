@@ -66,5 +66,12 @@
     "created_at": "2026-07-29",
     "password_hash": "920bd8bea181d44c5364f012b19f8b8bc67e1a5bbf4119738c71681117e864ec",
     "password_salt": "2ddd6096fa3eb7bf2f09349278448a2d"
+  },
+  {
+    "id": "32635",
+    "nickname": "らら",
+    "created_at": "2026-08-08",
+    "password_hash": "837c94be25bbf41382ca5b87ba45d793a798663eb8ffc08417185491a9ac5102",
+    "password_salt": "7deddd6fff13b49f198ccceaa47adc74"
   }
 ]
