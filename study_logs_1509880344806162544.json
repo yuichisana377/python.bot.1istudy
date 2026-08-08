@@ -1,13 +1,5 @@
 [
   {
-    "date": "2026-07-08",
-    "subject": "情報基礎",
-    "minutes": 3,
-    "memo": "ぶひゃひゃひゃ",
-    "student_id": "32623",
-    "nickname": "たけのこども"
-  },
-  {
     "date": "2026-07-13",
     "subject": "情報基礎",
     "minutes": 70,
@@ -286,6 +278,15 @@
     "subject": "情報基礎",
     "minutes": 34,
     "memo": "",
+    "student_id": "32617",
+    "nickname": "山田レットドラゴン太郎"
+  },
+  {
+    "date": "2026-08-08",
+    "time": "2026-08-08 17:05:43",
+    "subject": "物理1a",
+    "minutes": 150,
+    "memo": "パソコン起動し忘れてました許してください",
     "student_id": "32617",
     "nickname": "山田レットドラゴン太郎"
   }
