@@ -1,9 +1,1 @@
-{
-  "32618": {
-    "state": "paused",
-    "run_start_epoch": null,
-    "accumulated_sec": 10851,
-    "next_checkpoint_sec": 21600,
-    "pause_reason": "checkpoint"
-  }
-}
+{}
