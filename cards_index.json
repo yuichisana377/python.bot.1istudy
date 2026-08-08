@@ -914,7 +914,7 @@
     "name": "その他 実験",
     "count": 1,
     "subject": "その他",
-    "folder_id": "f3kmcdz51u",
+    "folder_id": null,
     "has_folder_id": true,
     "published_by": "Chiro",
     "incomplete": false
