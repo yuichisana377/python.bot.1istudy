@@ -4,7 +4,7 @@ from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timedelta
 from datetime import date as _date
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, redirect
 from flask_cors import CORS
 from threading import Thread
 from pytz import timezone
@@ -17,6 +17,7 @@ import time
 import hashlib
 import hmac
 import secrets
+from urllib.parse import urlencode
 
 # ================================
 #  設定
@@ -27,6 +28,31 @@ TOKEN               = os.getenv("TOKEN")
 SUBJECT_CATEGORY_ID = os.getenv("SUBJECT_CATEGORY_ID")  # カテゴリID（優先）
 SUBJECT_CATEGORY    = os.getenv("SUBJECT_CATEGORY")     # カテゴリ名（フォールバック）
 JST = timezone("Asia/Tokyo")
+
+# ================================
+#  ★ Discord OAuth2（「Discordでログイン」方式のアカウント連携）
+#  ─────────────────────────────
+#  コード手入力方式（/id連携）に加えて、生徒がボタン一つでDiscordの
+#  認可画面から直接連携できるようにするための設定。
+#  ・DISCORD_CLIENT_ID     : 公開情報なのでハードコードのフォールバックでも問題ない
+#  ・DISCORD_CLIENT_SECRET : 機密情報。必ずRenderの環境変数に設定すること。
+#                            これがコードに書かれていたり漏れたりすると、
+#                            第三者がこのアプリになりすましてDiscordユーザーの
+#                            情報を取得できてしまう。
+#  ・DISCORD_OAUTH_REDIRECT_URI : Discord Developer Portal の
+#                            OAuth2 → Redirects に登録したURLと
+#                            1文字違わず完全一致している必要がある。
+# ================================
+DISCORD_CLIENT_ID     = os.getenv("DISCORD_CLIENT_ID", "1515358957542047975")
+DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
+DISCORD_OAUTH_REDIRECT_URI = os.getenv(
+    "DISCORD_OAUTH_REDIRECT_URI",
+    "https://python-bot-1istudy.onrender.com/discord_oauth_callback"
+)
+if not DISCORD_CLIENT_SECRET:
+    print("[WARN] 環境変数 DISCORD_CLIENT_SECRET が未設定です。"
+          "Discord OAuth連携（/discord_oauth_start, /discord_oauth_callback）は無効化されます。"
+          "使う場合はRenderの環境変数にDISCORD_CLIENT_SECRETを設定してください。")
 
 # --- 通生/寮生 振り分け用の絵文字 ---
 EMOJI_COMMUTER = "🚃"  # 通生
@@ -858,6 +884,106 @@ def consume_link_code(guild_id: int, code: str):
         return None
     del LINK_CODES[code]  # ★ 1回使い切り（使い回し防止）
     return entry["student_id"]
+
+
+# ================================
+#  ★ Discord OAuth2 の一時state（CSRF対策 兼 「誰が認可画面に飛んだか」の記録）
+#  ─────────────────────────────
+#  生徒がStudyLog上のボタンから直接Discordの認可画面に飛ぶ方式。
+#  「認可画面から戻ってきたリクエストが、確かにさっきログイン中の本人が
+#   発行したものである」ことを保証するため、認可画面に飛ばす直前に
+#   ランダムなstateを発行してguild_id/student_idと紐付けておき、
+#   コールバック時にそのstateを検証する（1回使い切り・5分間有効）。
+#   これが無いと、他人が作ったURLを踏まされて意図しない連携をさせられる
+#   （CSRF）リスクがある。
+# ================================
+OAUTH_STATE_TTL_SEC = 5 * 60
+OAUTH_STATES = {}  # state(str) -> {"guild_id", "student_id", "purpose", "expires"}
+
+def issue_oauth_state(guild_id: int, student_id, purpose: str) -> str:
+    """
+    purpose:
+      "link"  … 既にログイン中の本人が、追加でDiscordを連携する（従来の /discord_oauth_start）
+      "login" … まだログインしていない状態で、Discordそのものでログインしようとしている
+                （student_id はこの時点ではまだ分からないので None）
+    """
+    state = secrets.token_urlsafe(24)
+    OAUTH_STATES[state] = {
+        "guild_id": guild_id,
+        "student_id": student_id,
+        "purpose": purpose,
+        "expires": time.time() + OAUTH_STATE_TTL_SEC,
+    }
+    return state
+
+def consume_oauth_state(state: str):
+    """有効なstateなら中身のdictを返し、消費（削除）する。無効ならNone。"""
+    entry = OAUTH_STATES.get(state)
+    if not entry:
+        return None
+    if time.time() > entry["expires"]:
+        del OAUTH_STATES[state]
+        return None
+    del OAUTH_STATES[state]  # ★ 1回使い切り
+    return entry
+
+
+# ================================
+#  ★ Discordログイン専用の紐付け（discord_login_links_{guild_id}.json）
+#  ─────────────────────────────
+#  DM通知用の discord_links とは意図的に別ファイルにしている。
+#  「学籍番号+パスワードで既に登録している生徒／すでに /id連携（DM用）
+#   だけ済ませている生徒であっても、Discordログイン機能そのものは
+#   全員一度、新しい登録ステップ（既存アカウントならパスワードで本人確認）
+#   を通してもらう」という運用方針のため、こちらは意図的に空の状態から
+#   始まり、discord_links の中身を勝手に引き継がない。
+# ================================
+def load_discord_login_links(guild_id: int) -> dict:
+    data, _ = github_get(f"discord_login_links_{guild_id}.json")
+    return data or {}
+
+def save_discord_login_links(guild_id: int, links: dict, sha=None):
+    if sha is None:
+        _, sha = github_get(f"discord_login_links_{guild_id}.json")
+    github_put(f"discord_login_links_{guild_id}.json", links, sha)
+
+
+# ================================
+#  ★ Discordログイン：初回登録用の一時トークン
+#  ─────────────────────────────
+#  「Discordでログイン」を初めて使う生徒は、OAuth認可の直後に一度だけ
+#  学籍番号（＋既存アカウントならパスワード）を入力する登録ステップを通る。
+#  このトークンは「Discordの認可自体は既に済んでいる」ことの証明であり、
+#  Login.html側の登録フォームからサーバーに送られてくる。
+#  ・パスワード誤入力時など、登録が失敗しただけではトークンを消費しない
+#    （何度かやり直せるようにするため）。ただし有効期限（10分）は切れる。
+#  ・成功時のみ明示的に破棄する。
+# ================================
+DISCORD_REG_TOKEN_TTL_SEC = 10 * 60
+DISCORD_REG_TOKENS = {}  # token(str) -> {"guild_id","discord_user_id","discord_username","expires"}
+
+def issue_discord_reg_token(guild_id: int, discord_user_id: int, discord_username: str = "") -> str:
+    token = secrets.token_urlsafe(24)
+    DISCORD_REG_TOKENS[token] = {
+        "guild_id": guild_id,
+        "discord_user_id": discord_user_id,
+        "discord_username": discord_username,
+        "expires": time.time() + DISCORD_REG_TOKEN_TTL_SEC,
+    }
+    return token
+
+def get_discord_reg_token(token):
+    """有効なら中身のdictを返す（消費しない＝再試行可能）。無効・期限切れならNone。"""
+    entry = DISCORD_REG_TOKENS.get(token)
+    if not entry:
+        return None
+    if time.time() > entry["expires"]:
+        del DISCORD_REG_TOKENS[token]
+        return None
+    return entry
+
+def discard_discord_reg_token(token):
+    DISCORD_REG_TOKENS.pop(token, None)
 
 # ================================
 #  科目チャンネルユーティリティ
@@ -2167,7 +2293,8 @@ def get_users():
         # ★ password_hash / password_salt は絶対に外部に出さない。
         #   このAPIは認証なしで誰でも呼べるので、公開してよい項目だけに絞る。
         public_users = [
-            {"id": u.get("id"), "nickname": u.get("nickname"), "created_at": u.get("created_at")}
+            {"id": u.get("id"), "nickname": u.get("nickname"), "created_at": u.get("created_at"),
+             "has_password": bool(u.get("password_hash"))}
             for u in users
         ]
         return jsonify({"ok": True, "users": public_users})
@@ -2343,6 +2470,357 @@ def generate_link_code():
         if msg.startswith("too_soon:"):
             return jsonify({"ok": False, "error": "too_soon", "retry_after_sec": int(msg.split(":", 1)[1])})
         return jsonify({"ok": False, "error": msg})
+
+
+@app.route("/discord_login_start", methods=["GET"])
+def discord_login_start():
+    """
+    ブラウザが直接GETするエンドポイント（ログイン前・session_token不要）。
+    Discordの認可画面へリダイレクトする。
+    ★ 学籍番号+パスワードでのログインとは完全に別経路。ここで発行するstateは
+      「まだ誰でもない」ものに紐づく（CSRF対策のみが目的で、student_idは
+      Discordの認可が終わって初めて分かる）。
+    """
+    if not DISCORD_CLIENT_SECRET:
+        return _oauth_result_page(False, "現在Discordログインは準備中です。学籍番号でログインしてください。")
+
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return _oauth_result_page(False, "不正なリクエストです。")
+
+    guild_id = int(guild_id)
+    state = issue_oauth_state(guild_id, None, purpose="login")
+    authorize_url = "https://discord.com/oauth2/authorize?" + urlencode({
+        "client_id":     DISCORD_CLIENT_ID,
+        "redirect_uri":  DISCORD_OAUTH_REDIRECT_URI,
+        "response_type": "code",
+        "scope":         "identify",
+        "state":         state,
+        "prompt":        "consent",
+    })
+    return redirect(authorize_url)
+
+
+@app.route("/discord_oauth_start", methods=["POST"])
+def discord_oauth_start():
+    """
+    body: { guild_id, session_token }
+    成功時: { ok: true, authorize_url }
+    ★ StudyLogにログイン済み（session_token検証済み）の本人だけが呼べる。
+      返ってきた authorize_url にブラウザを移動させると、Discordの認可画面が
+      表示され、許可すると /discord_oauth_callback に戻ってくる。
+    """
+    if not DISCORD_CLIENT_SECRET:
+        return jsonify({"ok": False, "error": "oauth_not_configured"})
+
+    data     = request.json or {}
+    guild_id = data.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing fields"})
+
+    guild_id   = int(guild_id)
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    state = issue_oauth_state(guild_id, student_id, purpose="link")
+    authorize_url = "https://discord.com/oauth2/authorize?" + urlencode({
+        "client_id":     DISCORD_CLIENT_ID,
+        "redirect_uri":  DISCORD_OAUTH_REDIRECT_URI,
+        "response_type": "code",
+        "scope":         "identify",
+        "state":         state,
+        "prompt":        "consent",
+    })
+    return jsonify({"ok": True, "authorize_url": authorize_url})
+
+
+def _oauth_result_page(success: bool, message: str) -> str:
+    """OAuthコールバック後にブラウザへ表示する簡易HTML（StudyLogへ自動で戻る）"""
+    color = "#16a34a" if success else "#dc2626"
+    icon  = "✓" if success else "✕"
+    return f"""<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Discord連携</title></head>
+<body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;
+             min-height:100vh;margin:0;background:#f1f5f9;">
+  <div style="background:#fff;border-radius:16px;padding:32px;max-width:360px;width:90%;
+              text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.15);">
+    <div style="font-size:40px;color:{color};margin-bottom:12px;">{icon}</div>
+    <div style="font-size:15px;color:#334155;line-height:1.6;">{message}</div>
+    <div style="font-size:12px;color:#94a3b8;margin-top:16px;">3秒後にStudyLogへ戻ります…</div>
+  </div>
+  <script>setTimeout(function() {{ location.href = "/StudyLog.html"; }}, 3000);</script>
+</body></html>"""
+
+
+def _oauth_login_success_page(student_id: str, nickname: str, token: str) -> str:
+    """
+    Discordログイン成功時：ブラウザのlocalStorageにセッションを書き込んでから
+    StudyLog.htmlへ遷移する。色（アバターカラー）はLogin.js/StudyLog.jsと
+    同じ計算式をここでもJS側で行い、表示の一貫性を保つ。
+    """
+    sid_js  = json.dumps(student_id)
+    nick_js = json.dumps(nickname)
+    tok_js  = json.dumps(token)
+    return f"""<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ログイン中…</title></head>
+<body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;
+             min-height:100vh;margin:0;background:#f1f5f9;">
+  <div style="background:#fff;border-radius:16px;padding:32px;max-width:360px;width:90%;
+              text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.15);">
+    <div style="font-size:40px;color:#16a34a;margin-bottom:12px;">✓</div>
+    <div style="font-size:15px;color:#334155;">Discordでログインしました。移動しています…</div>
+  </div>
+  <script>
+    // ★ Login.js / StudyLog.js の paletteFor() と同じ計算式（表示色を一致させるため）
+    const AVATAR_COLORS = [
+      {{ color: "#dbeafe", text: "#1e40af" }},
+      {{ color: "#dcfce7", text: "#166534" }},
+      {{ color: "#fce7f3", text: "#9d174d" }},
+      {{ color: "#ffedd5", text: "#9a3412" }},
+      {{ color: "#fef9c3", text: "#854d0e" }},
+      {{ color: "#ede9fe", text: "#6d28d9" }},
+      {{ color: "#fee2e2", text: "#991b1b" }},
+      {{ color: "#f0fdf4", text: "#15803d" }},
+    ];
+    function paletteFor(id) {{
+      let hash = 0;
+      for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+      return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+    }}
+    const p = paletteFor({sid_js});
+    const session = {{
+      student_id:    {sid_js},
+      nickname:      {nick_js},
+      color:         p.color,
+      text_color:    p.text,
+      session_token: {tok_js},
+      logged_in_at:  new Date().toISOString(),
+    }};
+    try {{ localStorage.setItem("sl_session", JSON.stringify(session)); }} catch(e) {{}}
+    location.href = "/StudyLog.html";
+  </script>
+</body></html>"""
+
+
+@app.route("/discord_oauth_callback", methods=["GET"])
+def discord_oauth_callback():
+    """
+    Discordの認可画面から戻ってくるエンドポイント（ブラウザが直接GETする）。
+    query: code, state（ユーザーが拒否した場合は error が入る）
+    stateの purpose によって「連携（link）」「ログイン（login）」の
+    どちらの処理をするかを振り分ける。
+    """
+    if not DISCORD_CLIENT_SECRET:
+        return _oauth_result_page(False, "サーバー側でDiscord連携が設定されていません。管理者にお問い合わせください。")
+
+    if request.args.get("error"):
+        return _oauth_result_page(False, "連携がキャンセルされました。")
+
+    code  = request.args.get("code")
+    state = request.args.get("state")
+    if not code or not state:
+        return _oauth_result_page(False, "不正なリクエストです。もう一度最初からお試しください。")
+
+    entry = consume_oauth_state(state)
+    if not entry:
+        return _oauth_result_page(False, "リンクの有効期限が切れました。もう一度最初からお試しください。")
+
+    guild_id = entry["guild_id"]
+    purpose  = entry.get("purpose", "link")
+
+    # --- 認可コード → アクセストークン に交換（linkでもloginでも共通） ---
+    try:
+        token_res = requests.post(
+            "https://discord.com/api/oauth2/token",
+            data={
+                "client_id":     DISCORD_CLIENT_ID,
+                "client_secret": DISCORD_CLIENT_SECRET,
+                "grant_type":    "authorization_code",
+                "code":          code,
+                "redirect_uri":  DISCORD_OAUTH_REDIRECT_URI,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=10,
+        )
+        token_res.raise_for_status()
+        access_token = token_res.json()["access_token"]
+    except Exception:
+        return _oauth_result_page(False, "Discordとの認証に失敗しました。時間をおいてもう一度お試しください。")
+
+    # --- 自分自身のDiscordユーザー情報を取得（linkでもloginでも共通） ---
+    try:
+        me_res = requests.get(
+            "https://discord.com/api/users/@me",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
+        )
+        me_res.raise_for_status()
+        me_json = me_res.json()
+        discord_user_id  = int(me_json["id"])
+        discord_username = me_json.get("global_name") or me_json.get("username") or ""
+    except Exception:
+        return _oauth_result_page(False, "Discordのユーザー情報取得に失敗しました。時間をおいてもう一度お試しください。")
+
+    if purpose == "login":
+        return _handle_discord_login_callback(guild_id, discord_user_id, discord_username)
+    else:
+        return _handle_discord_link_callback(guild_id, entry["student_id"], discord_user_id)
+
+
+def _handle_discord_link_callback(guild_id: int, student_id: str, discord_user_id: int) -> str:
+    """既にログイン中の本人が、追加でDiscordを連携する（従来のフロー）。"""
+    users = load_users(guild_id)
+    matched = next((u for u in users if u["id"] == student_id), None)
+    if not matched:
+        return _oauth_result_page(False, "生徒データが見つかりませんでした。お手数ですがもう一度お試しください。")
+    nickname = matched.get("nickname", student_id)
+
+    try:
+        links = load_discord_links(guild_id)
+        links[student_id] = discord_user_id
+        save_discord_links(guild_id, links)
+    except GitHubWriteError:
+        return _oauth_result_page(False, "連携の保存に失敗しました（サーバーエラー）。もう一度お試しください。")
+
+    try:
+        send_discord_dm(guild_id, student_id, "StudyLog", f"{student_id}の{nickname}さんの通知登録が完了しました。")
+    except Exception:
+        pass
+
+    return _oauth_result_page(True, "Discordとの連携が完了しました！")
+
+
+def _handle_discord_login_callback(guild_id: int, discord_user_id: int, discord_username: str) -> str:
+    """
+    Discordそのものでログインしようとしている（まだ未ログイン）。
+    ★「全員に登録し直してもらう」方針のため、既存の discord_links
+      （/id連携 のコード方式で作られたDM通知用の紐付け）はログイン用途では
+      一切信用しない。discord_login_links（ログイン専用・別ファイル）に
+      登録済みの場合のみ、そのままログインさせる。
+    """
+    login_links = load_discord_login_links(guild_id)
+    student_id = next((sid for sid, did in login_links.items() if int(did) == discord_user_id), None)
+
+    if student_id:
+        user = find_user(guild_id, student_id)
+        if user:
+            token = create_session(guild_id, student_id)
+            return _oauth_login_success_page(student_id, user.get("nickname", student_id), token)
+        # ユーザーデータが見つからない（削除された等）→ 登録し直しへフォールバック
+
+    # 初回、またはデータ不整合 → 学籍番号入力（登録）ステップへ
+    reg_token = issue_discord_reg_token(guild_id, discord_user_id, discord_username)
+    return redirect(f"/Login.html?discord_reg={reg_token}")
+
+
+@app.route("/discord_reg_info", methods=["GET"])
+def discord_reg_info():
+    """
+    query: dtoken
+    ★ Login.html側が、URLに付いてきた discord_reg トークンが有効かどうかを
+      最初に確認するためのAPI。生徒IDはまだ分からない段階なので、
+      参考情報としてDiscordの表示名（ニックネーム欄の初期値に使える）だけを返す。
+      トークン自体は消費しない（この後の登録フォーム送信時に使うため）。
+    """
+    entry = get_discord_reg_token(request.args.get("dtoken"))
+    if not entry:
+        return jsonify({"ok": False, "error": "reg_token_invalid"})
+    return jsonify({"ok": True, "discord_username": entry.get("discord_username", "")})
+
+
+@app.route("/discord_complete_registration", methods=["POST"])
+def discord_complete_registration():
+    """
+    body: { guild_id, dtoken, student_id, nickname(新規登録時のみ必須), password(既存アカウントの場合のみ必須) }
+    成功時: { ok: true, session_token, student: {id, nickname} }
+    ★ dtoken は Discordの認可を実際に済ませていないと手に入らない
+      （＝「このDiscordアカウントの持ち主である」ことは既に確認済み）。
+      その上で、
+      ・既に存在する学籍番号を指定した場合は、これまで通りパスワードで
+        本人確認する（他人の学籍番号を勝手に乗っ取れないようにするため。
+        以前の /id連携 の脆弱性と同じ構造の問題を防ぐ）。
+      ・存在しない学籍番号なら、新規生徒として登録する（パスワード不要）。
+      成功時のみ dtoken を破棄する（失敗時は同じdtokenで再試行できる）。
+    """
+    data       = request.json or {}
+    guild_id   = data.get("guild_id")
+    dtoken     = data.get("dtoken")
+    student_id = (data.get("student_id") or "").strip().upper()
+    nickname   = (data.get("nickname") or "").strip()
+    password   = data.get("password") or ""
+
+    if not guild_id or not dtoken or not student_id:
+        return jsonify({"ok": False, "error": "missing fields"})
+
+    guild_id = int(guild_id)
+    entry = get_discord_reg_token(dtoken)
+    if not entry or entry["guild_id"] != guild_id:
+        return jsonify({"ok": False, "error": "reg_token_invalid"})
+
+    discord_user_id = entry["discord_user_id"]
+
+    try:
+        users = load_users(guild_id)
+        existing = next((u for u in users if u.get("id") == student_id), None)
+
+        if existing:
+            # --- 既存の学籍番号 → パスワードで本人確認してから紐付ける ---
+            if not existing.get("password_hash"):
+                return jsonify({"ok": False, "error": "password_not_set"})
+            if not password:
+                return jsonify({"ok": False, "error": "password_required"})
+            if not verify_password(password, existing.get("password_salt"), existing.get("password_hash")):
+                return jsonify({"ok": False, "error": "wrong_password"})
+            final_nickname = existing.get("nickname", student_id)
+        else:
+            # --- 新しい学籍番号 → 新規生徒として登録（パスワード不要） ---
+            if not nickname:
+                return jsonify({"ok": False, "error": "nickname_required"})
+            if len(nickname) > 16:
+                return jsonify({"ok": False, "error": "nickname too long"})
+            err = reject_if_bug_chars({"ニックネーム": nickname})
+            if err:
+                return err
+            users.append({
+                "id":         student_id,
+                "nickname":   nickname,
+                "created_at": datetime.now(JST).strftime("%Y-%m-%d"),
+                # ★ Discordログイン専用アカウント。パスワードは未設定のまま保存する
+                #   （後から使いたくなった場合は /set_password で追加設定できる）。
+            })
+            save_users(guild_id, users)
+            final_nickname = nickname
+
+        # --- ログイン用の紐付けを保存 ---
+        login_links = load_discord_login_links(guild_id)
+        login_links[student_id] = discord_user_id
+        save_discord_login_links(guild_id, login_links)
+
+        # --- DM通知用の紐付けも合わせて更新しておく（失敗してもログイン自体は成功扱い） ---
+        try:
+            dm_links = load_discord_links(guild_id)
+            dm_links[student_id] = discord_user_id
+            save_discord_links(guild_id, dm_links)
+        except GitHubWriteError:
+            pass
+
+        discard_discord_reg_token(dtoken)  # ★ 成功時のみ破棄
+
+        token = create_session(guild_id, student_id)
+        return jsonify({
+            "ok": True,
+            "session_token": token,
+            "student": {"id": student_id, "nickname": final_nickname},
+        })
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_error: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 
 def send_discord_dm(guild_id: int, student_id: str, title: str, message: str):
