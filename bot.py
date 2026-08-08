@@ -2715,7 +2715,7 @@ def _handle_discord_login_callback(guild_id: int, discord_user_id: int, discord_
 
     # 初回、またはデータ不整合 → 学籍番号入力（登録）ステップへ
     reg_token = issue_discord_reg_token(guild_id, discord_user_id, discord_username)
-    return redirect(f"/Login.html?discord_reg={reg_token}")
+    return redirect(f"https://1istudyweb.pages.dev/Login?discord_reg={reg_token}")
 
 
 @app.route("/discord_reg_info", methods=["GET"])
