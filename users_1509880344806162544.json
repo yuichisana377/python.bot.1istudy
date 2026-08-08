@@ -47,7 +47,9 @@
   {
     "id": "32637",
     "nickname": "たりき",
-    "created_at": "2026-07-05"
+    "created_at": "2026-07-05",
+    "password_hash": "9d0473a7147a2e0b861096af3c85ff7cfe000a15e7379f6ebd3ae73b640a233d",
+    "password_salt": "002131e59457c0356de23e2d468cfc94"
   },
   {
     "id": "32615",
