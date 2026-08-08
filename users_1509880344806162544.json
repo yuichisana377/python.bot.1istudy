@@ -23,7 +23,9 @@
   {
     "id": "32632",
     "nickname": "ゆうらんせん",
-    "created_at": "2026-06-30"
+    "created_at": "2026-06-30",
+    "password_hash": "fe68198cae3ee37dfae1f058169904910bf01fb99ffada4e5a8f2c8b6b18ebd8",
+    "password_salt": "f17d42d448ba22afc1df2e67cc45ff5a"
   },
   {
     "id": "32628",
