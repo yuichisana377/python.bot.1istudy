@@ -16,6 +16,7 @@ import asyncio
 import time
 import hashlib
 import hmac
+import re
 import secrets
 from urllib.parse import urlencode
 
@@ -4085,27 +4086,44 @@ def save_order():
 #    同じ状態を見られるようにする。
 #  ・student_id はタイマーAPI等と同様、クライアントの自己申告を信用せず、
 #    必ず session_token から resolve_session() で解決したものを使う。
-#  ・study_data_{guild_id}.json の中身:
+#  ・study_data_{guild_id}_{student_id}.json（生徒ごとに1ファイル）の中身:
 #      {
-#        student_id: {
-#          "unsure":    { deck_id: [cardKey, ...] },
-#          "progress":  { "deck:ID" または "folder:ID": {...} },
-#          "completed": { "deck:ID" または "folder:ID": {...} },
-#        },
-#        ...
+#        "unsure":    { deck_id: [cardKey, ...] },
+#        "progress":  { "deck:ID" または "folder:ID": {...} },
+#        "completed": { "deck:ID" または "folder:ID": {...} },
 #      }
+#  ★ 全生徒分をまとめて1ファイルに保存する方式（study_data_{guild_id}.json）
+#    も検討したが、「わからない」マークはカードをめくるたびに更新が
+#    走りうるため、1ファイル共有だと生徒が増えるほどGitHubへの書き込みが
+#    競合（409）しやすくなる。そのため生徒ごとに別ファイルへ分け、
+#    自分の学習データを保存するときは他の生徒の書き込みと衝突しないように
+#    した（本人の複数端末からの同時書き込みだけがぶつかる可能性があり、
+#    その場合は github_put() 内の409再試行ロジックでカバーする）。
 # ================================
-def load_study_data(guild_id: int) -> dict:
-    data, _ = github_get(f"study_data_{guild_id}.json")
-    return data or {}
-
-def save_study_data(guild_id: int, all_data: dict, sha=None):
-    if sha is None:
-        _, sha = github_get(f"study_data_{guild_id}.json")
-    github_put(f"study_data_{guild_id}.json", all_data, sha)
+def _study_data_filename(guild_id: int, student_id: str) -> str:
+    # ★ student_id はユーザー（先生）が自由な文字列で登録できてしまうため、
+    #   そのままファイル名に使うと "/" 等でパスが変わってしまう恐れがある。
+    #   英数字・ハイフン・アンダースコア以外は "_" に置き換えたうえで、
+    #   末尾に短いハッシュを付けて衝突を防ぐ（安全性と可読性の両立）。
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", str(student_id))[:40]
+    suffix = hashlib.sha1(str(student_id).encode()).hexdigest()[:8]
+    return f"study_data_{guild_id}_{safe}_{suffix}.json"
 
 def _empty_student_study_data():
     return {"unsure": {}, "progress": {}, "completed": {}}
+
+def load_student_study_data(guild_id: int, student_id: str):
+    data, sha = github_get(_study_data_filename(guild_id, student_id))
+    if not data:
+        return _empty_student_study_data(), sha
+    return {
+        "unsure":    data.get("unsure", {}),
+        "progress":  data.get("progress", {}),
+        "completed": data.get("completed", {}),
+    }, sha
+
+def save_student_study_data(guild_id: int, student_id: str, data: dict, sha=None):
+    github_put(_study_data_filename(guild_id, student_id), data, sha)
 
 @app.route("/get_study_data", methods=["GET"])
 def get_study_data():
@@ -4118,8 +4136,7 @@ def get_study_data():
     if not student_id:
         return jsonify({"ok": False, "error": "not_logged_in"})
 
-    all_data = load_study_data(guild_id)
-    my_data = all_data.get(student_id) or _empty_student_study_data()
+    my_data, _ = load_student_study_data(guild_id, student_id)
     return jsonify({"ok": True, "data": my_data})
 
 @app.route("/save_unsure", methods=["POST"])
@@ -4134,14 +4151,12 @@ def save_unsure():
     if not deck_id or not isinstance(unsure, list):
         return jsonify({"ok": False, "error": "deck_id と unsure は必須です"})
     try:
-        all_data = load_study_data(guild_id)
-        my_data  = all_data.get(student_id) or _empty_student_study_data()
+        my_data, sha = load_student_study_data(guild_id, student_id)
         if unsure:
             my_data["unsure"][deck_id] = unsure
         else:
             my_data["unsure"].pop(deck_id, None)
-        all_data[student_id] = my_data
-        save_study_data(guild_id, all_data)
+        save_student_study_data(guild_id, student_id, my_data, sha)
         return jsonify({"ok": True})
     except GitHubWriteError as e:
         return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
@@ -4160,14 +4175,12 @@ def save_study_progress_api():
         return jsonify({"ok": False, "error": "key は必須です"})
     progress_data = data.get("data")
     try:
-        all_data = load_study_data(guild_id)
-        my_data  = all_data.get(student_id) or _empty_student_study_data()
+        my_data, sha = load_student_study_data(guild_id, student_id)
         if progress_data is None:
             my_data["progress"].pop(key, None)
         else:
             my_data["progress"][key] = progress_data
-        all_data[student_id] = my_data
-        save_study_data(guild_id, all_data)
+        save_student_study_data(guild_id, student_id, my_data, sha)
         return jsonify({"ok": True})
     except GitHubWriteError as e:
         return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
@@ -4186,11 +4199,9 @@ def save_completion_api():
     if not key or not completion_data:
         return jsonify({"ok": False, "error": "key と data は必須です"})
     try:
-        all_data = load_study_data(guild_id)
-        my_data  = all_data.get(student_id) or _empty_student_study_data()
+        my_data, sha = load_student_study_data(guild_id, student_id)
         my_data["completed"][key] = completion_data
-        all_data[student_id] = my_data
-        save_study_data(guild_id, all_data)
+        save_student_study_data(guild_id, student_id, my_data, sha)
         return jsonify({"ok": True})
     except GitHubWriteError as e:
         return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
