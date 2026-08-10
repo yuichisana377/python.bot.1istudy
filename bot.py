@@ -4125,6 +4125,33 @@ def load_student_study_data(guild_id: int, student_id: str):
 def save_student_study_data(guild_id: int, student_id: str, data: dict, sha=None):
     github_put(_study_data_filename(guild_id, student_id), data, sha)
 
+# ★ 追加：読み込み→一部だけ書き換え→保存、を「保存直前に必ず最新内容を
+#   読み直してから変更を適用する」形でやり直す安全な更新処理。
+#   ─────────────────────────────────────────────
+#   以前は各APIハンドラが「リクエストの最初に読み込んだ my_data」を
+#   そのまま保存していたため、ほぼ同時に届いた別のリクエスト（例：
+#   「わからない」マークの保存と、カード送りのたびに自動で走る
+#   「続きから」進捗の保存）が競合すると、後から書き込んだ方が
+#   前の変更を含まない古い中身でファイル全体を上書きしてしまい、
+#   わからないマーク等の変更が消えてしまう不具合があった。
+#   ここでは github_put が 409（sha衝突）を返したら、その都度
+#   最新のデータを読み直して mutate_fn をもう一度適用してから
+#   書き込み直す（＝変更そのものを失わない）ようにする。
+def update_student_study_data(guild_id: int, student_id: str, mutate_fn, max_attempts: int = 4):
+    """mutate_fn(my_data) は my_data を直接書き換える関数。
+    保存に失敗（sha競合）した場合は最新データを読み直して再適用する。"""
+    last_err = None
+    for _ in range(max_attempts):
+        my_data, sha = load_student_study_data(guild_id, student_id)
+        mutate_fn(my_data)
+        try:
+            save_student_study_data(guild_id, student_id, my_data, sha)
+            return
+        except GitHubWriteError as e:
+            last_err = e
+            continue  # 最新のsha・内容を読み直してもう一度やり直す
+    raise last_err or GitHubWriteError("保存に失敗しました（リトライ上限）")
+
 @app.route("/get_study_data", methods=["GET"])
 def get_study_data():
     """ログイン中の生徒の学習データ（わからない／続きから／完了記録）を返す。"""
@@ -4151,12 +4178,12 @@ def save_unsure():
     if not deck_id or not isinstance(unsure, list):
         return jsonify({"ok": False, "error": "deck_id と unsure は必須です"})
     try:
-        my_data, sha = load_student_study_data(guild_id, student_id)
-        if unsure:
-            my_data["unsure"][deck_id] = unsure
-        else:
-            my_data["unsure"].pop(deck_id, None)
-        save_student_study_data(guild_id, student_id, my_data, sha)
+        def _mutate(my_data):
+            if unsure:
+                my_data["unsure"][deck_id] = unsure
+            else:
+                my_data["unsure"].pop(deck_id, None)
+        update_student_study_data(guild_id, student_id, _mutate)
         return jsonify({"ok": True})
     except GitHubWriteError as e:
         return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
@@ -4175,12 +4202,12 @@ def save_study_progress_api():
         return jsonify({"ok": False, "error": "key は必須です"})
     progress_data = data.get("data")
     try:
-        my_data, sha = load_student_study_data(guild_id, student_id)
-        if progress_data is None:
-            my_data["progress"].pop(key, None)
-        else:
-            my_data["progress"][key] = progress_data
-        save_student_study_data(guild_id, student_id, my_data, sha)
+        def _mutate(my_data):
+            if progress_data is None:
+                my_data["progress"].pop(key, None)
+            else:
+                my_data["progress"][key] = progress_data
+        update_student_study_data(guild_id, student_id, _mutate)
         return jsonify({"ok": True})
     except GitHubWriteError as e:
         return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
@@ -4199,9 +4226,9 @@ def save_completion_api():
     if not key or not completion_data:
         return jsonify({"ok": False, "error": "key と data は必須です"})
     try:
-        my_data, sha = load_student_study_data(guild_id, student_id)
-        my_data["completed"][key] = completion_data
-        save_student_study_data(guild_id, student_id, my_data, sha)
+        def _mutate(my_data):
+            my_data["completed"][key] = completion_data
+        update_student_study_data(guild_id, student_id, _mutate)
         return jsonify({"ok": True})
     except GitHubWriteError as e:
         return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
