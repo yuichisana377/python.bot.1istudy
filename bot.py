@@ -81,6 +81,7 @@ NO_CACHE_PATHS = {
     "/channels",
     "/list_in_progress",
     "/timer_state",
+    "/get_study_data",
 }
 
 @app.after_request
@@ -4068,6 +4069,128 @@ def save_order():
         order_map, sha = load_list_order()
         order_map[scope] = keys
         save_list_order(order_map, sha)
+        return jsonify({"ok": True})
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+# ================================
+#  Flask API — 学習データ（わからないマーク／続きから／完了記録）の
+#              端末間共有
+#  ─────────────────────────────
+#  ・以前はブラウザの localStorage にしか保存しておらず、別の端末では
+#    見えなかった。ログイン（student_id）に紐付けてサーバー（GitHub）側
+#    にも保存することで、同じアカウントでログインしていればどの端末からでも
+#    同じ状態を見られるようにする。
+#  ・student_id はタイマーAPI等と同様、クライアントの自己申告を信用せず、
+#    必ず session_token から resolve_session() で解決したものを使う。
+#  ・study_data_{guild_id}.json の中身:
+#      {
+#        student_id: {
+#          "unsure":    { deck_id: [cardKey, ...] },
+#          "progress":  { "deck:ID" または "folder:ID": {...} },
+#          "completed": { "deck:ID" または "folder:ID": {...} },
+#        },
+#        ...
+#      }
+# ================================
+def load_study_data(guild_id: int) -> dict:
+    data, _ = github_get(f"study_data_{guild_id}.json")
+    return data or {}
+
+def save_study_data(guild_id: int, all_data: dict, sha=None):
+    if sha is None:
+        _, sha = github_get(f"study_data_{guild_id}.json")
+    github_put(f"study_data_{guild_id}.json", all_data, sha)
+
+def _empty_student_study_data():
+    return {"unsure": {}, "progress": {}, "completed": {}}
+
+@app.route("/get_study_data", methods=["GET"])
+def get_study_data():
+    """ログイン中の生徒の学習データ（わからない／続きから／完了記録）を返す。"""
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    guild_id = int(guild_id)
+    student_id = resolve_session(request.args.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    all_data = load_study_data(guild_id)
+    my_data = all_data.get(student_id) or _empty_student_study_data()
+    return jsonify({"ok": True, "data": my_data})
+
+@app.route("/save_unsure", methods=["POST"])
+def save_unsure():
+    """指定したデッキの「わからない」マーク（カードキーの配列）を丸ごと置き換える。"""
+    guild_id, student_id, err = _timer_auth_from_json()
+    if err:
+        return err
+    data     = request.json or {}
+    deck_id  = data.get("deck_id")
+    unsure   = data.get("unsure")
+    if not deck_id or not isinstance(unsure, list):
+        return jsonify({"ok": False, "error": "deck_id と unsure は必須です"})
+    try:
+        all_data = load_study_data(guild_id)
+        my_data  = all_data.get(student_id) or _empty_student_study_data()
+        if unsure:
+            my_data["unsure"][deck_id] = unsure
+        else:
+            my_data["unsure"].pop(deck_id, None)
+        all_data[student_id] = my_data
+        save_study_data(guild_id, all_data)
+        return jsonify({"ok": True})
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/save_study_progress", methods=["POST"])
+def save_study_progress_api():
+    """「続きから」の進捗を保存する。data に null を渡すとその項目を削除する。"""
+    guild_id, student_id, err = _timer_auth_from_json()
+    if err:
+        return err
+    data = request.json or {}
+    key  = data.get("key")  # 例: "deck:xxxx" / "folder:xxxx"
+    if not key:
+        return jsonify({"ok": False, "error": "key は必須です"})
+    progress_data = data.get("data")
+    try:
+        all_data = load_study_data(guild_id)
+        my_data  = all_data.get(student_id) or _empty_student_study_data()
+        if progress_data is None:
+            my_data["progress"].pop(key, None)
+        else:
+            my_data["progress"][key] = progress_data
+        all_data[student_id] = my_data
+        save_study_data(guild_id, all_data)
+        return jsonify({"ok": True})
+    except GitHubWriteError as e:
+        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/save_completion", methods=["POST"])
+def save_completion_api():
+    """学習の完了記録を保存する。"""
+    guild_id, student_id, err = _timer_auth_from_json()
+    if err:
+        return err
+    data = request.json or {}
+    key  = data.get("key")  # 例: "deck:xxxx" / "folder:xxxx"
+    completion_data = data.get("data")
+    if not key or not completion_data:
+        return jsonify({"ok": False, "error": "key と data は必須です"})
+    try:
+        all_data = load_study_data(guild_id)
+        my_data  = all_data.get(student_id) or _empty_student_study_data()
+        my_data["completed"][key] = completion_data
+        all_data[student_id] = my_data
+        save_study_data(guild_id, all_data)
         return jsonify({"ok": True})
     except GitHubWriteError as e:
         return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
