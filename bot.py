@@ -3580,9 +3580,20 @@ def delete_cards():
 #  ・code（5桁の招待コード）でルームを引く。
 #  ・state は "lobby"（開始待ち）→ "question"（出題中）→ "reveal"（正解発表）
 #    → （次の問題があれば "question" に戻る／無ければ "ended"）と遷移する。
-#    "question"⇔"reveal" の遷移も、次の問題への遷移も、すべてホストが
-#    /quiz_next を叩くたびに1段階だけ進む（時間切れで自動的には進まない。
-#    タイマーバーはあくまで見た目上の演出で、実際の進行はホスト操作に委ねる）。
+#    ホストの操作待ちにはせず、すべて自動で進行する：
+#      "question" → "reveal" … 全員が回答し終わった、または制限時間
+#                    （QUIZ_TIME_LIMIT_SEC）が経過したら自動的に切り替わる。
+#      "reveal"   → 次の問題 / "ended" … 発表から QUIZ_REVEAL_DURATION_SEC
+#                    秒経ったら自動的に進む。
+#    この判定は各APIリクエストのたびに _quiz_autoadvance_locked() で
+#    その場評価する（study_timers の自動休憩判定と同じ「アクセスの
+#    たびに評価する」方式。専用のバックグラウンドジョブは持たない）。
+#    フロントは1秒ごとにポーリングしているので、実際の進行から
+#    最大でも1秒程度の遅れで反映される。
+#  ・ホスト（作成者）も1人のプレイヤーとして最初から参加者に含まれ、
+#    他の参加者と同じように回答してスコアを競える。そのため、正解番号は
+#    ホストにも「発表(reveal)されるまでは」一切渡さない（渡すとホストだけ
+#    先に答えを知れてしまう）。
 #  ・得点：正解 +10pt。そのうち、その問題で一番早く正解した1人だけ
 #    さらに +2pt のボーナス（合計12pt）が付く。
 #  ・プロセス再起動でルームは全て消える（＝進行中のクイズは失われる）が、
@@ -3593,8 +3604,8 @@ QUIZ_ROOMS_LOCK = Lock()
 QUIZ_ROOM_CODE_LEN = 5
 QUIZ_ROOM_IDLE_TTL_SEC = 3 * 60 * 60   # 3時間アクセスが無ければ破棄する（ホスト放置対策）
 QUIZ_ROOM_ENDED_TTL_SEC = 15 * 60      # 終了後もしばらくは結果画面を見られるよう残しておく
-QUIZ_MIN_TIME_LIMIT_SEC = 5
-QUIZ_MAX_TIME_LIMIT_SEC = 120
+QUIZ_TIME_LIMIT_SEC = 20        # 1問あたりの制限時間（固定）
+QUIZ_REVEAL_DURATION_SEC = 5    # 正解発表から次の問題に自動で進むまでの待ち時間
 QUIZ_MAX_QUESTIONS = 30
 QUIZ_ANSWER_BASE_POINTS = 10
 QUIZ_FIRST_CORRECT_BONUS = 2
@@ -3638,6 +3649,45 @@ def _quiz_gc_locked(now):
     for code in stale:
         del QUIZ_ROOMS[code]
 
+def _quiz_autoadvance_locked(room, now):
+    """QUIZ_ROOMS_LOCK を保持している状態で呼び出すこと。
+    ホストの操作を待たず、時間経過や全員の回答状況に応じてルームの
+    stateを自動的に1段階（必要なら複数段階）進める。
+      ・"question" → 全員が回答し終わった、または制限時間が過ぎたら → "reveal"
+      ・"reveal"   → 発表からQUIZ_REVEAL_DURATION_SEC秒経ったら
+                      → 次の問題（無ければ "ended"）
+    """
+    while True:
+        if room["state"] == "question":
+            total = len(room["players"])
+            answered = sum(1 for p in room["players"].values() if p["cur_answer"] is not None)
+            time_up = (now - room["question_started_at"]) >= room["time_limit_sec"]
+            all_answered = total > 0 and answered >= total
+            if not (time_up or all_answered):
+                return
+            room["state"] = "reveal"
+            room["reveal_started_at"] = now
+        elif room["state"] == "reveal":
+            if now - room["reveal_started_at"] < QUIZ_REVEAL_DURATION_SEC:
+                return
+            if room["current_q"] + 1 >= len(room["questions"]):
+                room["state"] = "ended"
+                room["ended_at"] = now
+                return
+            room["current_q"] += 1
+            room["state"] = "question"
+            room["question_started_at"] = now
+            room["reveal_started_at"] = None
+            room["first_correct_id"] = None
+            room["first_correct_nickname"] = None
+            for p in room["players"].values():
+                p["cur_answer"] = None
+                p["cur_correct"] = None
+            # ★ 次の問題もすぐ制限時間切れ…という極端なケースは無いはずだが、
+            #   万一に備えてループで再評価する（whileで継続）。
+        else:
+            return
+
 def _quiz_auth_from_json():
     """POST系クイズAPI共通：JSONボディからguild_id・session_tokenを検証し、
     (data, guild_id, student_id, nickname, error_response) を返す。
@@ -3674,7 +3724,7 @@ def _quiz_room_players_json(room):
         for p in players
     ]
 
-def _quiz_room_snapshot(room, is_host: bool, student_id):
+def _quiz_room_snapshot(room, student_id):
     snap = {
         "code": room["code"],
         "title": room["title"],
@@ -3686,10 +3736,10 @@ def _quiz_room_snapshot(room, is_host: bool, student_id):
         q = room["questions"][room["current_q"]]
         revealed = room["state"] == "reveal"
         question_payload = {"question": q["question"], "choices": q["choices"]}
-        # ★ 正解番号は、出題中はプレイヤーには渡さない（レスポンスをdevtools等で
-        #   覗かれてカンニングされるのを防ぐ）。ホスト、または発表済み(reveal)に
-        #   なってから渡す。
-        if is_host or revealed:
+        # ★ 正解番号は、発表(reveal)されるまでは誰にも渡さない（レスポンスを
+        #   devtools等で覗かれてカンニングされるのを防ぐ）。ホストも今は
+        #   1プレイヤーとして参加するため、ホストだけ特別扱いはしない。
+        if revealed:
             question_payload["correct_index"] = q["correct_index"]
         snap.update({
             "current_q": room["current_q"],
@@ -3697,18 +3747,18 @@ def _quiz_room_snapshot(room, is_host: bool, student_id):
             "question": question_payload,
             "question_started_at": room["question_started_at"],
             "time_limit_sec": room["time_limit_sec"],
+            "answered_count": sum(1 for p in room["players"].values() if p["cur_answer"] is not None),
+            "total_players": len(room["players"]),
         })
-        if is_host:
-            snap["answered_count"] = sum(1 for p in room["players"].values() if p["cur_answer"] is not None)
-            snap["total_players"] = len(room["players"])
         if revealed:
             snap["first_correct_nickname"] = room.get("first_correct_nickname")
-        if not is_host:
-            player = room["players"].get(student_id)
-            if player is not None and player["cur_answer"] is not None:
-                snap["your_answer"] = player["cur_answer"]
-                if revealed:
-                    snap["your_correct"] = bool(player["cur_correct"])
+            snap["reveal_started_at"] = room.get("reveal_started_at")
+            snap["reveal_duration_sec"] = QUIZ_REVEAL_DURATION_SEC
+        player = room["players"].get(student_id)
+        if player is not None and player["cur_answer"] is not None:
+            snap["your_answer"] = player["cur_answer"]
+            if revealed:
+                snap["your_correct"] = bool(player["cur_correct"])
     return snap
 
 def _build_deck_questions(deck_filename, num_questions):
@@ -3787,12 +3837,6 @@ def quiz_create():
         return err
 
     title = str(data.get("title") or "").strip()[:40] or "みんなでクイズ"
-    try:
-        time_limit_sec = int(data.get("time_limit_sec"))
-    except (TypeError, ValueError):
-        return jsonify({"ok": False, "error": "invalid_time_limit"})
-    if not (QUIZ_MIN_TIME_LIMIT_SEC <= time_limit_sec <= QUIZ_MAX_TIME_LIMIT_SEC):
-        return jsonify({"ok": False, "error": "invalid_time_limit"})
 
     source = data.get("source")
     if source == "deck":
@@ -3821,18 +3865,32 @@ def quiz_create():
     with QUIZ_ROOMS_LOCK:
         _quiz_gc_locked(now)
         code = _generate_quiz_code()
+        # ★ ホスト（作成者）自身も、最初から1人のプレイヤーとして参加者に含める
+        #   （開催している本人も一緒に回答してスコアを競えるようにするため）。
+        host_color, host_text_color = _quiz_palette_for(student_id)
         QUIZ_ROOMS[code] = {
             "code": code,
             "guild_id": guild_id,
             "title": title,
-            "time_limit_sec": time_limit_sec,
+            "time_limit_sec": QUIZ_TIME_LIMIT_SEC,
             "questions": questions,
             "host_id": student_id,
             "host_nickname": nickname,
-            "players": {},
+            "players": {
+                student_id: {
+                    "id": student_id,
+                    "nickname": nickname,
+                    "color": host_color,
+                    "text_color": host_text_color,
+                    "score": 0,
+                    "cur_answer": None,
+                    "cur_correct": None,
+                },
+            },
             "state": "lobby",
             "current_q": 0,
             "question_started_at": None,
+            "reveal_started_at": None,
             "first_correct_id": None,
             "first_correct_nickname": None,
             "created_at": now,
@@ -3870,7 +3928,8 @@ def quiz_join():
                 "cur_correct": None,
             }
         room["last_activity"] = now
-        snap = _quiz_room_snapshot(room, is_host, student_id)
+        _quiz_autoadvance_locked(room, now)
+        snap = _quiz_room_snapshot(room, student_id)
     return jsonify({"ok": True, "is_host": is_host, "room": snap})
 
 @app.route("/quiz_state", methods=["GET"])
@@ -3895,7 +3954,8 @@ def quiz_state():
             # 参加したことのない部屋の状態は覗けないようにする（未参加なら「見つからない」扱い）
             return jsonify({"ok": False, "error": "room_not_found"})
         room["last_activity"] = now
-        snap = _quiz_room_snapshot(room, is_host, student_id)
+        _quiz_autoadvance_locked(room, now)
+        snap = _quiz_room_snapshot(room, student_id)
     return jsonify({"ok": True, "is_host": is_host, "room": snap})
 
 @app.route("/quiz_start", methods=["POST"])
@@ -3914,18 +3974,17 @@ def quiz_start():
             return jsonify({"ok": False, "error": "not_host"})
         if room["state"] != "lobby":
             return jsonify({"ok": False, "error": "quiz_already_started"})
-        if not room["players"]:
-            return jsonify({"ok": False, "error": "no_players"})
         room["state"] = "question"
         room["current_q"] = 0
         room["question_started_at"] = now
+        room["reveal_started_at"] = None
         room["first_correct_id"] = None
         room["first_correct_nickname"] = None
         for p in room["players"].values():
             p["cur_answer"] = None
             p["cur_correct"] = None
         room["last_activity"] = now
-        snap = _quiz_room_snapshot(room, True, student_id)
+        snap = _quiz_room_snapshot(room, student_id)
     return jsonify({"ok": True, "room": snap})
 
 @app.route("/quiz_answer", methods=["POST"])
@@ -3963,46 +4022,10 @@ def quiz_answer():
                 points += QUIZ_FIRST_CORRECT_BONUS
             player["score"] += points
         room["last_activity"] = now
+        # ★ この回答で全員が回答し終わった場合、次のポーリングを待たずに
+        #   その場で正解発表(reveal)へ進める（体感の速さのため）。
+        _quiz_autoadvance_locked(room, now)
     return jsonify({"ok": True})
-
-@app.route("/quiz_next", methods=["POST"])
-def quiz_next():
-    data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
-    if err:
-        return err
-    code = (data.get("code") or "").strip().upper()
-
-    now = time.time()
-    with QUIZ_ROOMS_LOCK:
-        room, err = _quiz_get_room_or_error(code)
-        if err:
-            return err
-        if student_id != room["host_id"]:
-            return jsonify({"ok": False, "error": "not_host"})
-
-        if room["state"] == "question":
-            # 出題中 → 正解発表（この問題の集計を締め切るだけで、得点は既に
-            # /quiz_answer の時点で加算済みなのでここでは何もしない）
-            room["state"] = "reveal"
-        elif room["state"] == "reveal":
-            if room["current_q"] + 1 >= len(room["questions"]):
-                room["state"] = "ended"
-                room["ended_at"] = now
-            else:
-                room["current_q"] += 1
-                room["state"] = "question"
-                room["question_started_at"] = now
-                room["first_correct_id"] = None
-                room["first_correct_nickname"] = None
-                for p in room["players"].values():
-                    p["cur_answer"] = None
-                    p["cur_correct"] = None
-        else:
-            return jsonify({"ok": False, "error": "quiz_not_in_progress"})
-
-        room["last_activity"] = now
-        snap = _quiz_room_snapshot(room, True, student_id)
-    return jsonify({"ok": True, "room": snap})
 
 @app.route("/quiz_end", methods=["POST"])
 def quiz_end():
