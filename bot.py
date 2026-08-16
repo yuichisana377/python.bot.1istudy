@@ -18,16 +18,20 @@ import hashlib
 import hmac
 import re
 import secrets
-import random
-import string
-import threading
 from urllib.parse import urlencode
 
 # ================================
 #  設定
 # ================================
-GITHUB_REPO         = os.getenv("GITHUB_REPO")
-GITHUB_TOKEN        = os.getenv("GITHUB_TOKEN")
+# ★ 変更：以前はデータの永続化先としてGitHubリポジトリ（Contents API）を
+#   使っていたが、Ubuntuサーバー上で常時稼働させる構成に合わせて、
+#   すべてサーバーのローカルディスク（DATA_DIR配下）に保存する方式に変更した。
+#   ・DATA_DIR は環境変数で変更可能（未設定時はこのスクリプトと同じ場所の
+#     "data" フォルダを使う）。
+#   ・systemd等で再起動してもデータが消えないよう、DATA_DIRは外部ボリュームや
+#     永続的なディスク上のパスを指定することを推奨する。
+DATA_DIR            = os.getenv("DATA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
+os.makedirs(DATA_DIR, exist_ok=True)
 TOKEN               = os.getenv("TOKEN")
 SUBJECT_CATEGORY_ID = os.getenv("SUBJECT_CATEGORY_ID")  # カテゴリID（優先）
 SUBJECT_CATEGORY    = os.getenv("SUBJECT_CATEGORY")     # カテゴリ名（フォールバック）
@@ -39,24 +43,30 @@ JST = timezone("Asia/Tokyo")
 #  コード手入力方式（/id連携）に加えて、生徒がボタン一つでDiscordの
 #  認可画面から直接連携できるようにするための設定。
 #  ・DISCORD_CLIENT_ID     : 公開情報なのでハードコードのフォールバックでも問題ない
-#  ・DISCORD_CLIENT_SECRET : 機密情報。必ずRenderの環境変数に設定すること。
+#  ・DISCORD_CLIENT_SECRET : 機密情報。必ずサーバーの環境変数に設定すること。
 #                            これがコードに書かれていたり漏れたりすると、
 #                            第三者がこのアプリになりすましてDiscordユーザーの
 #                            情報を取得できてしまう。
 #  ・DISCORD_OAUTH_REDIRECT_URI : Discord Developer Portal の
 #                            OAuth2 → Redirects に登録したURLと
 #                            1文字違わず完全一致している必要がある。
+#                            ★ Ubuntuサーバーに移行する場合は、実際に
+#                              このサーバーへアクセスできるURL（独自ドメイン
+#                              やサーバーのグローバルIPなど）を環境変数
+#                              DISCORD_OAUTH_REDIRECT_URI に設定し、
+#                              Discord Developer Portal 側のRedirect URLも
+#                              同じ値に変更すること。
 # ================================
 DISCORD_CLIENT_ID     = os.getenv("DISCORD_CLIENT_ID", "1515358957542047975")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DISCORD_OAUTH_REDIRECT_URI = os.getenv(
     "DISCORD_OAUTH_REDIRECT_URI",
-    "https://python-bot-1istudy.onrender.com/discord_oauth_callback"
+    "http://localhost:10000/discord_oauth_callback"
 )
 if not DISCORD_CLIENT_SECRET:
     print("[WARN] 環境変数 DISCORD_CLIENT_SECRET が未設定です。"
           "Discord OAuth連携（/discord_oauth_start, /discord_oauth_callback）は無効化されます。"
-          "使う場合はRenderの環境変数にDISCORD_CLIENT_SECRETを設定してください。")
+          "使う場合はサーバーの環境変数にDISCORD_CLIENT_SECRETを設定してください。")
 
 # --- 通生/寮生 振り分け用の絵文字 ---
 EMOJI_COMMUTER = "🚃"  # 通生
@@ -86,7 +96,6 @@ NO_CACHE_PATHS = {
     "/list_in_progress",
     "/timer_state",
     "/get_study_data",
-    "/quiz_state",
 }
 
 @app.after_request
@@ -112,22 +121,7 @@ def home():
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    # ★ Ubuntuサーバー移行に伴う変更：
-    #   Renderの無料枠ではFlask標準の開発用サーバー(app.run)でも動いていたが、
-    #   常時稼働の自前サーバーでは本番用のWSGIサーバーを使うのが望ましい
-    #   （app.runは「開発用」と明記されており、同時アクセスへの耐性や
-    #   安定性で劣る）。ここではPure Pythonで依存が少なく、Flaskと
-    #   ほぼドロップイン互換のwaitressを使う（要: pip install waitress）。
-    #   waitressが入っていない場合は自動的に開発用サーバーにフォールバックする
-    #   （動作はするが、その場合は早めに `pip install waitress` を推奨）。
-    try:
-        from waitress import serve
-        print(f"[INFO] waitress（本番用サーバー）で起動します: port={port}")
-        serve(app, host="0.0.0.0", port=port, threads=8)
-    except ImportError:
-        print("[WARN] waitress が見つかりません。`pip install waitress` を推奨します。"
-              "今回はFlask標準の開発用サーバーで代用して起動します。")
-        app.run(host="0.0.0.0", port=port, use_reloader=False, threaded=True)
+    app.run(host="0.0.0.0", port=port, use_reloader=False, threaded=True)
 
 def keep_alive():
     t = Thread(target=run_flask, daemon=True)
@@ -145,95 +139,118 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ================================
-#  GitHub ユーティリティ
+#  ローカルファイル ユーティリティ
+#  ─────────────────────────────
+#  以前はここでGitHub Contents APIを叩いてJSONファイルの読み書きを
+#  行っていたが、Ubuntuサーバー上でローカルディスクに直接保存する方式に
+#  変更した。呼び出し側のインターフェース（(data, sha) を返す・
+#  sha衝突時は例外を送出する、など）は変更していないため、以降の
+#  ロジックはそのまま動作する。
+#  ・sha相当のものとして、保存されているファイル内容のSHA256ハッシュ値を
+#    使う。GitHubの「誰かが先に更新していたら409で拒否する」という
+#    楽観的排他制御を、ローカルファイルでも同じ考え方で再現している
+#    （同時書き込みで片方の変更が消えるのを防ぐ）。
 # ================================
-class GitHubWriteError(Exception):
+class DataWriteError(Exception):
     pass
 
-def github_get(filename):
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers, timeout=15)
-    if r.status_code == 404:
+def _data_path(filename):
+    return os.path.join(DATA_DIR, filename)
+
+def _file_sha(raw_bytes):
+    return hashlib.sha256(raw_bytes).hexdigest()
+
+def local_get(filename):
+    """filename の中身をJSONとして読み込み (data, sha) を返す。存在しなければ (None, None)。"""
+    path = _data_path(filename)
+    if not os.path.isfile(path):
         return None, None
-    r.raise_for_status()
-    data = r.json()
-    content = base64.b64decode(data["content"]).decode()
-    return json.loads(content), data["sha"]
+    with open(path, "rb") as f:
+        raw = f.read()
+    try:
+        data = json.loads(raw.decode("utf-8")) if raw.strip() else None
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        data = None
+    return data, _file_sha(raw)
 
-def _github_put_once(filename, content_obj, sha=None):
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    encoded = base64.b64encode(
-        json.dumps(content_obj, ensure_ascii=False, indent=2).encode()
-    ).decode()
-    payload = {"message": f"update {filename}", "content": encoded}
-    if sha:
-        payload["sha"] = sha
-    return requests.put(url, headers=headers, json=payload, timeout=15)
+def _local_write_once(filename, content_obj, expected_sha=None):
+    """expected_sha が指定されていて現在のファイル内容と一致しない場合は
+    (False, 現在のsha) を返す（＝GitHubでいう409相当）。
+    書き込みに成功した場合は (True, 新しいsha) を返す。"""
+    path = _data_path(filename)
+    dirname = os.path.dirname(path)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
 
-def github_put(filename, content_obj, sha=None):
+    current_sha = None
+    if os.path.isfile(path):
+        with open(path, "rb") as f:
+            current_sha = _file_sha(f.read())
+
+    if expected_sha is not None and current_sha is not None and expected_sha != current_sha:
+        return False, current_sha
+
+    encoded = json.dumps(content_obj, ensure_ascii=False, indent=2).encode("utf-8")
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "wb") as f:
+        f.write(encoded)
+    os.replace(tmp_path, path)
+    return True, _file_sha(encoded)
+
+def local_put(filename, content_obj, sha=None):
     """
-    GitHubへの書き込み。失敗した場合は例外を送出する（以前は無視していた）。
-    ・409（sha衝突 = 他の誰かが先に保存した）の場合は、最新のshaを取り直して
-      1回だけ自動再試行する。
-    ・それでも失敗する場合は GitHubWriteError を送出するので、呼び出し側で
+    ローカルディスクへの書き込み。失敗した場合は例外を送出する（以前は無視していた）。
+    ・保存直前の内容が、渡された sha（前回読み込み時のハッシュ）と一致しない場合
+      （＝他の誰かが先に保存した）は、最新の内容を読み直して1回だけ自動再試行する。
+    ・それでも失敗する場合は DataWriteError を送出するので、呼び出し側で
       「保存に失敗しました」とユーザーに伝えられるようにする。
     """
-    r = _github_put_once(filename, content_obj, sha)
-    if r.status_code in (200, 201):
-        return r.json()
+    ok, info = _local_write_once(filename, content_obj, sha)
+    if ok:
+        return {"content": {"sha": info}}
 
-    if r.status_code == 409:
-        # 誰かが先に更新した → 最新のshaを取得して1回だけ再試行
-        _, latest_sha = github_get(filename)
-        r2 = _github_put_once(filename, content_obj, latest_sha)
-        if r2.status_code in (200, 201):
-            return r2.json()
-        raise GitHubWriteError(
-            f"GitHub保存に失敗しました（409再試行後も失敗）: {r2.status_code} {r2.text[:300]}"
-        )
+    # 誰かが先に更新した（sha不一致）→ 無条件で1回だけ再試行
+    ok2, info2 = _local_write_once(filename, content_obj, None)
+    if ok2:
+        return {"content": {"sha": info2}}
 
-    raise GitHubWriteError(f"GitHub保存に失敗しました: {r.status_code} {r.text[:300]}")
+    raise DataWriteError(f"ローカル保存に失敗しました（再試行後も失敗）: {filename}")
 
-async def async_github_get(filename):
+async def async_local_get(filename):
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, github_get, filename)
+    return await loop.run_in_executor(None, local_get, filename)
 
-async def async_github_put(filename, content_obj, sha=None):
+async def async_local_put(filename, content_obj, sha=None):
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, github_put, filename, content_obj, sha)
+    return await loop.run_in_executor(None, local_put, filename, content_obj, sha)
 
 # ================================
 #  設定ファイル
 # ================================
 def load_config(guild_id: int):
-    data, _ = github_get(f"config_{guild_id}.json")
+    data, _ = local_get(f"config_{guild_id}.json")
     return data or {}
 
 def save_config(guild_id: int, data: dict):
-    _, sha = github_get(f"config_{guild_id}.json")
-    github_put(f"config_{guild_id}.json", data, sha)
+    _, sha = local_get(f"config_{guild_id}.json")
+    local_put(f"config_{guild_id}.json", data, sha)
 
 async def async_load_config(guild_id: int):
-    data, _ = await async_github_get(f"config_{guild_id}.json")
+    data, _ = await async_local_get(f"config_{guild_id}.json")
     return data or {}
 
 async def async_save_config(guild_id: int, data: dict):
-    _, sha = await async_github_get(f"config_{guild_id}.json")
-    await async_github_put(f"config_{guild_id}.json", data, sha)
+    _, sha = await async_local_get(f"config_{guild_id}.json")
+    await async_local_put(f"config_{guild_id}.json", data, sha)
 
 def list_all_configs():
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers, timeout=15)
-    r.raise_for_status()
-    files = r.json()
+    if not os.path.isdir(DATA_DIR):
+        return []
     return [
-        f["name"] for f in files
-        if isinstance(f, dict)
-        and f["name"].startswith("config_")
-        and f["name"].endswith(".json")
+        name for name in os.listdir(DATA_DIR)
+        if name.startswith("config_")
+        and name.endswith(".json")
+        and os.path.isfile(_data_path(name))
     ]
 
 # ================================
@@ -322,20 +339,20 @@ def reject_if_bug_chars(fields: dict):
 #  予定データ
 # ================================
 def load_plans(guild_id: int):
-    data, _ = github_get(f"plans_{guild_id}.json")
+    data, _ = local_get(f"plans_{guild_id}.json")
     return data or []
 
 def save_plans(guild_id: int, plans: list):
-    _, sha = github_get(f"plans_{guild_id}.json")
-    github_put(f"plans_{guild_id}.json", plans, sha)
+    _, sha = local_get(f"plans_{guild_id}.json")
+    local_put(f"plans_{guild_id}.json", plans, sha)
 
 async def async_load_plans(guild_id: int):
-    data, _ = await async_github_get(f"plans_{guild_id}.json")
+    data, _ = await async_local_get(f"plans_{guild_id}.json")
     return data or []
 
 async def async_save_plans(guild_id: int, plans: list):
-    _, sha = await async_github_get(f"plans_{guild_id}.json")
-    await async_github_put(f"plans_{guild_id}.json", plans, sha)
+    _, sha = await async_local_get(f"plans_{guild_id}.json")
+    await async_local_put(f"plans_{guild_id}.json", plans, sha)
 
 # ================================
 #  ログ
@@ -347,7 +364,7 @@ def write_log(guild_id: int, log_type: str, detail: str):
     """
     try:
         filename = f"logs_{guild_id}.json"
-        logs, sha = github_get(filename)
+        logs, sha = local_get(filename)
         logs = logs or []
         now_jst = datetime.now(JST)
         now_str = now_jst.strftime("%Y-%m-%d %H:%M:%S")
@@ -356,7 +373,7 @@ def write_log(guild_id: int, log_type: str, detail: str):
             if (now_jst - datetime.strptime(log["time"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=JST)).days <= 30
         ]
         logs.append({"time": now_str, "type": log_type, "detail": detail})
-        github_put(filename, logs, sha)
+        local_put(filename, logs, sha)
     except Exception as e:
         print(f"[WARN] write_log failed (ignored): {e}")
 
@@ -368,20 +385,20 @@ async def async_write_log(guild_id: int, log_type: str, detail: str):
 #  勉強ログ データ
 # ================================
 def load_study_logs(guild_id: int):
-    data, _ = github_get(f"study_logs_{guild_id}.json")
+    data, _ = local_get(f"study_logs_{guild_id}.json")
     return data or []
 
 def save_study_logs(guild_id: int, logs: list):
-    _, sha = github_get(f"study_logs_{guild_id}.json")
-    github_put(f"study_logs_{guild_id}.json", logs, sha)
+    _, sha = local_get(f"study_logs_{guild_id}.json")
+    local_put(f"study_logs_{guild_id}.json", logs, sha)
 
 async def async_load_study_logs(guild_id: int):
-    data, _ = await async_github_get(f"study_logs_{guild_id}.json")
+    data, _ = await async_local_get(f"study_logs_{guild_id}.json")
     return data or []
 
 async def async_save_study_logs(guild_id: int, logs: list):
-    _, sha = await async_github_get(f"study_logs_{guild_id}.json")
-    await async_github_put(f"study_logs_{guild_id}.json", logs, sha)
+    _, sha = await async_local_get(f"study_logs_{guild_id}.json")
+    await async_local_put(f"study_logs_{guild_id}.json", logs, sha)
 
 # ================================
 #  ★ 勉強タイマー状態（複数端末で共有）
@@ -392,7 +409,7 @@ async def async_save_study_logs(guild_id: int, logs: list):
 #    ブラウザの復帰まで遅れる（＝精度が低い。時には全く違う経過時間で
 #    「破棄」判定されてしまう）
 #  という2つの問題があった。
-#  → 開始・一時停止・再開の「時刻」そのものをサーバー（GitHub）で管理し、
+#  → 開始・一時停止・再開の「時刻」そのものをサーバー（ローカルディスク）で管理し、
 #    どの端末で開いても同じ状態を見られるようにする。
 #    3時間経過の判定・DM通知も、クライアントのタブが開いているかに関係なく
 #    サーバー側の定期ジョブ（check_study_timers）で正確に行う。
@@ -412,22 +429,22 @@ MSG_TIMER_AUTO_PAUSED = (
 )
 
 def load_study_timers(guild_id: int) -> dict:
-    data, _ = github_get(f"study_timers_{guild_id}.json")
+    data, _ = local_get(f"study_timers_{guild_id}.json")
     return data or {}
 
 def save_study_timers(guild_id: int, timers: dict, sha=None):
     if sha is None:
-        _, sha = github_get(f"study_timers_{guild_id}.json")
-    github_put(f"study_timers_{guild_id}.json", timers, sha)
+        _, sha = local_get(f"study_timers_{guild_id}.json")
+    local_put(f"study_timers_{guild_id}.json", timers, sha)
 
 async def async_load_study_timers(guild_id: int) -> dict:
-    data, _ = await async_github_get(f"study_timers_{guild_id}.json")
+    data, _ = await async_local_get(f"study_timers_{guild_id}.json")
     return data or {}
 
 async def async_save_study_timers(guild_id: int, timers: dict, sha=None):
     if sha is None:
-        _, sha = await async_github_get(f"study_timers_{guild_id}.json")
-    await async_github_put(f"study_timers_{guild_id}.json", timers, sha)
+        _, sha = await async_local_get(f"study_timers_{guild_id}.json")
+    await async_local_put(f"study_timers_{guild_id}.json", timers, sha)
 
 def _finalize_study_timer(entry, now_ms):
     """
@@ -492,7 +509,7 @@ def _sync_timer_entry(guild_id, student_id):
             save_study_timers(guild_id, timers)
             if notify_kind == "auto_paused":
                 _try_notify_timer(guild_id, student_id, MSG_TIMER_AUTO_PAUSED)
-        except GitHubWriteError as e:
+        except DataWriteError as e:
             print(f"[WARN] study_timers 保存に失敗しました: {e}")
             # 保存に失敗した場合は通知せず、次回アクセス時に再評価される
 
@@ -572,8 +589,8 @@ def timer_start():
         timers[student_id] = new_entry
         try:
             save_study_timers(guild_id, timers)
-        except GitHubWriteError as e:
-            return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+        except DataWriteError as e:
+            return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         resp = {"ok": True, "created": True}
         resp.update(_timer_entry_json(new_entry, now_ms))
         return jsonify(resp)
@@ -614,8 +631,8 @@ def timer_pause():
     timers[student_id] = new_entry
     try:
         save_study_timers(guild_id, timers)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     resp = {"ok": True}
     resp.update(_timer_entry_json(new_entry, now_ms))
@@ -645,8 +662,8 @@ def timer_resume():
     timers[student_id] = new_entry
     try:
         save_study_timers(guild_id, timers)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     resp = {"ok": True}
     resp.update(_timer_entry_json(new_entry, now_ms))
@@ -669,33 +686,33 @@ def timer_stop():
         timers.pop(student_id, None)
         try:
             save_study_timers(guild_id, timers)
-        except GitHubWriteError as e:
-            return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+        except DataWriteError as e:
+            return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     return jsonify({"ok": True})
 
 # ================================
 #  ポイント データ
 # ================================
 def load_points(guild_id: int) -> dict:
-    data, _ = github_get(f"points_{guild_id}.json")
+    data, _ = local_get(f"points_{guild_id}.json")
     return data or {}
 
 def save_points(guild_id: int, pts: dict, sha=None):
     if sha is None:
-        _, sha = github_get(f"points_{guild_id}.json")
-    github_put(f"points_{guild_id}.json", pts, sha)
+        _, sha = local_get(f"points_{guild_id}.json")
+    local_put(f"points_{guild_id}.json", pts, sha)
 
 # ============================================================
 #  課題達成データ
 # ============================================================
 def load_completed_tasks(guild_id: int) -> dict:
-    data, _ = github_get(f"completed_tasks_{guild_id}.json")
+    data, _ = local_get(f"completed_tasks_{guild_id}.json")
     return data or {}
 
 def save_completed_tasks(guild_id: int, tasks: dict, sha=None):
     if sha is None:
-        _, sha = github_get(f"completed_tasks_{guild_id}.json")
-    github_put(f"completed_tasks_{guild_id}.json", tasks, sha)
+        _, sha = local_get(f"completed_tasks_{guild_id}.json")
+    local_put(f"completed_tasks_{guild_id}.json", tasks, sha)
 
 
 def _task_id_of_plan(plan: dict) -> str:
@@ -732,12 +749,12 @@ def _normalize_task_entry(entry):
 #  ユーザーデータ
 # ================================
 def load_users(guild_id: int):
-    data, _ = github_get(f"users_{guild_id}.json")
+    data, _ = local_get(f"users_{guild_id}.json")
     return data or []
 
 def save_users(guild_id: int, users: list):
-    _, sha = github_get(f"users_{guild_id}.json")
-    github_put(f"users_{guild_id}.json", users, sha)
+    _, sha = local_get(f"users_{guild_id}.json")
+    local_put(f"users_{guild_id}.json", users, sha)
 
 def find_user(guild_id: int, student_id: str):
     users = load_users(guild_id)
@@ -747,9 +764,9 @@ def find_user(guild_id: int, student_id: str):
 #  ★ パスワード関連ユーティリティ
 #  ─────────────────────────────
 #  パスワードは絶対に平文のまま保存しない。
-#  users_{guild_id}.json はGitHubリポジトリ経由で保存されており、
-#  そのリポジトリは他の人にも共有されているため、平文で置くと
-#  リポジトリを見られる人全員にパスワードが漏れてしまう。
+#  users_{guild_id}.json はサーバーのローカルディスクに保存されているが、
+#  ファイルが何らかの理由で漏洩・閲覧された場合に備えて、
+#  平文で置かないようにする。
 #  そのため PBKDF2-HMAC-SHA256（ソルト付き・十分な反復回数）で
 #  ハッシュ化した値だけを保存し、元のパスワードはサーバーのメモリ上
 #  ですら検証の一瞬しか扱わない。
@@ -783,20 +800,20 @@ def verify_password(password: str, salt_hex: str, expected_hash_hex: str) -> boo
 #  「guild_id・student_id・発行時刻」を埋め込み、HMAC署名を付けて
 #  改ざんを検知する方式に変更した（JWTの簡易版のようなもの）。
 #  ・SESSION_SECRET はプロセス再起動をまたいでも変わらないよう、
-#    環境変数として設定することを強く推奨する（TOKENやGITHUB_TOKENと同様）。
+#    環境変数として設定することを強く推奨する（TOKENと同様）。
 #    未設定の場合はプロセスごとにランダム値を使うため、その場合は結局
 #    再起動のたびに全員ログアウトされる（が、パスワード自体は漏れない）。
 #  ・トークンは有効期限が来るまで有効であり続ける。パスワード変更時に
 #    「以前発行したトークンを強制的に無効化する」仕組みは持たない
 #    （このアプリの規模ではオーバーエンジニアリングと判断）。
-#    より厳密に失効させたい場合は、失効リストをGitHub等に保存する方式に
+#    より厳密に失効させたい場合は、失効リストを別ファイルに保存する方式に
 #    拡張できる。
 # ================================
 SESSION_SECRET = os.getenv("SESSION_SECRET")
 if not SESSION_SECRET:
     SESSION_SECRET = secrets.token_hex(32)
     print("[WARN] 環境変数 SESSION_SECRET が未設定です。プロセス再起動のたびに"
-          "全ユーザーのログインセッションが無効になります。Renderの環境変数に"
+          "全ユーザーのログインセッションが無効になります。サーバーの環境変数に"
           "SESSION_SECRET（ランダムな文字列）を設定することを推奨します。")
 
 SESSION_TTL_SEC = 60 * 60 * 24 * 30  # 30日間ログイン状態を維持
@@ -831,13 +848,13 @@ def resolve_session(token, guild_id: int):
 #     紐付けて保存しておく。{ "1I001": 123456789012345678, ... }
 # ================================
 def load_discord_links(guild_id: int) -> dict:
-    data, _ = github_get(f"discord_links_{guild_id}.json")
+    data, _ = local_get(f"discord_links_{guild_id}.json")
     return data or {}
 
 def save_discord_links(guild_id: int, links: dict, sha=None):
     if sha is None:
-        _, sha = github_get(f"discord_links_{guild_id}.json")
-    github_put(f"discord_links_{guild_id}.json", links, sha)
+        _, sha = local_get(f"discord_links_{guild_id}.json")
+    local_put(f"discord_links_{guild_id}.json", links, sha)
 
 # ================================
 #  ★ アカウント連携コード（なりすまし対策）
@@ -960,13 +977,13 @@ def consume_oauth_state(state: str):
 #   始まり、discord_links の中身を勝手に引き継がない。
 # ================================
 def load_discord_login_links(guild_id: int) -> dict:
-    data, _ = github_get(f"discord_login_links_{guild_id}.json")
+    data, _ = local_get(f"discord_login_links_{guild_id}.json")
     return data or {}
 
 def save_discord_login_links(guild_id: int, links: dict, sha=None):
     if sha is None:
-        _, sha = github_get(f"discord_login_links_{guild_id}.json")
-    github_put(f"discord_login_links_{guild_id}.json", links, sha)
+        _, sha = local_get(f"discord_login_links_{guild_id}.json")
+    local_put(f"discord_login_links_{guild_id}.json", links, sha)
 
 
 # ================================
@@ -1068,8 +1085,8 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
     plans.append(plan)
     try:
         save_plans(guild_id, plans)
-    except GitHubWriteError as e:
-        return False, f"保存に失敗しました（GitHubエラー）。もう一度お試しください。\n{e}"
+    except DataWriteError as e:
+        return False, f"保存に失敗しました（データ保存エラー）。もう一度お試しください。\n{e}"
 
     detail = f"{date_str} / {subject} / {tagged_content}"
     if "points" in plan:
@@ -1175,8 +1192,8 @@ async def delete_plan(interaction: discord.Interaction, target: str):
         return
     try:
         save_plans(guild.id, new_plans)
-    except GitHubWriteError as e:
-        await interaction.followup.send(f"保存に失敗しました（GitHubエラー）。もう一度お試しください。\n{e}", ephemeral=True)
+    except DataWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（データ保存エラー）。もう一度お試しください。\n{e}", ephemeral=True)
         return
     write_log(guild.id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
     msg = f"削除しました！\n{target}"
@@ -1249,8 +1266,8 @@ async def edit_plan(interaction: discord.Interaction, target: str, date: str = N
 
     try:
         await async_save_plans(guild.id, plans)
-    except GitHubWriteError as e:
-        await interaction.followup.send(f"保存に失敗しました（GitHubエラー）。もう一度お試しください。\n{e}", ephemeral=True)
+    except DataWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（データ保存エラー）。もう一度お試しください。\n{e}", ephemeral=True)
         return
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
     await async_write_log(guild.id, "edit", detail=f"{before_str} → {after_str}")
@@ -1304,8 +1321,8 @@ async def cleanup_command(interaction: discord.Interaction):
     ]
     try:
         await async_save_plans(guild_id, new_plans)
-    except GitHubWriteError as e:
-        await interaction.followup.send(f"保存に失敗しました（GitHubエラー）。もう一度お試しください。\n{e}", ephemeral=True)
+    except DataWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（データ保存エラー）。もう一度お試しください。\n{e}", ephemeral=True)
         return
     if deleted_dates:
         await async_write_log(guild_id, "cleanup", detail="削除した日付: " + ", ".join(deleted_dates))
@@ -1345,8 +1362,8 @@ async def setchannel(interaction: discord.Interaction, type: app_commands.Choice
 
     try:
         await async_save_config(guild_id, config)
-    except GitHubWriteError as e:
-        await interaction.followup.send(f"保存に失敗しました（GitHubエラー）。もう一度お試しください。\n{e}", ephemeral=True)
+    except DataWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（データ保存エラー）。もう一度お試しください。\n{e}", ephemeral=True)
         return
     await interaction.followup.send(
         f"{label} の通知チャンネルを **#{interaction.channel.name}** に設定しました！"
@@ -1393,8 +1410,8 @@ async def setup_roles(
     config["dorm_role_id"] = 寮生ロール.id
     try:
         await async_save_config(guild.id, config)
-    except GitHubWriteError as e:
-        await interaction.followup.send(f"保存に失敗しました（GitHubエラー）。パネルは投稿済みですが、設定の保存に失敗しました。\n{e}", ephemeral=True)
+    except DataWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（データ保存エラー）。パネルは投稿済みですが、設定の保存に失敗しました。\n{e}", ephemeral=True)
         return
 
     await interaction.followup.send("パネルを投稿しました。", ephemeral=True)
@@ -1516,8 +1533,8 @@ async def link_student_id(interaction: discord.Interaction, code: str):
         links = load_discord_links(guild_id)
         links[sid] = interaction.user.id
         save_discord_links(guild_id, links)
-    except GitHubWriteError as e:
-        await interaction.followup.send(f"連携の保存に失敗しました（GitHubエラー）: {e}", ephemeral=True)
+    except DataWriteError as e:
+        await interaction.followup.send(f"連携の保存に失敗しました（データ保存エラー）: {e}", ephemeral=True)
         return
 
     # ★ 連携できたことをその場で本人に確認してもらうため、確認DMを試しに送る
@@ -1760,7 +1777,7 @@ async def check_study_timers():
 
         try:
             await async_save_study_timers(guild_id, new_timers)
-        except GitHubWriteError as e:
+        except DataWriteError as e:
             print(f"[WARN] study_timers 保存に失敗しました（guild_id={guild_id}）。次回のチェックで再試行します: {e}")
             continue
 
@@ -1950,8 +1967,8 @@ def add_study_log():
     logs.append(entry)
     try:
         save_study_logs(guild_id, logs)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     # --- ポイント加算（5分ごとに1pt） ---
     earned = entry["minutes"] // 5
@@ -1959,8 +1976,8 @@ def add_study_log():
     pts[entry["student_id"]] = pts.get(entry["student_id"], 0) + earned
     try:
         save_points(guild_id, pts)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     return jsonify({"ok": True, "earned": earned, "total": pts[entry["student_id"]]})
 
@@ -2037,8 +2054,8 @@ def edit_schedule():
 
     try:
         save_plans(guild_id, plans)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
     write_log(guild_id, "edit", detail=f"{before_str} → {after_str}")
     if guild:
@@ -2074,8 +2091,8 @@ def delete_schedule():
         return jsonify({"ok": False, "error": "plan not found"})
     try:
         save_plans(guild_id, new_plans)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(guild_id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
     if guild:
         target_channel = get_subject_channel_by_name(guild, deleted["subject"])
@@ -2090,7 +2107,7 @@ def list_logs():
     guild_id = request.args.get("guild_id")
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
-    logs, _ = github_get(f"logs_{guild_id}.json")
+    logs, _ = local_get(f"logs_{guild_id}.json")
     logs = sorted(logs or [], key=lambda l: l["time"], reverse=True)
     return jsonify({"ok": True, "logs": logs})
 
@@ -2098,12 +2115,12 @@ def list_logs():
 #  Flask API — 時間割
 # ================================
 def load_timetable(guild_id: int):
-    data, _ = github_get(f"timetable_{guild_id}.json")
+    data, _ = local_get(f"timetable_{guild_id}.json")
     return data or {}
 
 def save_timetable(guild_id: int, data: dict):
-    _, sha = github_get(f"timetable_{guild_id}.json")
-    github_put(f"timetable_{guild_id}.json", data, sha)
+    _, sha = local_get(f"timetable_{guild_id}.json")
+    local_put(f"timetable_{guild_id}.json", data, sha)
 
 @app.route("/list_timetable", methods=["GET"])
 def list_timetable():
@@ -2138,8 +2155,8 @@ def update_timetable():
     }
     try:
         save_timetable(int(guild_id), tt)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"時間割変更: {key} → {data.get('subject')}")
     return jsonify({"ok": True})
 
@@ -2160,8 +2177,8 @@ def set_holiday():
     }
     try:
         save_timetable(int(guild_id), tt)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"休校設定: {data.get('date')} {data.get('reason')}")
     return jsonify({"ok": True})
 
@@ -2192,8 +2209,8 @@ def set_period_holiday():
     }
     try:
         save_timetable(int(guild_id), tt)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"1コマ休み設定: {data.get('date')} {period}限 {data.get('reason')}")
     return jsonify({"ok": True})
 
@@ -2209,8 +2226,8 @@ def delete_timetable():
         del tt[key]
         try:
             save_timetable(int(guild_id), tt)
-        except GitHubWriteError as e:
-            return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+        except DataWriteError as e:
+            return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         write_log(int(guild_id), "edit", detail=f"時間割変更削除: {key}")
     return jsonify({"ok": True})
 
@@ -2226,12 +2243,12 @@ def delete_timetable():
 #    ベース時間割の上にそのまま重ねて適用されるので、前期のデータをいじらずに
 #    後期分を新規に追加・編集できる。
 def load_terms(guild_id: int):
-    data, _ = github_get(f"terms_{guild_id}.json")
+    data, _ = local_get(f"terms_{guild_id}.json")
     return data or {}
 
 def save_terms(guild_id: int, terms: dict):
-    _, sha = github_get(f"terms_{guild_id}.json")
-    github_put(f"terms_{guild_id}.json", terms, sha)
+    _, sha = local_get(f"terms_{guild_id}.json")
+    local_put(f"terms_{guild_id}.json", terms, sha)
 
 @app.route("/list_terms", methods=["GET"])
 def list_terms():
@@ -2278,8 +2295,8 @@ def save_term():
     }
     try:
         save_terms(int(guild_id), terms)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"学期時間割保存: {name}（{start_date}〜{end_date}）")
     return jsonify({"ok": True, "id": term_id})
 
@@ -2296,8 +2313,8 @@ def delete_term():
         del terms[term_id]
         try:
             save_terms(int(guild_id), terms)
-        except GitHubWriteError as e:
-            return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+        except DataWriteError as e:
+            return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         write_log(int(guild_id), "edit", detail=f"学期時間割削除: {name}")
     return jsonify({"ok": True})
 
@@ -2346,8 +2363,8 @@ def add_user():
         if any(u["id"] == user_id for u in users):
             return jsonify({"ok": False, "error": "already_exists"})
         # ★ パスワードは平文で保存せず、ソルト付きハッシュのみ保存する
-        #   （users_{guild_id}.json はGitHub上のリポジトリに保存され、
-        #     そのリポジトリは他の人にも共有されているため）
+        #   （users_{guild_id}.json はサーバーのローカルディスクに保存されるが、
+        #     万一ファイルが閲覧されても影響を抑えるため）
         pw_hash, pw_salt = hash_password(password)
         users.append({
             "id":            user_id,
@@ -2663,7 +2680,7 @@ def _handle_discord_link_callback(guild_id: int, student_id: str, discord_user_i
         links = load_discord_links(guild_id)
         links[student_id] = discord_user_id
         save_discord_links(guild_id, links)
-    except GitHubWriteError:
+    except DataWriteError:
         return _oauth_result_page(False, "連携の保存に失敗しました（サーバーエラー）。もう一度お試しください。")
 
     try:
@@ -2794,7 +2811,7 @@ def discord_complete_registration():
             dm_links = load_discord_links(guild_id)
             dm_links[student_id] = discord_user_id
             save_discord_links(guild_id, dm_links)
-        except GitHubWriteError:
+        except DataWriteError:
             pass
 
         discard_discord_reg_token(dtoken)  # ★ 成功時のみ破棄
@@ -2805,8 +2822,8 @@ def discord_complete_registration():
             "session_token": token,
             "student": {"id": student_id, "nickname": final_nickname},
         })
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_error: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_error: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -2914,8 +2931,8 @@ def change_nickname():
         target["nickname"] = nickname
         save_users(guild_id, users)
         return jsonify({"ok": True, "nickname": nickname})
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
 @app.route("/request_password_change_code", methods=["POST"])
 def request_password_change_code():
@@ -2995,8 +3012,8 @@ def confirm_password_change():
         target["password_hash"] = pw_hash
         target["password_salt"] = pw_salt
         save_users(guild_id, users)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     del PASSWORD_CHANGE_CODES[key]  # ★ 使い切ったコードは即座に無効化（使い回し防止）
     return jsonify({"ok": True})
@@ -3098,8 +3115,8 @@ def confirm_password_reset():
         target["password_hash"] = pw_hash
         target["password_salt"] = pw_salt
         save_users(guild_id, users)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     del PASSWORD_CHANGE_CODES[key]  # ★ 使い切ったコードは即座に無効化（使い回し防止）
     return jsonify({"ok": True})
@@ -3199,16 +3216,16 @@ def complete_task():
     done[student_id] = normalized
     try:
         save_completed_tasks(guild_id, done)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     # --- ポイント加算 ---
     pts = load_points(guild_id)
     pts[student_id] = pts.get(student_id, 0) + points
     try:
         save_points(guild_id, pts)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     return jsonify({"ok": True, "total": pts[student_id]})
 
@@ -3246,8 +3263,8 @@ def uncomplete_task():
     done[student_id] = normalized
     try:
         save_completed_tasks(guild_id, done)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     # --- ポイント減算（0未満にはしない） ---
     removed_points = target.get("points") or 0
@@ -3255,8 +3272,8 @@ def uncomplete_task():
     pts[student_id] = max(0, pts.get(student_id, 0) - removed_points)
     try:
         save_points(guild_id, pts)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     return jsonify({"ok": True, "total": pts[student_id]})
 
@@ -3270,21 +3287,21 @@ CARDS_INDEX_FILE = "cards_index.json"
 CARDMAKER_URL = "https://1istudyweb.pages.dev/Cardmaker.html"
 
 def list_card_files():
-    url     = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CARDS_DIR}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers, timeout=15)
-    if r.status_code == 404:
+    dir_path = _data_path(CARDS_DIR)
+    if not os.path.isdir(dir_path):
         return []
-    r.raise_for_status()
-    files = r.json()
-    return [f for f in files if isinstance(f, dict) and f["name"].endswith(".json")]
+    return [
+        {"name": name}
+        for name in sorted(os.listdir(dir_path))
+        if name.endswith(".json") and os.path.isfile(os.path.join(dir_path, name))
+    ]
 
 def get_card_file(filename):
-    data, sha = github_get(f"{CARDS_DIR}/{filename}")
+    data, sha = local_get(f"{CARDS_DIR}/{filename}")
     return data, sha
 
 def put_card_file(filename, content_obj, sha=None):
-    github_put(f"{CARDS_DIR}/{filename}", content_obj, sha)
+    local_put(f"{CARDS_DIR}/{filename}", content_obj, sha)
 
 def generate_card_filename():
     import random, string
@@ -3309,13 +3326,13 @@ def _meta_from_card_data(filename, data):
 
 def load_cards_index():
     """索引ファイルを取得する。存在しない場合は None を返す（呼び出し側で再構築する）。"""
-    data, sha = github_get(CARDS_INDEX_FILE)
+    data, sha = local_get(CARDS_INDEX_FILE)
     return data, sha
 
 def save_cards_index(index_list, sha=None):
     if sha is None:
-        _, sha = github_get(CARDS_INDEX_FILE)
-    github_put(CARDS_INDEX_FILE, index_list, sha)
+        _, sha = local_get(CARDS_INDEX_FILE)
+    local_put(CARDS_INDEX_FILE, index_list, sha)
 
 def rebuild_cards_index():
     """
@@ -3325,13 +3342,13 @@ def rebuild_cards_index():
     files = list_card_files()
     index = []
     for f in files:
-        data, _ = github_get(f"{CARDS_DIR}/{f['name']}")
+        data, _ = local_get(f"{CARDS_DIR}/{f['name']}")
         if data is None:
             continue
         index.append(_meta_from_card_data(f["name"], data))
     try:
         save_cards_index(index, sha=None)
-    except GitHubWriteError as e:
+    except DataWriteError as e:
         print(f"[WARN] cards_index の再構築保存に失敗しました: {e}")
     return index
 
@@ -3455,13 +3472,13 @@ def save_cards():
 
     try:
         put_card_file(filename, card_payload, sha)
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     # ★ 索引ファイルも合わせて更新する（list_cardsを軽く保つため）
     try:
         upsert_cards_index_entry(filename, card_payload)
-    except GitHubWriteError as e:
+    except DataWriteError as e:
         # カード本体の保存自体は成功しているので、索引更新の失敗は警告に留める。
         # 次回 list_cards アクセス時に再構築されるので実害は小さい。
         print(f"[WARN] cards_index の更新に失敗しました: {e}")
@@ -3517,20 +3534,22 @@ def delete_cards():
     filename = data.get("filename")
     if not filename:
         return jsonify({"ok": False, "error": "filename は必須です"})
-    url     = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{CARDS_DIR}/{filename}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers, timeout=15)
-    if r.status_code == 404:
+    # ★ パストラバーサル対策：filename はクライアントからの入力なので、
+    #   "/" や ".." を含む値でCARDS_DIR外のファイルを操作されないようにする。
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return jsonify({"ok": False, "error": "invalid filename"})
+    path = _data_path(f"{CARDS_DIR}/{filename}")
+    if not os.path.isfile(path):
         return jsonify({"ok": False, "error": "ファイルが見つかりません"})
-    sha = r.json().get("sha")
-    del_res = requests.delete(url, headers=headers, json={"message": f"delete {filename}", "sha": sha}, timeout=15)
-    if del_res.status_code not in (200, 201):
-        return jsonify({"ok": False, "error": f"github_delete_failed: {del_res.status_code} {del_res.text[:300]}"})
+    try:
+        os.remove(path)
+    except OSError as e:
+        return jsonify({"ok": False, "error": f"local_delete_failed: {e}"})
 
     # ★ 索引ファイルからも削除する
     try:
         remove_cards_index_entry(filename)
-    except GitHubWriteError as e:
+    except DataWriteError as e:
         print(f"[WARN] cards_index からの削除に失敗しました: {e}")
 
     # ★ 並び順（list_order.json）からも、このデッキのキーを取り除いておく
@@ -3551,13 +3570,13 @@ IN_PROGRESS_FILE = "in_progress_decks.json"
 IN_PROGRESS_STALE_DAYS = 14
 
 def load_in_progress():
-    data, sha = github_get(IN_PROGRESS_FILE)
+    data, sha = local_get(IN_PROGRESS_FILE)
     return (data or []), sha
 
 def save_in_progress(items, sha=None):
     if sha is None:
-        _, sha = github_get(IN_PROGRESS_FILE)
-    github_put(IN_PROGRESS_FILE, items, sha)
+        _, sha = local_get(IN_PROGRESS_FILE)
+    local_put(IN_PROGRESS_FILE, items, sha)
 
 def _prune_stale_in_progress(items):
     """登録から IN_PROGRESS_STALE_DAYS 日以上経過したエントリを取り除いた新しいリストを返す。
@@ -3583,7 +3602,7 @@ def list_in_progress():
         if len(pruned) != len(items):
             try:
                 save_in_progress(pruned, sha)
-            except GitHubWriteError as e:
+            except DataWriteError as e:
                 print(f"[WARN] in_progress の自動間引き保存に失敗しました: {e}")
         return jsonify({"ok": True, "items": pruned})
     except Exception as e:
@@ -3626,8 +3645,8 @@ def register_in_progress():
         items.append(entry)
         save_in_progress(items, sha)
         return jsonify({"ok": True})
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -3655,8 +3674,8 @@ def update_in_progress():
         if found:
             save_in_progress(items, sha)
         return jsonify({"ok": True, "found": found})
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -3673,8 +3692,8 @@ def remove_in_progress():
         if len(new_items) != len(items):
             save_in_progress(new_items, sha)
         return jsonify({"ok": True})
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 # ================================================================
@@ -3696,28 +3715,28 @@ def _is_safe_notice_filename(filename: str) -> bool:
 
 
 def list_notice_files():
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{NOTICES_DIR}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers, timeout=15)
-    if r.status_code == 404:
+    dir_path = _data_path(NOTICES_DIR)
+    if not os.path.isdir(dir_path):
         return []
-    r.raise_for_status()
-    files = r.json()
-    return [
-        f for f in files
-        if isinstance(f, dict) and f["name"].lower().endswith(NOTICE_ALLOWED_EXT)
-    ]
+    results = []
+    for name in sorted(os.listdir(dir_path)):
+        if not name.lower().endswith(NOTICE_ALLOWED_EXT):
+            continue
+        full_path = os.path.join(dir_path, name)
+        if os.path.isfile(full_path):
+            results.append({"name": name, "size": os.path.getsize(full_path)})
+    return results
 
 
 def load_notices_meta():
-    data, sha = github_get(NOTICES_META_FILE)
+    data, sha = local_get(NOTICES_META_FILE)
     return (data or {}), sha
 
 
 def save_notices_meta(meta, sha=None):
     if sha is None:
-        _, sha = github_get(NOTICES_META_FILE)
-    github_put(NOTICES_META_FILE, meta, sha)
+        _, sha = local_get(NOTICES_META_FILE)
+    local_put(NOTICES_META_FILE, meta, sha)
 
 
 @app.route("/list_notices", methods=["GET"])
@@ -3750,14 +3769,11 @@ def get_notice():
     if not _is_safe_notice_filename(filename):
         return jsonify({"ok": False, "error": "invalid filename"})
     try:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{NOTICES_DIR}/{filename}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-        r = requests.get(url, headers=headers, timeout=15)
-        if r.status_code == 404:
+        path = _data_path(f"{NOTICES_DIR}/{filename}")
+        if not os.path.isfile(path):
             return jsonify({"ok": False, "error": "not found"})
-        r.raise_for_status()
-        data = r.json()
-        content = base64.b64decode(data["content"]).decode("utf-8")
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
 
         meta, _ = load_notices_meta()
         m = meta.get(filename, {})
@@ -3791,27 +3807,22 @@ def upload_notice():
     if err:
         return err
 
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{NOTICES_DIR}/{filename}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    path = _data_path(f"{NOTICES_DIR}/{filename}")
+    dirname = os.path.dirname(path)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
 
-    # 既存ファイルなら上書き（sha が必要）
-    r = requests.get(url, headers=headers, timeout=15)
-    sha = r.json().get("sha") if r.status_code == 200 else None
-    is_update = sha is not None
-
-    encoded = base64.b64encode(content.encode("utf-8")).decode()
-    payload = {
-        "message": f"{'update' if is_update else 'add'} notice: {filename} by {uploader}",
-        "content": encoded,
-    }
-    if sha:
-        payload["sha"] = sha
-
-    put_res = requests.put(url, headers=headers, json=payload, timeout=15)
-    if put_res.status_code not in (200, 201):
+    # 既存ファイルなら上書き
+    is_update = os.path.isfile(path)
+    try:
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp_path, path)
+    except OSError as e:
         return jsonify({
             "ok": False,
-            "error": f"github_write_failed: {put_res.status_code} {put_res.text[:300]}"
+            "error": f"local_write_failed: {e}"
         })
 
     # --- 投稿者メタ情報を notices_meta.json に保存 ---
@@ -3822,7 +3833,7 @@ def upload_notice():
             "uploaded_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
         }
         save_notices_meta(meta, meta_sha)
-    except GitHubWriteError as e:
+    except DataWriteError as e:
         # 本体の保存自体は成功しているので、メタ情報の失敗は警告に留める
         print(f"[WARN] notices_meta の更新に失敗しました: {e}")
 
@@ -3857,21 +3868,15 @@ def delete_notice():
     if not _is_safe_notice_filename(filename):
         return jsonify({"ok": False, "error": "invalid filename"})
 
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{NOTICES_DIR}/{filename}"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers, timeout=15)
-    if r.status_code == 404:
+    path = _data_path(f"{NOTICES_DIR}/{filename}")
+    if not os.path.isfile(path):
         return jsonify({"ok": False, "error": "ファイルが見つかりません"})
-    sha = r.json().get("sha")
-    del_res = requests.delete(
-        url, headers=headers,
-        json={"message": f"delete notice {filename}", "sha": sha},
-        timeout=15
-    )
-    if del_res.status_code not in (200, 201):
+    try:
+        os.remove(path)
+    except OSError as e:
         return jsonify({
             "ok": False,
-            "error": f"github_delete_failed: {del_res.status_code} {del_res.text[:300]}"
+            "error": f"local_delete_failed: {e}"
         })
 
     # メタ情報からも削除
@@ -3880,7 +3885,7 @@ def delete_notice():
         if filename in meta:
             del meta[filename]
             save_notices_meta(meta, meta_sha)
-    except GitHubWriteError as e:
+    except DataWriteError as e:
         print(f"[WARN] notices_meta からの削除に失敗しました: {e}")
 
     return jsonify({"ok": True})
@@ -3892,13 +3897,13 @@ FOLDERS_FILE = "folders.json"
 MAX_FOLDER_DEPTH = 3
 
 def load_card_folders():
-    data, sha = github_get(FOLDERS_FILE)
+    data, sha = local_get(FOLDERS_FILE)
     return (data or []), sha
 
 def save_card_folders(folders, sha=None):
     if sha is None:
-        _, sha = github_get(FOLDERS_FILE)
-    github_put(FOLDERS_FILE, folders, sha)
+        _, sha = local_get(FOLDERS_FILE)
+    local_put(FOLDERS_FILE, folders, sha)
 
 def _folder_level(folders, folder_id):
     lvl = 0
@@ -3981,8 +3986,8 @@ def save_folder():
 
         save_card_folders(folders, sha)
         return jsonify({"ok": True, "id": folder_id})
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -4007,8 +4012,8 @@ def delete_folder():
         )
 
         return jsonify({"ok": True, "deleted_ids": list(remove_ids)})
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -4022,13 +4027,13 @@ def delete_folder():
 ORDER_FILE = "list_order.json"
 
 def load_list_order():
-    data, sha = github_get(ORDER_FILE)
+    data, sha = local_get(ORDER_FILE)
     return (data or {}), sha
 
 def save_list_order(order_map, sha=None):
     if sha is None:
-        _, sha = github_get(ORDER_FILE)
-    github_put(ORDER_FILE, order_map, sha)
+        _, sha = local_get(ORDER_FILE)
+    local_put(ORDER_FILE, order_map, sha)
 
 def cleanup_list_order(remove_keys=None, remove_scopes=None):
     """
@@ -4061,7 +4066,7 @@ def cleanup_list_order(remove_keys=None, remove_scopes=None):
                     changed = True
         if changed:
             save_list_order(order_map, sha)
-    except GitHubWriteError as e:
+    except DataWriteError as e:
         print(f"[WARN] list_order のクリーンアップに失敗しました: {e}")
     except Exception as e:
         print(f"[WARN] list_order のクリーンアップ中に予期しないエラーが発生しました: {e}")
@@ -4090,8 +4095,8 @@ def save_order():
         order_map[scope] = keys
         save_list_order(order_map, sha)
         return jsonify({"ok": True})
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -4100,7 +4105,7 @@ def save_order():
 #              端末間共有
 #  ─────────────────────────────
 #  ・以前はブラウザの localStorage にしか保存しておらず、別の端末では
-#    見えなかった。ログイン（student_id）に紐付けてサーバー（GitHub）側
+#    見えなかった。ログイン（student_id）に紐付けてサーバー（ローカルディスク）側
 #    にも保存することで、同じアカウントでログインしていればどの端末からでも
 #    同じ状態を見られるようにする。
 #  ・student_id はタイマーAPI等と同様、クライアントの自己申告を信用せず、
@@ -4113,11 +4118,11 @@ def save_order():
 #      }
 #  ★ 全生徒分をまとめて1ファイルに保存する方式（study_data_{guild_id}.json）
 #    も検討したが、「わからない」マークはカードをめくるたびに更新が
-#    走りうるため、1ファイル共有だと生徒が増えるほどGitHubへの書き込みが
+#    走りうるため、1ファイル共有だと生徒が増えるほどファイルへの書き込みが
 #    競合（409）しやすくなる。そのため生徒ごとに別ファイルへ分け、
 #    自分の学習データを保存するときは他の生徒の書き込みと衝突しないように
 #    した（本人の複数端末からの同時書き込みだけがぶつかる可能性があり、
-#    その場合は github_put() 内の409再試行ロジックでカバーする）。
+#    その場合は local_put() 内の409再試行ロジックでカバーする）。
 # ================================
 def _study_data_filename(guild_id: int, student_id: str) -> str:
     # ★ student_id はユーザー（先生）が自由な文字列で登録できてしまうため、
@@ -4132,7 +4137,7 @@ def _empty_student_study_data():
     return {"unsure": {}, "progress": {}, "completed": {}}
 
 def load_student_study_data(guild_id: int, student_id: str):
-    data, sha = github_get(_study_data_filename(guild_id, student_id))
+    data, sha = local_get(_study_data_filename(guild_id, student_id))
     if not data:
         return _empty_student_study_data(), sha
     return {
@@ -4142,7 +4147,7 @@ def load_student_study_data(guild_id: int, student_id: str):
     }, sha
 
 def save_student_study_data(guild_id: int, student_id: str, data: dict, sha=None):
-    github_put(_study_data_filename(guild_id, student_id), data, sha)
+    local_put(_study_data_filename(guild_id, student_id), data, sha)
 
 # ★ 追加：読み込み→一部だけ書き換え→保存、を「保存直前に必ず最新内容を
 #   読み直してから変更を適用する」形でやり直す安全な更新処理。
@@ -4153,7 +4158,7 @@ def save_student_study_data(guild_id: int, student_id: str, data: dict, sha=None
 #   「続きから」進捗の保存）が競合すると、後から書き込んだ方が
 #   前の変更を含まない古い中身でファイル全体を上書きしてしまい、
 #   わからないマーク等の変更が消えてしまう不具合があった。
-#   ここでは github_put が 409（sha衝突）を返したら、その都度
+#   ここでは local_put が 409（sha衝突）を返したら、その都度
 #   最新のデータを読み直して mutate_fn をもう一度適用してから
 #   書き込み直す（＝変更そのものを失わない）ようにする。
 def update_student_study_data(guild_id: int, student_id: str, mutate_fn, max_attempts: int = 4):
@@ -4166,10 +4171,10 @@ def update_student_study_data(guild_id: int, student_id: str, mutate_fn, max_att
         try:
             save_student_study_data(guild_id, student_id, my_data, sha)
             return
-        except GitHubWriteError as e:
+        except DataWriteError as e:
             last_err = e
             continue  # 最新のsha・内容を読み直してもう一度やり直す
-    raise last_err or GitHubWriteError("保存に失敗しました（リトライ上限）")
+    raise last_err or DataWriteError("保存に失敗しました（リトライ上限）")
 
 @app.route("/get_study_data", methods=["GET"])
 def get_study_data():
@@ -4204,8 +4209,8 @@ def save_unsure():
                 my_data["unsure"].pop(deck_id, None)
         update_student_study_data(guild_id, student_id, _mutate)
         return jsonify({"ok": True})
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -4228,8 +4233,8 @@ def save_study_progress_api():
                 my_data["progress"][key] = progress_data
         update_student_study_data(guild_id, student_id, _mutate)
         return jsonify({"ok": True})
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -4249,432 +4254,10 @@ def save_completion_api():
             my_data["completed"][key] = completion_data
         update_student_study_data(guild_id, student_id, _mutate)
         return jsonify({"ok": True})
-    except GitHubWriteError as e:
-        return jsonify({"ok": False, "error": f"github_write_failed: {e}"})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
-
-# ================================
-#  ★ みんなでクイズ（オンライン早押し4択）
-#  ─────────────────────────────
-#  各生徒が自分のスマホ・PCから同じ「ルームコード」に参加し、同時に
-#  4択クイズに解答するミニゲーム。正解=10点、そのクイズで最初に正解した
-#  人だけ+2点のボーナス（合計12点）が入る。
-#
-#  ・状態はメモリ上（QUIZ_ROOMS）だけで管理し、GitHubには保存しない。
-#    クイズは「今この瞬間」だけの一時的な進行状況であり、GitHub書き込みは
-#    数百ms〜数秒かかるうえ頻繁な更新には向かないため、そのままではリアル
-#    タイム性が出ない。サーバー再起動で進行中のクイズが消えるが、その場
-#    限りのミニゲームなので実用上問題ない（Ubuntuの常時稼働サーバーでも
-#    再起動は稀なので、この設計のままで問題ない）。
-#  ・フロント（Quiz.js）は /quiz_state を1秒間隔でポーリングして状態を
-#    同期する。ホスト操作（開始／次の問題／終了）も同じ状態に反映される。
-# ================================
-QUIZ_LOCK = threading.Lock()
-QUIZ_ROOMS = {}  # { room_code: {...} }
-QUIZ_ROOM_TTL_SEC = 60 * 60 * 6  # 6時間操作が無いルームは掃除する
-QUIZ_DEFAULT_TIME_LIMIT = 20  # 秒
-
-_QUIZ_COLOR_PALETTE = [
-    "#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e",
-    "#10b981", "#14b8a6", "#06b6d4", "#3b82f6", "#6366f1",
-    "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e",
-]
-def _quiz_color_for(student_id):
-    h = int(hashlib.md5(str(student_id).encode()).hexdigest(), 16)
-    return _QUIZ_COLOR_PALETTE[h % len(_QUIZ_COLOR_PALETTE)]
-
-def _quiz_gen_code():
-    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # 紛らわしい 0/O, 1/I を除く
-    while True:
-        code = "".join(random.choice(alphabet) for _ in range(5))
-        if code not in QUIZ_ROOMS:
-            return code
-
-def _quiz_cleanup_locked():
-    now = time.time()
-    dead = [c for c, r in QUIZ_ROOMS.items() if now - r["last_activity"] > QUIZ_ROOM_TTL_SEC]
-    for c in dead:
-        QUIZ_ROOMS.pop(c, None)
-
-def _quiz_touch(room):
-    room["last_activity"] = time.time()
-
-def _quiz_build_questions_from_deck(cards, num_questions=None):
-    pool = [c for c in cards if (c.get("question") or "").strip() and (c.get("answer") or "").strip()]
-    if len(pool) < 4:
-        return None, "四択を作るには、問題と答えが揃ったカードが最低4枚必要です"
-    all_answers = list({c["answer"].strip() for c in pool})
-    if len(all_answers) < 4:
-        return None, "違う答えのカードが最低4種類必要です（同じ答えのカードばかりでした）"
-    random.shuffle(pool)
-    if num_questions:
-        pool = pool[:num_questions]
-    questions = []
-    for c in pool:
-        correct = c["answer"].strip()
-        distractor_pool = [a for a in all_answers if a != correct]
-        random.shuffle(distractor_pool)
-        distractors = distractor_pool[:3]
-        if len(distractors) < 3:
-            continue  # all_answersが4種類以上ある前提なので基本発生しない
-        choices = distractors + [correct]
-        random.shuffle(choices)
-        questions.append({
-            "id": c.get("id") or _quiz_gen_code(),
-            "question": c["question"],
-            "choices": choices,
-            "correct_index": choices.index(correct),
-            "explanation": c.get("explanation") or "",
-            "imgs_q": c.get("imgs_q") or [],
-        })
-    if not questions:
-        return None, "問題を作成できませんでした"
-    return questions, None
-
-def _quiz_public_player(p):
-    return {"nickname": p["nickname"], "color": p["color"], "text_color": p["text_color"], "score": p["score"]}
-
-def _quiz_maybe_auto_reveal_locked(room):
-    """制限時間を過ぎたら、誰も次へ進めなくても自動的に正解発表状態にする。"""
-    if room["state"] != "question" or room["question_started_at"] is None:
-        return
-    if time.time() - room["question_started_at"] >= room["time_limit_sec"]:
-        room["state"] = "reveal"
-
-def _quiz_room_state_for(room, student_id, is_host):
-    """出題中は正解(correct_index)を隠し、正解発表(reveal)/終了(ended)後とホストにだけ見せる。"""
-    qidx = room["current_q"]
-    total = len(room["questions"])
-    out = {
-        "code": room["code"],
-        "title": room["title"],
-        "state": room["state"],
-        "current_q": qidx,
-        "total_questions": total,
-        "time_limit_sec": room["time_limit_sec"],
-        "question_started_at": room["question_started_at"],
-        "host_nickname": room["host_nickname"],
-        "is_host": is_host,
-        "players": [
-            dict(id=sid, **_quiz_public_player(p))
-            for sid, p in sorted(room["players"].items(), key=lambda kv: -kv[1]["score"])
-        ],
-    }
-    if room["state"] in ("question", "reveal", "ended") and 0 <= qidx < total:
-        q = room["questions"][qidx]
-        q_out = {"question": q["question"], "choices": q["choices"], "imgs_q": q["imgs_q"]}
-        if is_host or room["state"] in ("reveal", "ended"):
-            q_out["correct_index"] = q["correct_index"]
-            q_out["explanation"] = q["explanation"]
-        out["question"] = q_out
-        answers_for_q = room["answers"].get(qidx, {})
-        out["answered_count"] = len(answers_for_q)
-        out["total_players"] = len(room["players"])
-        if student_id in answers_for_q:
-            out["your_answer"] = answers_for_q[student_id]["choice_index"]
-            out["your_correct"] = answers_for_q[student_id]["correct"]
-        if room["state"] in ("reveal", "ended"):
-            fc = room["first_correct"].get(qidx)
-            out["first_correct_nickname"] = room["players"][fc]["nickname"] if fc in room["players"] else None
-    return out
-
-def _quiz_auth(src):
-    guild_id = src.get("guild_id")
-    if not guild_id:
-        return None, None, jsonify({"ok": False, "error": "missing guild_id"})
-    guild_id = int(guild_id)
-    student_id = resolve_session(src.get("session_token"), guild_id)
-    if not student_id:
-        return None, None, jsonify({"ok": False, "error": "not_logged_in"})
-    return guild_id, student_id, None
-
-def _quiz_get_room_or_error(code):
-    room = QUIZ_ROOMS.get((code or "").strip().upper())
-    if not room:
-        return None, jsonify({"ok": False, "error": "room_not_found"})
-    return room, None
-
-
-@app.route("/quiz_create", methods=["POST"])
-def quiz_create():
-    """クイズルームを作成する（作った人がそのままホストになる）。
-    body: { guild_id, session_token, title?, source: 'deck'|'manual',
-             deck_filename? (sourceが'deck'の場合必須), num_questions?(省略時は全問),
-             questions?: [{question, choices:[4つ], correct_index, explanation?}] (sourceが'manual'の場合必須),
-             time_limit_sec? (5〜120、既定20) }
-    """
-    data = request.json or {}
-    guild_id, student_id, err = _quiz_auth(data)
-    if err:
-        return err
-    user = find_user(guild_id, student_id)
-    host_nickname = (user or {}).get("nickname", student_id)
-    title = (data.get("title") or "").strip()[:40]
-    source = data.get("source")
-
-    try:
-        time_limit_sec = int(data.get("time_limit_sec") or QUIZ_DEFAULT_TIME_LIMIT)
-    except (TypeError, ValueError):
-        time_limit_sec = QUIZ_DEFAULT_TIME_LIMIT
-    time_limit_sec = max(5, min(120, time_limit_sec))
-
-    if source == "deck":
-        filename = data.get("deck_filename")
-        if not filename:
-            return jsonify({"ok": False, "error": "deck_filename は必須です"})
-        deck_data, _ = get_card_file(filename)
-        if deck_data is None:
-            return jsonify({"ok": False, "error": "デッキが見つかりません"})
-        try:
-            num_q = int(data.get("num_questions")) if data.get("num_questions") else None
-        except (TypeError, ValueError):
-            num_q = None
-        questions, qerr = _quiz_build_questions_from_deck(deck_data.get("cards", []), num_q)
-        if qerr:
-            return jsonify({"ok": False, "error": qerr})
-        if not title:
-            title = (deck_data.get("name") or "みんなでクイズ")[:40]
-    elif source == "manual":
-        raw_questions = data.get("questions")
-        if not isinstance(raw_questions, list) or not raw_questions:
-            return jsonify({"ok": False, "error": "questions は必須です"})
-        if len(raw_questions) > 50:
-            return jsonify({"ok": False, "error": "問題数は50問までです"})
-        questions = []
-        for q in raw_questions:
-            qtext = (q.get("question") or "").strip()
-            choices = q.get("choices")
-            if not qtext or not isinstance(choices, list) or len(choices) != 4:
-                return jsonify({"ok": False, "error": "各問題には問題文と4つの選択肢が必要です"})
-            choices = [str(c).strip() for c in choices]
-            if any(not c for c in choices):
-                return jsonify({"ok": False, "error": "空の選択肢があります"})
-            try:
-                correct_index = int(q.get("correct_index"))
-            except (TypeError, ValueError):
-                return jsonify({"ok": False, "error": "correct_index は必須です"})
-            if not (0 <= correct_index < 4):
-                return jsonify({"ok": False, "error": "correct_index は0〜3で指定してください"})
-            berr = reject_if_bug_chars({"問題文": qtext, "選択肢": " / ".join(choices)})
-            if berr:
-                return berr
-            questions.append({
-                "id": _quiz_gen_code(),
-                "question": qtext,
-                "choices": choices,
-                "correct_index": correct_index,
-                "explanation": (q.get("explanation") or "").strip(),
-                "imgs_q": [],
-            })
-        if not title:
-            title = "みんなでクイズ"
-    else:
-        return jsonify({"ok": False, "error": "source は 'deck' か 'manual' を指定してください"})
-
-    with QUIZ_LOCK:
-        _quiz_cleanup_locked()
-        code = _quiz_gen_code()
-        now = time.time()
-        QUIZ_ROOMS[code] = {
-            "code": code,
-            "guild_id": guild_id,
-            "host_id": student_id,
-            "host_nickname": host_nickname,
-            "title": title,
-            "questions": questions,
-            "state": "lobby",       # lobby -> question -> reveal -> (question...) -> ended
-            "current_q": -1,
-            "question_started_at": None,
-            "time_limit_sec": time_limit_sec,
-            "players": {},
-            "answers": {},          # { q_index: { student_id: {choice_index, answered_at, correct} } }
-            "first_correct": {},    # { q_index: student_id }
-            "created_at": now,
-            "last_activity": now,
-        }
-
-    return jsonify({"ok": True, "code": code, "total_questions": len(questions)})
-
-
-@app.route("/quiz_join", methods=["POST"])
-def quiz_join():
-    data = request.json or {}
-    guild_id, student_id, err = _quiz_auth(data)
-    if err:
-        return err
-    with QUIZ_LOCK:
-        room, err = _quiz_get_room_or_error(data.get("code"))
-        if err:
-            return err
-        if room["guild_id"] != guild_id:
-            return jsonify({"ok": False, "error": "room_not_found"})
-        if room["state"] == "ended":
-            return jsonify({"ok": False, "error": "このクイズはもう終了しています"})
-        if student_id not in room["players"]:
-            user = find_user(guild_id, student_id)
-            room["players"][student_id] = {
-                "nickname": (user or {}).get("nickname", student_id),
-                "color": _quiz_color_for(student_id),
-                "text_color": "#ffffff",
-                "score": 0,
-                "joined_at": time.time(),
-            }
-        _quiz_touch(room)
-        is_host = (student_id == room["host_id"])
-        state = _quiz_room_state_for(room, student_id, is_host)
-    return jsonify({"ok": True, "is_host": is_host, "room": state})
-
-
-@app.route("/quiz_state", methods=["GET"])
-def quiz_state():
-    guild_id, student_id, err = _quiz_auth(request.args)
-    if err:
-        return err
-    with QUIZ_LOCK:
-        room, err = _quiz_get_room_or_error(request.args.get("code"))
-        if err:
-            return err
-        if room["guild_id"] != guild_id:
-            return jsonify({"ok": False, "error": "room_not_found"})
-        is_host = (student_id == room["host_id"])
-        if not is_host and student_id not in room["players"]:
-            return jsonify({"ok": False, "error": "not_joined"})
-        _quiz_maybe_auto_reveal_locked(room)  # 制限時間切れなら自動でrevealへ
-        state = _quiz_room_state_for(room, student_id, is_host)
-    return jsonify({"ok": True, "is_host": is_host, "room": state})
-
-
-@app.route("/quiz_start", methods=["POST"])
-def quiz_start():
-    data = request.json or {}
-    guild_id, student_id, err = _quiz_auth(data)
-    if err:
-        return err
-    with QUIZ_LOCK:
-        room, err = _quiz_get_room_or_error(data.get("code"))
-        if err:
-            return err
-        if room["guild_id"] != guild_id or room["host_id"] != student_id:
-            return jsonify({"ok": False, "error": "host_only"})
-        if room["state"] != "lobby":
-            return jsonify({"ok": False, "error": "すでに開始しています"})
-        if not room["players"]:
-            return jsonify({"ok": False, "error": "参加者がまだいません"})
-        room["state"] = "question"
-        room["current_q"] = 0
-        room["question_started_at"] = time.time()
-        _quiz_touch(room)
-        state = _quiz_room_state_for(room, student_id, True)
-    return jsonify({"ok": True, "room": state})
-
-
-@app.route("/quiz_next", methods=["POST"])
-def quiz_next():
-    """出題中(question)に押すとまず正解発表(reveal)にし、reveal中にもう一度押すと
-    次の問題(question)へ進む。最後の問題のreveal後に押すと終了(ended)になる。"""
-    data = request.json or {}
-    guild_id, student_id, err = _quiz_auth(data)
-    if err:
-        return err
-    with QUIZ_LOCK:
-        room, err = _quiz_get_room_or_error(data.get("code"))
-        if err:
-            return err
-        if room["guild_id"] != guild_id or room["host_id"] != student_id:
-            return jsonify({"ok": False, "error": "host_only"})
-        if room["state"] == "question":
-            room["state"] = "reveal"
-        elif room["state"] == "reveal":
-            if room["current_q"] + 1 < len(room["questions"]):
-                room["current_q"] += 1
-                room["state"] = "question"
-                room["question_started_at"] = time.time()
-            else:
-                room["state"] = "ended"
-        _quiz_touch(room)
-        state = _quiz_room_state_for(room, student_id, True)
-    return jsonify({"ok": True, "room": state})
-
-
-@app.route("/quiz_answer", methods=["POST"])
-def quiz_answer():
-    """解答を1つ送信する。1問につき1回だけ受け付ける。
-    正解=10点、そのクイズでその問題に最初に正解した人だけ+2点のボーナス。"""
-    data = request.json or {}
-    guild_id, student_id, err = _quiz_auth(data)
-    if err:
-        return err
-    try:
-        choice_index = int(data.get("choice_index"))
-    except (TypeError, ValueError):
-        return jsonify({"ok": False, "error": "choice_index は必須です"})
-    with QUIZ_LOCK:
-        room, err = _quiz_get_room_or_error(data.get("code"))
-        if err:
-            return err
-        if room["guild_id"] != guild_id:
-            return jsonify({"ok": False, "error": "room_not_found"})
-        if student_id not in room["players"]:
-            return jsonify({"ok": False, "error": "not_joined"})
-        _quiz_maybe_auto_reveal_locked(room)
-        if room["state"] != "question":
-            return jsonify({"ok": False, "error": "受付終了しました"})
-        qidx = room["current_q"]
-        answers_for_q = room["answers"].setdefault(qidx, {})
-        if student_id in answers_for_q:
-            return jsonify({"ok": False, "error": "already_answered"})
-        if not (0 <= choice_index < len(room["questions"][qidx]["choices"])):
-            return jsonify({"ok": False, "error": "invalid_choice"})
-        correct = (choice_index == room["questions"][qidx]["correct_index"])
-        answers_for_q[student_id] = {"choice_index": choice_index, "answered_at": time.time(), "correct": correct}
-        gained = 0
-        first_bonus = False
-        if correct:
-            gained = 10
-            if qidx not in room["first_correct"]:
-                room["first_correct"][qidx] = student_id
-                gained += 2
-                first_bonus = True
-            room["players"][student_id]["score"] += gained
-        _quiz_touch(room)
-    return jsonify({"ok": True, "correct": correct, "gained": gained, "first_bonus": first_bonus})
-
-
-@app.route("/quiz_end", methods=["POST"])
-def quiz_end():
-    """ホストがクイズを途中終了する。"""
-    data = request.json or {}
-    guild_id, student_id, err = _quiz_auth(data)
-    if err:
-        return err
-    with QUIZ_LOCK:
-        room, err = _quiz_get_room_or_error(data.get("code"))
-        if err:
-            return err
-        if room["guild_id"] != guild_id or room["host_id"] != student_id:
-            return jsonify({"ok": False, "error": "host_only"})
-        room["state"] = "ended"
-        _quiz_touch(room)
-        state = _quiz_room_state_for(room, student_id, True)
-    return jsonify({"ok": True, "room": state})
-
-
-@app.route("/quiz_leave", methods=["POST"])
-def quiz_leave():
-    data = request.json or {}
-    guild_id, student_id, err = _quiz_auth(data)
-    if err:
-        return err
-    with QUIZ_LOCK:
-        room, err = _quiz_get_room_or_error(data.get("code"))
-        if err:
-            return jsonify({"ok": True})  # 既に無いなら何もしなくてよい
-        if room["guild_id"] == guild_id:
-            room["players"].pop(student_id, None)
-            _quiz_touch(room)
-    return jsonify({"ok": True})
-
 
 # ================================
 #  スケジューラー & 起動
