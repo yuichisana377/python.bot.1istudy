@@ -68,7 +68,7 @@ DISCORD_CLIENT_ID     = os.getenv("DISCORD_CLIENT_ID", "1515358957542047975")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DISCORD_OAUTH_REDIRECT_URI = os.getenv(
     "DISCORD_OAUTH_REDIRECT_URI",
-    "http://localhost:10000/discord_oauth_callback"
+    "https://chiro-ubuntuser.tail1130ba.ts.net/discord_oauth_callback"
 )
 if not DISCORD_CLIENT_SECRET:
     print("[WARN] 環境変数 DISCORD_CLIENT_SECRET が未設定です。"
