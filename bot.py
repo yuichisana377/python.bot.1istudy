@@ -32,6 +32,13 @@ from urllib.parse import urlencode
 #     永続的なディスク上のパスを指定することを推奨する。
 DATA_DIR            = os.getenv("DATA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
 os.makedirs(DATA_DIR, exist_ok=True)
+print(f"[INFO] DATA_DIR = {os.path.abspath(DATA_DIR)}")
+try:
+    _existing = os.listdir(DATA_DIR)
+    print(f"[INFO] DATA_DIR 内のファイル数: {len(_existing)}"
+          + (f"（例: {_existing[:5]}）" if _existing else "（空です。データを配置しましたか？）"))
+except OSError as e:
+    print(f"[WARN] DATA_DIR の読み取りに失敗しました: {e}")
 TOKEN               = os.getenv("TOKEN")
 SUBJECT_CATEGORY_ID = os.getenv("SUBJECT_CATEGORY_ID")  # カテゴリID（優先）
 SUBJECT_CATEGORY    = os.getenv("SUBJECT_CATEGORY")     # カテゴリ名（フォールバック）
@@ -169,7 +176,11 @@ def local_get(filename):
         raw = f.read()
     try:
         data = json.loads(raw.decode("utf-8")) if raw.strip() else None
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        # ★ ここで失敗を握りつぶすと「読み込まれない（原因不明）」に見えて
+        #   デバッグしづらいため、必ずログに出す。
+        print(f"[ERROR] {path} の読み込みに失敗しました（JSON形式が壊れているか、"
+              f"文字コードがUTF-8ではない可能性があります）: {e}")
         data = None
     return data, _file_sha(raw)
 
