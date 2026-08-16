@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from datetime import date as _date
 from flask import Flask, request, jsonify, make_response, redirect
 from flask_cors import CORS
-from threading import Thread
+from threading import Thread, Lock
 from pytz import timezone
 import json
 import os
@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import re
 import secrets
+import random
 from urllib.parse import urlencode
 
 # ================================
@@ -103,6 +104,7 @@ NO_CACHE_PATHS = {
     "/list_in_progress",
     "/timer_state",
     "/get_study_data",
+    "/quiz_state",
 }
 
 @app.after_request
@@ -3566,6 +3568,474 @@ def delete_cards():
     # ★ 並び順（list_order.json）からも、このデッキのキーを取り除いておく
     cleanup_list_order(remove_keys={f"deck:{filename}"})
 
+    return jsonify({"ok": True})
+
+# ================================
+#  ★ Flask API — みんなでクイズ（オンライン早押し4択）
+#  ─────────────────────────────
+#  Quiz.js から呼ばれる。ルームの状態は「今まさに進行中のゲーム」にしか
+#  意味を持たない一時的なデータなので、他のAPI（予定・単語カード等）の
+#  ようにディスクへは永続化せず、プロセスのメモリ上（QUIZ_ROOMS）だけで
+#  管理する（LINK_CODES / OAUTH_STATES と同じ考え方）。
+#  ・code（5桁の招待コード）でルームを引く。
+#  ・state は "lobby"（開始待ち）→ "question"（出題中）→ "reveal"（正解発表）
+#    → （次の問題があれば "question" に戻る／無ければ "ended"）と遷移する。
+#    "question"⇔"reveal" の遷移も、次の問題への遷移も、すべてホストが
+#    /quiz_next を叩くたびに1段階だけ進む（時間切れで自動的には進まない。
+#    タイマーバーはあくまで見た目上の演出で、実際の進行はホスト操作に委ねる）。
+#  ・得点：正解 +10pt。そのうち、その問題で一番早く正解した1人だけ
+#    さらに +2pt のボーナス（合計12pt）が付く。
+#  ・プロセス再起動でルームは全て消える（＝進行中のクイズは失われる）が、
+#    ゲームの性質上（せいぜい数十分で終わる遊び）これは許容している。
+# ================================
+QUIZ_ROOMS = {}
+QUIZ_ROOMS_LOCK = Lock()
+QUIZ_ROOM_CODE_LEN = 5
+QUIZ_ROOM_IDLE_TTL_SEC = 3 * 60 * 60   # 3時間アクセスが無ければ破棄する（ホスト放置対策）
+QUIZ_ROOM_ENDED_TTL_SEC = 15 * 60      # 終了後もしばらくは結果画面を見られるよう残しておく
+QUIZ_MIN_TIME_LIMIT_SEC = 5
+QUIZ_MAX_TIME_LIMIT_SEC = 120
+QUIZ_MAX_QUESTIONS = 30
+QUIZ_ANSWER_BASE_POINTS = 10
+QUIZ_FIRST_CORRECT_BONUS = 2
+
+# ★ フロント（Login.js の AVATAR_COLORS / paletteFor）と全く同じ規則で、
+#   生徒IDから常に同じ色を選ぶ（クイズの参加者一覧・順位表の表示用）。
+#   ログインセッション自体に色が入っているのは「自分」だけなので、
+#   他の参加者の色はサーバー側でも同じ計算式で求める必要がある。
+QUIZ_AVATAR_COLORS = [
+    ("#dbeafe", "#1e40af"),
+    ("#dcfce7", "#166534"),
+    ("#fce7f3", "#9d174d"),
+    ("#ffedd5", "#9a3412"),
+    ("#fef9c3", "#854d0e"),
+    ("#ede9fe", "#6d28d9"),
+    ("#fee2e2", "#991b1b"),
+    ("#f0fdf4", "#15803d"),
+]
+
+def _quiz_palette_for(student_id: str):
+    h = 0
+    for ch in str(student_id):
+        h = (h * 31 + ord(ch)) & 0xFFFFFFFF  # JSの `hash = (hash*31+charCode) >>> 0` を再現
+    return QUIZ_AVATAR_COLORS[h % len(QUIZ_AVATAR_COLORS)]
+
+def _generate_quiz_code() -> str:
+    # /id連携コードと同様、紛らわしい文字(0/O, 1/I等)を除いた大文字+数字。
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    while True:
+        code = "".join(secrets.choice(alphabet) for _ in range(QUIZ_ROOM_CODE_LEN))
+        if code not in QUIZ_ROOMS:
+            return code
+
+def _quiz_gc_locked(now):
+    """QUIZ_ROOMS_LOCK を保持している状態で呼び出すこと。期限切れのルームを間引く。"""
+    stale = [
+        code for code, room in QUIZ_ROOMS.items()
+        if now - room["last_activity"] > QUIZ_ROOM_IDLE_TTL_SEC
+        or (room["state"] == "ended" and room.get("ended_at") and now - room["ended_at"] > QUIZ_ROOM_ENDED_TTL_SEC)
+    ]
+    for code in stale:
+        del QUIZ_ROOMS[code]
+
+def _quiz_auth_from_json():
+    """POST系クイズAPI共通：JSONボディからguild_id・session_tokenを検証し、
+    (data, guild_id, student_id, nickname, error_response) を返す。
+    ★ nickname はクライアントの自己申告ではなく、サーバー側のユーザーデータから
+    引き直す（他の参加者への表示名の詐称防止）。"""
+    data = request.json or {}
+    guild_id = data.get("guild_id")
+    if not guild_id:
+        return None, None, None, None, jsonify({"ok": False, "error": "missing guild_id"})
+    guild_id = int(guild_id)
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return None, None, None, None, jsonify({"ok": False, "error": "not_logged_in"})
+    user = find_user(guild_id, student_id)
+    nickname = (user or {}).get("nickname") or str(student_id)
+    return data, guild_id, student_id, nickname, None
+
+def _quiz_get_room_or_error(code):
+    room = QUIZ_ROOMS.get((code or "").strip().upper())
+    if room is None:
+        return None, jsonify({"ok": False, "error": "room_not_found"})
+    return room, None
+
+def _quiz_room_players_json(room):
+    players = sorted(room["players"].values(), key=lambda p: -p["score"])
+    return [
+        {
+            "id": p["id"],
+            "nickname": p["nickname"],
+            "color": p["color"],
+            "text_color": p["text_color"],
+            "score": p["score"],
+        }
+        for p in players
+    ]
+
+def _quiz_room_snapshot(room, is_host: bool, student_id):
+    snap = {
+        "code": room["code"],
+        "title": room["title"],
+        "state": room["state"],
+        "host_nickname": room["host_nickname"],
+        "players": _quiz_room_players_json(room),
+    }
+    if room["state"] in ("question", "reveal"):
+        q = room["questions"][room["current_q"]]
+        revealed = room["state"] == "reveal"
+        question_payload = {"question": q["question"], "choices": q["choices"]}
+        # ★ 正解番号は、出題中はプレイヤーには渡さない（レスポンスをdevtools等で
+        #   覗かれてカンニングされるのを防ぐ）。ホスト、または発表済み(reveal)に
+        #   なってから渡す。
+        if is_host or revealed:
+            question_payload["correct_index"] = q["correct_index"]
+        snap.update({
+            "current_q": room["current_q"],
+            "total_questions": len(room["questions"]),
+            "question": question_payload,
+            "question_started_at": room["question_started_at"],
+            "time_limit_sec": room["time_limit_sec"],
+        })
+        if is_host:
+            snap["answered_count"] = sum(1 for p in room["players"].values() if p["cur_answer"] is not None)
+            snap["total_players"] = len(room["players"])
+        if revealed:
+            snap["first_correct_nickname"] = room.get("first_correct_nickname")
+        if not is_host:
+            player = room["players"].get(student_id)
+            if player is not None and player["cur_answer"] is not None:
+                snap["your_answer"] = player["cur_answer"]
+                if revealed:
+                    snap["your_correct"] = bool(player["cur_correct"])
+    return snap
+
+def _build_deck_questions(deck_filename, num_questions):
+    """単語カードのデッキ（表面=question／裏面=answer）から、答えをシャッフルした
+    4択問題を自動生成する。(questions, error_code) を返す（成功時 error_code は None）。"""
+    if "/" in deck_filename or "\\" in deck_filename or ".." in deck_filename:
+        return None, "deck_not_found"
+    data, _ = get_card_file(deck_filename)
+    if data is None:
+        return None, "deck_not_found"
+    cards = [
+        c for c in data.get("cards", [])
+        if isinstance(c, dict) and str(c.get("question") or "").strip() and str(c.get("answer") or "").strip()
+    ]
+    unique_answers = {c["answer"].strip() for c in cards}
+    # ★ 4択（正解1つ＋不正解3つ）を作るには、答えの異なり（ユニークな値）が
+    #   最低4つ必要。html側の注意書き（「答えの種類が4つ以上あるデッキが必要」）と対応。
+    if len(cards) < 4 or len(unique_answers) < 4:
+        return None, "deck_too_small"
+
+    try:
+        num_questions = int(num_questions) if num_questions else None
+    except (TypeError, ValueError):
+        num_questions = None
+    n = min(num_questions, len(cards)) if num_questions else len(cards)
+    n = max(1, min(n, QUIZ_MAX_QUESTIONS, len(cards)))
+
+    picked = random.sample(cards, n)
+    questions = []
+    for card in picked:
+        correct = card["answer"].strip()
+        pool = list(dict.fromkeys(  # 同じ答え文言の重複を除去しつつ順序を保つ
+            c["answer"].strip() for c in cards if c is not card and c["answer"].strip() != correct
+        ))
+        if len(pool) < 3:
+            return None, "deck_too_small"
+        choices = random.sample(pool, 3) + [correct]
+        random.shuffle(choices)
+        questions.append({
+            "question": card["question"].strip(),
+            "choices": choices,
+            "correct_index": choices.index(correct),
+        })
+    return questions, None
+
+def _validate_manual_questions(raw_questions):
+    """ホストが手入力した問題データを検証する。
+    成功時: ((questions, check_fields), None) / 失敗時: (None, error_code)"""
+    if not isinstance(raw_questions, list) or not raw_questions:
+        return None, "invalid_questions"
+    questions = []
+    check_fields = {}
+    for i, q in enumerate(raw_questions):
+        if not isinstance(q, dict):
+            return None, "invalid_questions"
+        question_text = str(q.get("question") or "").strip()
+        choices = q.get("choices")
+        correct_index = q.get("correct_index")
+        if not question_text or not isinstance(choices, list) or len(choices) != 4:
+            return None, "invalid_questions"
+        choices = [str(c or "").strip() for c in choices]
+        if any(not c for c in choices):
+            return None, "invalid_questions"
+        if not isinstance(correct_index, int) or isinstance(correct_index, bool) or not (0 <= correct_index < 4):
+            return None, "invalid_questions"
+        check_fields[f"問題{i+1}の問題文"] = question_text
+        for j, c in enumerate(choices):
+            check_fields[f"問題{i+1}の選択肢{j+1}"] = c
+        questions.append({"question": question_text, "choices": choices, "correct_index": correct_index})
+    return (questions, check_fields), None
+
+@app.route("/quiz_create", methods=["POST"])
+def quiz_create():
+    data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
+    if err:
+        return err
+
+    title = str(data.get("title") or "").strip()[:40] or "みんなでクイズ"
+    try:
+        time_limit_sec = int(data.get("time_limit_sec"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid_time_limit"})
+    if not (QUIZ_MIN_TIME_LIMIT_SEC <= time_limit_sec <= QUIZ_MAX_TIME_LIMIT_SEC):
+        return jsonify({"ok": False, "error": "invalid_time_limit"})
+
+    source = data.get("source")
+    if source == "deck":
+        deck_filename = data.get("deck_filename")
+        if not deck_filename:
+            return jsonify({"ok": False, "error": "deck_not_found"})
+        questions, q_err = _build_deck_questions(deck_filename, data.get("num_questions"))
+        if q_err:
+            return jsonify({"ok": False, "error": q_err})
+        err = reject_if_bug_chars({"タイトル": title})
+        if err:
+            return err
+    elif source == "manual":
+        result, q_err = _validate_manual_questions(data.get("questions"))
+        if q_err:
+            return jsonify({"ok": False, "error": q_err})
+        questions, check_fields = result
+        check_fields["タイトル"] = title
+        err = reject_if_bug_chars(check_fields)
+        if err:
+            return err
+    else:
+        return jsonify({"ok": False, "error": "invalid_source"})
+
+    now = time.time()
+    with QUIZ_ROOMS_LOCK:
+        _quiz_gc_locked(now)
+        code = _generate_quiz_code()
+        QUIZ_ROOMS[code] = {
+            "code": code,
+            "guild_id": guild_id,
+            "title": title,
+            "time_limit_sec": time_limit_sec,
+            "questions": questions,
+            "host_id": student_id,
+            "host_nickname": nickname,
+            "players": {},
+            "state": "lobby",
+            "current_q": 0,
+            "question_started_at": None,
+            "first_correct_id": None,
+            "first_correct_nickname": None,
+            "created_at": now,
+            "last_activity": now,
+            "ended_at": None,
+        }
+    write_log(guild_id, "quiz_create", detail=f"{nickname} が「{title}」を作成（{len(questions)}問, code={code}）")
+    return jsonify({"ok": True, "code": code})
+
+@app.route("/quiz_join", methods=["POST"])
+def quiz_join():
+    data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
+    if err:
+        return err
+    code = (data.get("code") or "").strip().upper()
+
+    now = time.time()
+    with QUIZ_ROOMS_LOCK:
+        _quiz_gc_locked(now)
+        room, err = _quiz_get_room_or_error(code)
+        if err:
+            return err
+        is_host = (student_id == room["host_id"])
+        if not is_host and student_id not in room["players"]:
+            if room["state"] != "lobby":
+                return jsonify({"ok": False, "error": "quiz_already_started"})
+            color, text_color = _quiz_palette_for(student_id)
+            room["players"][student_id] = {
+                "id": student_id,
+                "nickname": nickname,
+                "color": color,
+                "text_color": text_color,
+                "score": 0,
+                "cur_answer": None,
+                "cur_correct": None,
+            }
+        room["last_activity"] = now
+        snap = _quiz_room_snapshot(room, is_host, student_id)
+    return jsonify({"ok": True, "is_host": is_host, "room": snap})
+
+@app.route("/quiz_state", methods=["GET"])
+def quiz_state():
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    guild_id = int(guild_id)
+    student_id = resolve_session(request.args.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+    code = (request.args.get("code") or "").strip().upper()
+
+    now = time.time()
+    with QUIZ_ROOMS_LOCK:
+        _quiz_gc_locked(now)
+        room, err = _quiz_get_room_or_error(code)
+        if err:
+            return err
+        is_host = (student_id == room["host_id"])
+        if not is_host and student_id not in room["players"]:
+            # 参加したことのない部屋の状態は覗けないようにする（未参加なら「見つからない」扱い）
+            return jsonify({"ok": False, "error": "room_not_found"})
+        room["last_activity"] = now
+        snap = _quiz_room_snapshot(room, is_host, student_id)
+    return jsonify({"ok": True, "is_host": is_host, "room": snap})
+
+@app.route("/quiz_start", methods=["POST"])
+def quiz_start():
+    data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
+    if err:
+        return err
+    code = (data.get("code") or "").strip().upper()
+
+    now = time.time()
+    with QUIZ_ROOMS_LOCK:
+        room, err = _quiz_get_room_or_error(code)
+        if err:
+            return err
+        if student_id != room["host_id"]:
+            return jsonify({"ok": False, "error": "not_host"})
+        if room["state"] != "lobby":
+            return jsonify({"ok": False, "error": "quiz_already_started"})
+        if not room["players"]:
+            return jsonify({"ok": False, "error": "no_players"})
+        room["state"] = "question"
+        room["current_q"] = 0
+        room["question_started_at"] = now
+        room["first_correct_id"] = None
+        room["first_correct_nickname"] = None
+        for p in room["players"].values():
+            p["cur_answer"] = None
+            p["cur_correct"] = None
+        room["last_activity"] = now
+        snap = _quiz_room_snapshot(room, True, student_id)
+    return jsonify({"ok": True, "room": snap})
+
+@app.route("/quiz_answer", methods=["POST"])
+def quiz_answer():
+    data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
+    if err:
+        return err
+    code = (data.get("code") or "").strip().upper()
+    choice_index = data.get("choice_index")
+    if not isinstance(choice_index, int) or isinstance(choice_index, bool) or not (0 <= choice_index < 4):
+        return jsonify({"ok": False, "error": "invalid_choice"})
+
+    now = time.time()
+    with QUIZ_ROOMS_LOCK:
+        room, err = _quiz_get_room_or_error(code)
+        if err:
+            return err
+        if room["state"] != "question":
+            return jsonify({"ok": False, "error": "not_answerable"})
+        player = room["players"].get(student_id)
+        if player is None:
+            return jsonify({"ok": False, "error": "not_in_room"})
+        if player["cur_answer"] is not None:
+            return jsonify({"ok": False, "error": "already_answered"})
+
+        q = room["questions"][room["current_q"]]
+        correct = (choice_index == q["correct_index"])
+        player["cur_answer"] = choice_index
+        player["cur_correct"] = correct
+        if correct:
+            points = QUIZ_ANSWER_BASE_POINTS
+            if room["first_correct_id"] is None:
+                room["first_correct_id"] = student_id
+                room["first_correct_nickname"] = player["nickname"]
+                points += QUIZ_FIRST_CORRECT_BONUS
+            player["score"] += points
+        room["last_activity"] = now
+    return jsonify({"ok": True})
+
+@app.route("/quiz_next", methods=["POST"])
+def quiz_next():
+    data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
+    if err:
+        return err
+    code = (data.get("code") or "").strip().upper()
+
+    now = time.time()
+    with QUIZ_ROOMS_LOCK:
+        room, err = _quiz_get_room_or_error(code)
+        if err:
+            return err
+        if student_id != room["host_id"]:
+            return jsonify({"ok": False, "error": "not_host"})
+
+        if room["state"] == "question":
+            # 出題中 → 正解発表（この問題の集計を締め切るだけで、得点は既に
+            # /quiz_answer の時点で加算済みなのでここでは何もしない）
+            room["state"] = "reveal"
+        elif room["state"] == "reveal":
+            if room["current_q"] + 1 >= len(room["questions"]):
+                room["state"] = "ended"
+                room["ended_at"] = now
+            else:
+                room["current_q"] += 1
+                room["state"] = "question"
+                room["question_started_at"] = now
+                room["first_correct_id"] = None
+                room["first_correct_nickname"] = None
+                for p in room["players"].values():
+                    p["cur_answer"] = None
+                    p["cur_correct"] = None
+        else:
+            return jsonify({"ok": False, "error": "quiz_not_in_progress"})
+
+        room["last_activity"] = now
+        snap = _quiz_room_snapshot(room, True, student_id)
+    return jsonify({"ok": True, "room": snap})
+
+@app.route("/quiz_end", methods=["POST"])
+def quiz_end():
+    data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
+    if err:
+        return err
+    code = (data.get("code") or "").strip().upper()
+
+    now = time.time()
+    with QUIZ_ROOMS_LOCK:
+        room, err = _quiz_get_room_or_error(code)
+        if err:
+            return err
+        if student_id != room["host_id"]:
+            return jsonify({"ok": False, "error": "not_host"})
+        room["state"] = "ended"
+        room["ended_at"] = now
+        room["last_activity"] = now
+    return jsonify({"ok": True})
+
+@app.route("/quiz_leave", methods=["POST"])
+def quiz_leave():
+    data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
+    if err:
+        return err
+    code = (data.get("code") or "").strip().upper()
+
+    with QUIZ_ROOMS_LOCK:
+        room, err = _quiz_get_room_or_error(code)
+        if err:
+            return err
+        room["players"].pop(student_id, None)
+        room["last_activity"] = time.time()
     return jsonify({"ok": True})
 
 # ================================
