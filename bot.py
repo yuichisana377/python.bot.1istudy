@@ -3555,7 +3555,15 @@ def save_cards():
 
     sha = None
     if is_update:
-        _, sha = get_card_file(filename)
+        existing_data, sha = get_card_file(filename)
+        # ★「クイズ過去問」フォルダの中身は、その外へ移動できない
+        #   （フォルダ移動UIのガードと同じ考え方。ここが唯一のデッキfolder_id書き込み
+        #   経路なので、サーバー側の実効的な強制はここで行う）。
+        if existing_data is not None:
+            old_folder_id = existing_data.get("folder_id")
+            folders_for_check, _ = load_card_folders()
+            if _is_in_archive_scope(folders_for_check, old_folder_id) and not _is_in_archive_scope(folders_for_check, folder_id):
+                return jsonify({"ok": False, "error": "クイズ過去問フォルダの外には移動できません"})
 
     card_payload = {
         "name": name,
@@ -3942,6 +3950,44 @@ def _validate_manual_questions(raw_questions):
         questions.append({"question": question_text, "choices": choices, "correct_index": correct_index})
     return (questions, check_fields), None
 
+def _archive_manual_quiz(title, questions, student_id, nickname):
+    """
+    ★ ホストが「自分で問題を作る」（オリジナル4択）で作成したクイズを、
+      CardMakerの「クイズ過去問」フォルダにデッキとして自動保存する。
+      いつでも一人用4択モードで遊べる「過去問」として残すため。
+    ・questions は _validate_manual_questions の戻り値そのもの
+      （[{"question", "choices"(4件), "correct_index"}, ...]）。
+    ・各カードには choices/correct_index に加えて answer（正解の選択肢文言）も
+      入れておく。これにより単語検索・一覧表示・作成済みリストなど、
+      「answerは文字列である」という前提の既存コードを一切変更せずに動かせる
+      （choices/correct_index は4択専用UIだけが見る）。
+    ・アーカイブに失敗しても、クイズ自体の作成は失敗させない（ベストエフォート）。
+    """
+    try:
+        _ensure_quiz_archive_folder()
+        cards = [{
+            "id": secrets.token_hex(6),
+            "question": q["question"],
+            "answer": q["choices"][q["correct_index"]],
+            "choices": q["choices"],
+            "correct_index": q["correct_index"],
+            "explanation": "",
+            "imgs_q": [], "imgs_a": [], "imgs_e": [],
+        } for q in questions]
+        filename = generate_card_filename()
+        card_payload = {
+            "name": title,
+            "cards": cards,
+            "subject": None,
+            "folder_id": QUIZ_ARCHIVE_FOLDER_ID,
+            "published_by": {"id": student_id, "nickname": nickname},
+            "incomplete": False,
+        }
+        put_card_file(filename, card_payload)
+        upsert_cards_index_entry(filename, card_payload)
+    except Exception as e:
+        print(f"[WARN] クイズ過去問の保存に失敗しました（クイズ作成自体は続行）: {e}")
+
 @app.route("/quiz_create", methods=["POST"])
 def quiz_create():
     data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
@@ -3970,6 +4016,9 @@ def quiz_create():
         err = reject_if_bug_chars(check_fields)
         if err:
             return err
+        # ★ オリジナル4択クイズは、CardMakerの「クイズ過去問」フォルダに
+        #   自動保存する（あとで一人用4択モードで遊べるようにするため）
+        _archive_manual_quiz(title, questions, student_id, nickname)
     else:
         return jsonify({"ok": False, "error": "invalid_source"})
 
@@ -4019,6 +4068,108 @@ def quiz_create():
     # ★ クイズの開始は予定管理などと違い頻繁に行われる一時的な操作なので、
     #   write_log（予定の追加・編集・削除ログ）には残さない。
     return jsonify({"ok": True, "code": code})
+
+# ================================
+#  ★ クイズ過去問（CardMaker内の一人用4択モード）のランキング
+#  ─────────────────────────────
+#  「クイズ過去問」フォルダにアーカイブされたデッキ1つにつき1ファイル
+#  （quiz_leaderboard_<デッキのfilename>.json）に、{student_id: {...}} の形で
+#  各生徒のベストスコアだけを保持する。QUIZ_ROOMS（ライブルーム）とは異なり、
+#  こちらはディスクに永続化する（いつ・誰が挑戦しても記録が残るランキングのため）。
+# ================================
+def _is_safe_deck_filename(filename):
+    return bool(filename) and filename.endswith(".json") \
+        and "/" not in filename and "\\" not in filename and ".." not in filename
+
+def _update_quiz_leaderboard(deck_filename, mutate_fn, max_attempts=4):
+    """mutate_fn(leaderboard_dict) は dict を直接書き換える関数。
+    保存に失敗（sha競合）した場合は最新データを読み直して再適用する。"""
+    lb_filename = f"quiz_leaderboard_{deck_filename}"
+    last_err = None
+    for _ in range(max_attempts):
+        data, sha = local_get(lb_filename)
+        data = data or {}
+        mutate_fn(data)
+        try:
+            local_put(lb_filename, data, sha)
+            return
+        except DataWriteError as e:
+            last_err = e
+            continue
+    raise last_err or DataWriteError("保存に失敗しました（リトライ上限）")
+
+@app.route("/quiz_archive_submit_score", methods=["POST"])
+def quiz_archive_submit_score():
+    """一人用4択モードのスコアを記録する。ベストスコアだけを保持する。"""
+    data = request.json or {}
+    guild_id = data.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    guild_id = int(guild_id)
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    filename = data.get("filename") or ""
+    if not _is_safe_deck_filename(filename):
+        return jsonify({"ok": False, "error": "invalid filename"})
+
+    try:
+        score = int(data.get("score"))
+        total = int(data.get("total"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid score/total"})
+    if score < 0 or total <= 0 or score > total:
+        return jsonify({"ok": False, "error": "invalid score/total"})
+
+    # ★ このデッキが実際に「クイズ過去問」フォルダの中にあるか確認する
+    #   （でたらめなfilenameを指定してスコアを偽造されるのを防ぐ）
+    card_data, _ = get_card_file(filename)
+    if card_data is None:
+        return jsonify({"ok": False, "error": "deck_not_found"})
+    folders, _ = load_card_folders()
+    if not _is_in_archive_scope(folders, card_data.get("folder_id")):
+        return jsonify({"ok": False, "error": "not_a_quiz_archive_deck"})
+
+    user = find_user(guild_id, student_id)
+    nickname = (user or {}).get("nickname") or str(student_id)
+
+    try:
+        def _mutate(lb):
+            existing = lb.get(student_id)
+            if existing is None or score > existing.get("score", -1):
+                lb[student_id] = {
+                    "nickname": nickname,
+                    "score": score,
+                    "total": total,
+                    "played_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
+                }
+        _update_quiz_leaderboard(filename, _mutate)
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
+
+    return jsonify({"ok": True})
+
+@app.route("/quiz_archive_leaderboard", methods=["GET"])
+def quiz_archive_leaderboard():
+    """指定デッキ（クイズ過去問）のランキングをスコア降順で返す。"""
+    filename = request.args.get("filename") or ""
+    if not _is_safe_deck_filename(filename):
+        return jsonify({"ok": False, "error": "invalid filename"})
+    data, _ = local_get(f"quiz_leaderboard_{filename}")
+    data = data or {}
+    rows = [
+        {
+            "student_id": sid,
+            "nickname": e.get("nickname"),
+            "score": e.get("score"),
+            "total": e.get("total"),
+            "played_at": e.get("played_at"),
+        }
+        for sid, e in data.items()
+    ]
+    rows.sort(key=lambda r: (-(r["score"] or 0), r["played_at"] or ""))
+    return jsonify({"ok": True, "leaderboard": rows})
 
 @app.route("/quiz_list_rooms", methods=["GET"])
 def quiz_list_rooms():
@@ -4620,6 +4771,37 @@ def generate_folder_id():
     import string
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
 
+# ================================
+#  ★ 「クイズ過去問」フォルダ（クイズ由来の4択アーカイブ用・システムフォルダ）
+#  ─────────────────────────────
+#  みんなでクイズ（Quiz.js）でホストが「自分で問題を作る」（deckからの自動生成
+#  ではなく手入力のオリジナル4択）でクイズを作った瞬間、その問題セットを
+#  CardMakerのこの固定フォルダの中にデッキとして自動保存する。
+#  ・IDを固定にすることで、二重作成を防ぎ、どのルートからでも同じフォルダを指せる。
+#  ・このフォルダ自体は名前変更・削除・移動を禁止する（save_folder/delete_folder側で
+#    ガードする）。中身（サブフォルダ作成・デッキの移動・並び替え・編集）は
+#    フォルダの中でなら自由だが、フォルダの外へ出すことは禁止する。
+#  ・「このデッキが4択アーカイブかどうか」は専用フラグを持たせず、
+#    folder_id がこのフォルダのスコープ内かどうかだけで判定する
+#    （save_cardsのcard_payloadは固定6キーのため、任意のトップレベルフラグを
+#    追加すると通常デッキの保存経路にも影響が及んでしまうのを避けるため）。
+# ================================
+QUIZ_ARCHIVE_FOLDER_ID   = "quiz_archive_root"
+QUIZ_ARCHIVE_FOLDER_NAME = "クイズ過去問"
+
+def _ensure_quiz_archive_folder():
+    """「クイズ過去問」フォルダが無ければ作る（あれば何もしない）。"""
+    folders, sha = load_card_folders()
+    if not any(f.get("id") == QUIZ_ARCHIVE_FOLDER_ID for f in folders):
+        folders.append({"id": QUIZ_ARCHIVE_FOLDER_ID, "name": QUIZ_ARCHIVE_FOLDER_NAME, "parent_id": None})
+        save_card_folders(folders, sha)
+
+def _is_in_archive_scope(folders, folder_id):
+    """folder_id が「クイズ過去問」フォルダ自身、またはその子孫かどうか。"""
+    if folder_id == QUIZ_ARCHIVE_FOLDER_ID:
+        return True
+    return any(f["id"] == folder_id for f in _folder_descendants(folders, QUIZ_ARCHIVE_FOLDER_ID))
+
 @app.route("/list_folders", methods=["GET"])
 def list_folders():
     try:
@@ -4653,9 +4835,15 @@ def save_folder():
             target = next((f for f in folders if f["id"] == folder_id), None)
             if not target:
                 return jsonify({"ok": False, "error": "folder not found"})
+            # ★「クイズ過去問」フォルダ自身は改名・移動できないシステムフォルダ
+            if folder_id == QUIZ_ARCHIVE_FOLDER_ID and (name != target.get("name") or parent_id != target.get("parent_id")):
+                return jsonify({"ok": False, "error": "このフォルダは変更できません"})
             if parent_id != target.get("parent_id"):
                 if not _can_move_folder_to(folders, folder_id, parent_id):
                     return jsonify({"ok": False, "error": "移動できません（3階層を超える、または循環参照）"})
+                # ★「クイズ過去問」フォルダの中身は、その外へ移動できない
+                if _is_in_archive_scope(folders, folder_id) and not _is_in_archive_scope(folders, parent_id):
+                    return jsonify({"ok": False, "error": "クイズ過去問フォルダの外には移動できません"})
                 target["parent_id"] = parent_id
             target["name"] = name
         else:
@@ -4677,6 +4865,9 @@ def delete_folder():
     folder_id = data.get("id")
     if not folder_id:
         return jsonify({"ok": False, "error": "id は必須です"})
+    # ★「クイズ過去問」フォルダ自身は削除できないシステムフォルダ
+    if folder_id == QUIZ_ARCHIVE_FOLDER_ID:
+        return jsonify({"ok": False, "error": "このフォルダは削除できません"})
     try:
         folders, sha = load_card_folders()
         desc_ids   = [f["id"] for f in _folder_descendants(folders, folder_id)]
