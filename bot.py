@@ -19,6 +19,7 @@ import hmac
 import re
 import secrets
 import random
+import difflib
 from urllib.parse import urlencode
 
 # ================================
@@ -3751,6 +3752,21 @@ def _quiz_room_snapshot(room, student_id):
                 snap["your_correct"] = bool(player["cur_correct"])
     return snap
 
+def _pick_distractors(correct: str, pool: list, k: int) -> list:
+    """
+    正解(correct)に対する誤答をpoolからk個選ぶ。
+    ★ 完全ランダムに選ぶと、他のカードの答えと文字数も内容もかけ離れた
+      誤答ばかりになりがちで、見た目だけで消去法に正解できてしまっていた。
+      正解と文字列として近い（綴り・字面が似ている）ものを優先候補にし、
+      その中からランダムに選ぶことで、きちんと覚えていないと迷うような
+      4択にする（候補は上位だけに絞らず少し広めに取るので、
+      似たものが少ないデッキでも極端に難しくなりすぎない）。
+    """
+    scored = sorted(pool, key=lambda a: difflib.SequenceMatcher(None, correct, a).ratio(), reverse=True)
+    pool_size = max(k, min(len(scored), k * 3))
+    return random.sample(scored[:pool_size], k)
+
+
 def _build_deck_questions(deck_filename, num_questions):
     """単語カードのデッキ（表面=question／裏面=answer）から、答えをシャッフルした
     4択問題を自動生成する。(questions, error_code) を返す（成功時 error_code は None）。"""
@@ -3785,7 +3801,7 @@ def _build_deck_questions(deck_filename, num_questions):
         ))
         if len(pool) < 3:
             return None, "deck_too_small"
-        choices = random.sample(pool, 3) + [correct]
+        choices = _pick_distractors(correct, pool, 3) + [correct]
         random.shuffle(choices)
         questions.append({
             "question": card["question"].strip(),
