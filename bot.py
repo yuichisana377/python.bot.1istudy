@@ -1889,7 +1889,8 @@ def add_schedule():
     return jsonify({"ok": ok, "message": msg})
 
 BASE_MAX_LOG_MINUTES = 180  # ★ タイマーを使っていない場合（手入力等）の上限。タイマー使用時は自動休憩を挟むたびに+3時間される
-MANUAL_COOLDOWN_SEC = 60  # ★ 手入力：同じ教科の連続記録は前回から1分あける（不正防止）
+MANUAL_COOLDOWN_SEC = 60  # ★ 手入力：連続記録は前回から1分あける（不正防止）
+MANUAL_DAILY_MAX_MINUTES = 960  # ★ 1日の記録合計の上限（16時間）。短時間の連投による水増し防止
 
 def _parse_log_time(log):
     """ログの正確な時刻（"time"）をdatetimeに変換する。無ければNone。"""
@@ -1981,6 +1982,21 @@ def add_study_log():
                     "error": f"前回の記録からまだ十分な時間が経過していません（あと約{remain_min}分待つ必要があります）"
                 })
     elif method == "manual":
+        # ★ 2026-08-17、教科名を毎回変えながら連投することで「同じ教科」判定の
+        #   1分クールダウンを回避され、10分間に34件・180分ずつの水増し記録を
+        #   入れられる被害が発生した。「同じ教科」に加えて「本人の直近ログ
+        #   （教科不問）」からの経過時間もチェックすることで、教科を変える
+        #   だけの連投そのものを防ぐ。
+        last_time_any = _latest_log_time(my_logs)
+        if last_time_any:
+            elapsed_sec_any = (now_jst - last_time_any).total_seconds()
+            if elapsed_sec_any < MANUAL_COOLDOWN_SEC:
+                remain_sec = int(MANUAL_COOLDOWN_SEC - elapsed_sec_any) + 1
+                return jsonify({
+                    "ok": False,
+                    "error": f"記録は、前回から1分経ってから行えます（あと{remain_sec}秒）"
+                })
+
         same_subject_logs = [l for l in my_logs if l.get("subject") == subject]
         last_time = _latest_log_time(same_subject_logs)
         if last_time:
@@ -1991,6 +2007,16 @@ def add_study_log():
                     "ok": False,
                     "error": f"同じ教科の記録は、前回から1分経ってから行えます（あと{remain_sec}秒）"
                 })
+
+        # ★ 1分間隔さえ守れば教科を変えて延々と積み上げられてしまうため、
+        #   1日（本人の全記録合計・教科不問）にも上限を設ける。
+        today_str = now_jst.strftime("%Y-%m-%d")
+        today_total = sum(l.get("minutes", 0) for l in my_logs if l.get("date") == today_str)
+        if today_total + minutes > MANUAL_DAILY_MAX_MINUTES:
+            return jsonify({
+                "ok": False,
+                "error": f"1日の記録合計の上限（{MANUAL_DAILY_MAX_MINUTES}分）を超えます"
+            })
 
     # --- ★ date/time はクライアントの値を信用せず、サーバー（JST）の値を使う ---
     #     → PCの時計を進めても戻しても、記録される日時は実際の日時のまま変わらない
