@@ -3869,6 +3869,44 @@ def _quiz_autoadvance_locked(room, now):
         else:
             return
 
+QUIZ_SCHEDULER_TICK_SEC = 0.15  # ★ 追加：誰もポーリングしていなくても、この間隔で自動的に時間切れをチェックする
+
+def _quiz_scheduler_loop():
+    """
+    ★ 追加：以前は「誰かがAPI（ポーリング等）を呼んだ瞬間にだけ」時間切れを
+      チェックしていたため（_quiz_autoadvance_locked はそこでしか呼ばれて
+      いなかった）、次に誰かがポーリングするまで状態の切り替わりが遅れて
+      いた（ポーリング間隔ぶんの遅延）。
+      この専用スレッドが誰のリクエストも待たずに一定間隔で全部屋を自動的に
+      チェックし、状態が変わった瞬間にSSE(notify_change)で全員へ即座に
+      知らせることで、「時間になったら勝手に切り替わる」ようにする。
+    ★ Discord bot側の非同期ループ（AsyncIOScheduler）とは完全に別の、
+      独立したスレッドで動かす。QUIZ_ROOMS_LOCK を握るのは一瞬（軽い辞書
+      走査だけ）なので、Discord側や他のAPIリクエストをブロックする心配は
+      ほぼ無い。
+    """
+    while True:
+        time.sleep(QUIZ_SCHEDULER_TICK_SEC)
+        try:
+            now = time.time()
+            changed_guild_ids = set()
+            with QUIZ_ROOMS_LOCK:
+                for room in QUIZ_ROOMS.values():
+                    state_before = room["state"]
+                    _quiz_autoadvance_locked(room, now)
+                    if room["state"] != state_before:
+                        changed_guild_ids.add(room["guild_id"])
+            for guild_id in changed_guild_ids:
+                notify_change(guild_id)
+        except Exception as e:
+            # ★ 1回のチェックで例外が起きても、このスレッド自体は止めない
+            #   （止まるとクイズの自動進行がポーリング頼みに戻ってしまうため）。
+            print(f"[ERROR] quiz scheduler tick failed: {e}")
+
+def start_quiz_scheduler():
+    Thread(target=_quiz_scheduler_loop, daemon=True).start()
+    print("[INFO] Quiz scheduler thread started")
+
 def _quiz_auth_from_json():
     """POST系クイズAPI共通：JSONボディからguild_id・session_tokenを検証し、
     (data, guild_id, student_id, nickname, error_response) を返す。
@@ -5325,6 +5363,7 @@ async def on_disconnect():
 
 
 keep_alive()
+start_quiz_scheduler()
 
 print(f"[INFO] TOKEN set: {bool(TOKEN)}, length: {len(TOKEN) if TOKEN else 0}")
 print(f"[INFO] Starting bot.run()...")
