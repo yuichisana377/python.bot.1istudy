@@ -3707,11 +3707,22 @@ def _pick_distractors(correct: str, pool: list, k: int) -> list:
       誤答ばかりになりがちで、見た目だけで消去法に正解できてしまっていた。
       正解と文字列として近い（綴り・字面が似ている）ものを優先候補にし、
       その中からランダムに選ぶことで、きちんと覚えていないと迷うような
-      4択にする（候補は上位だけに絞らず少し広めに取るので、
-      似たものが少ないデッキでも極端に難しくなりすぎない）。
+      4択にする。
+      ★ さらに、綴りの類似度（SequenceMatcher）だけだと「文字数が全然違う
+      せいで一目で誤答と分かる」選択肢が紛れ込みやすかったため、文字数の
+      近さもスコアに加味する。また、候補の絞り込みを従来（上位9件から
+      ランダムに3件）よりタイトにする（上位6件から3件）ことで、
+      「似ているが選ばれなかった」紛らわしい候補が混ざりにくくし、
+      パッと見で消去法が効きにくい4択にする。
     """
-    scored = sorted(pool, key=lambda a: difflib.SequenceMatcher(None, correct, a).ratio(), reverse=True)
-    pool_size = max(k, min(len(scored), k * 3))
+    def _score(a):
+        seq_ratio = difflib.SequenceMatcher(None, correct, a).ratio()
+        longer = max(len(correct), len(a), 1)
+        length_ratio = 1 - abs(len(correct) - len(a)) / longer
+        return seq_ratio * 0.7 + length_ratio * 0.3
+
+    scored = sorted(pool, key=_score, reverse=True)
+    pool_size = max(k, min(len(scored), k * 2))
     return random.sample(scored[:pool_size], k)
 
 
