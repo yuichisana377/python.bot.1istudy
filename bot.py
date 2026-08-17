@@ -3897,7 +3897,8 @@ def quiz_create():
             "last_activity": now,
             "ended_at": None,
         }
-    write_log(guild_id, "quiz_create", detail=f"{nickname} が「{title}」を作成（{len(questions)}問, code={code}）")
+    # ★ クイズの開始は予定管理などと違い頻繁に行われる一時的な操作なので、
+    #   write_log（予定の追加・編集・削除ログ）には残さない。
     return jsonify({"ok": True, "code": code})
 
 @app.route("/quiz_join", methods=["POST"])
