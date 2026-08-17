@@ -4283,7 +4283,7 @@ def quiz_join():
         room["last_activity"] = now
         _quiz_autoadvance_locked(room, now)
         snap = _quiz_room_snapshot(room, student_id)
-    return jsonify({"ok": True, "is_host": is_host, "room": snap})
+    return jsonify({"ok": True, "is_host": is_host, "room": snap, "server_now": int(now * 1000)})
 
 @app.route("/quiz_state", methods=["GET"])
 def quiz_state():
@@ -4309,7 +4309,7 @@ def quiz_state():
         room["last_activity"] = now
         _quiz_autoadvance_locked(room, now)
         snap = _quiz_room_snapshot(room, student_id)
-    return jsonify({"ok": True, "is_host": is_host, "room": snap})
+    return jsonify({"ok": True, "is_host": is_host, "room": snap, "server_now": int(now * 1000)})
 
 @app.route("/quiz_start", methods=["POST"])
 def quiz_start():
@@ -4338,7 +4338,7 @@ def quiz_start():
             p["cur_correct"] = None
         room["last_activity"] = now
         snap = _quiz_room_snapshot(room, student_id)
-    return jsonify({"ok": True, "room": snap})
+    return jsonify({"ok": True, "room": snap, "server_now": int(now * 1000)})
 
 @app.route("/quiz_answer", methods=["POST"])
 def quiz_answer():
