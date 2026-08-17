@@ -1889,7 +1889,7 @@ def add_schedule():
     return jsonify({"ok": ok, "message": msg})
 
 BASE_MAX_LOG_MINUTES = 180  # ★ タイマーを使っていない場合（手入力等）の上限。タイマー使用時は自動休憩を挟むたびに+3時間される
-MANUAL_COOLDOWN_SEC = 60  # ★ 手入力：連続記録は前回から1分あける（不正防止）
+MANUAL_COOLDOWN_SEC = 20  # ★ 手入力：連続記録は前回から20秒あける（連打対策）
 MANUAL_DAILY_MAX_MINUTES = 960  # ★ 1日の記録合計の上限（16時間）。短時間の連投による水増し防止
 
 def _parse_log_time(log):
@@ -1994,7 +1994,7 @@ def add_study_log():
                 remain_sec = int(MANUAL_COOLDOWN_SEC - elapsed_sec_any) + 1
                 return jsonify({
                     "ok": False,
-                    "error": f"記録は、前回から1分経ってから行えます（あと{remain_sec}秒）"
+                    "error": f"記録は、前回から{MANUAL_COOLDOWN_SEC}秒経ってから行えます（あと{remain_sec}秒）"
                 })
 
         same_subject_logs = [l for l in my_logs if l.get("subject") == subject]
@@ -2005,7 +2005,7 @@ def add_study_log():
                 remain_sec = int(MANUAL_COOLDOWN_SEC - elapsed_sec) + 1
                 return jsonify({
                     "ok": False,
-                    "error": f"同じ教科の記録は、前回から1分経ってから行えます（あと{remain_sec}秒）"
+                    "error": f"同じ教科の記録は、前回から{MANUAL_COOLDOWN_SEC}秒経ってから行えます（あと{remain_sec}秒）"
                 })
 
         # ★ 1分間隔さえ守れば教科を変えて延々と積み上げられてしまうため、
