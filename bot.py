@@ -2606,16 +2606,6 @@ def _oauth_result_page(success: bool, message: str) -> str:
 </body></html>"""
 
 
-def _oauth_login_success_page(student_id: str, nickname: str, token: str) -> str:
-    """
-    ★ 未使用（過去の実装の名残）。
-    APIドメイン上でlocalStorageに書き込んでもフロントエンドドメインからは
-    見えないため使用しない。ログイン成功時は _handle_discord_login_callback から
-    フロントエンドへ session_token をクエリパラメータで渡す方式に統一している。
-    """
-    raise NotImplementedError("this helper is no longer used; see _handle_discord_login_callback")
-
-
 @app.route("/discord_oauth_callback", methods=["GET"])
 def discord_oauth_callback():
     """
@@ -3317,7 +3307,7 @@ def put_card_file(filename, content_obj, sha=None):
     local_put(f"{CARDS_DIR}/{filename}", content_obj, sha)
 
 def generate_card_filename():
-    import random, string
+    import string
     now   = datetime.now(JST)
     date  = now.strftime("%Y%m%d")
     time_ = now.strftime("%H%M")
@@ -4202,7 +4192,7 @@ def remove_in_progress():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 # ================================================================
-#  
+#  Flask API — お知らせ（notices）
 # ================================================================
 
 NOTICES_DIR = "notices"
@@ -4442,7 +4432,7 @@ def _can_move_folder_to(folders, folder_id, new_parent_id):
     return (_max_level_in_subtree(folders, folder_id) + shift) <= MAX_FOLDER_DEPTH
 
 def generate_folder_id():
-    import random, string
+    import string
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
 
 @app.route("/list_folders", methods=["GET"])
