@@ -1316,38 +1316,6 @@ async def edit_category_autocomplete(interaction: discord.Interaction, current: 
     return [app_commands.Choice(name=c, value=c) for c in candidates if current in c][:25]
 
 # ================================
-#  /cleanup
-# ================================
-@bot.tree.command(name="cleanup", description="過去の予定を削除する")
-async def cleanup_command(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    guild_id = interaction.guild.id
-    plans = await async_load_plans(guild_id)
-    today = datetime.now(JST).date()
-    threshold = today - timedelta(days=7)
-    deleted_dates = sorted({
-        p["date"] for p in plans
-        if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold
-    })
-    new_plans = [
-        p for p in plans
-        if datetime.strptime(p["date"], "%Y-%m-%d").date() >= threshold
-    ]
-    try:
-        await async_save_plans(guild_id, new_plans)
-    except DataWriteError as e:
-        await interaction.followup.send(f"保存に失敗しました（データ保存エラー）。もう一度お試しください。\n{e}", ephemeral=True)
-        return
-    if deleted_dates:
-        await async_write_log(guild_id, "cleanup", detail="削除した日付: " + ", ".join(deleted_dates))
-        await interaction.followup.send(
-            f"🧹 {len(deleted_dates)}件削除しました！\n" + "\n".join(deleted_dates),
-            ephemeral=True
-        )
-    else:
-        await interaction.followup.send("削除する予定はありませんでした！", ephemeral=True)
-
-# ================================
 #  /setchannel
 # ================================
 
@@ -1583,7 +1551,6 @@ async def help_command(interaction: discord.Interaction):
         "**/list** — 予定を表示する\n"
         "**/delete** — 予定を削除する\n"
         "**/edit** — 予定を編集する\n"
-        "**/cleanup** — 過去の予定を削除する\n"
         "**/setchannel** — 通知チャンネルを設定する（通生／寮生／お知らせ用を選択可）\n"
         "**/setup_roles** — 通生/寮生 振り分けパネルを投稿する\n"
         "**/id連携** — StudyLogにログインして発行した連携コードを使い、DiscordアカウントをStudyLogと連携する（DM通知を受け取れるようになる）\n"
@@ -1684,25 +1651,6 @@ async def send_today_plans_commute():
 async def send_today_plans_dorm():
     """寮生向け：朝7:20の通知（remind_channel_id_dormを使用）"""
     await send_today_plans_for("remind_channel_id_dorm")
-
-async def cleanup_past_plans():
-    today = datetime.now(JST).date()
-    threshold = today - timedelta(days=7)
-    for filename in list_all_configs():
-        guild_id = int(filename.replace("config_", "").replace(".json", ""))
-        plans = load_plans(guild_id)
-        deleted_dates = sorted({
-            p["date"] for p in plans
-            if datetime.strptime(p["date"], "%Y-%m-%d").date() < threshold
-        })
-        new_plans = [
-            p for p in plans
-            if datetime.strptime(p["date"], "%Y-%m-%d").date() >= threshold
-        ]
-        if deleted_dates:
-            save_plans(guild_id, new_plans)
-            write_log(guild_id, "cleanup", detail="削除した日付: " + ", ".join(deleted_dates))
-            print(f"{guild_id} の過去予定を削除しました。")
 
 WEEKLY_NOTIFY_CHANNEL_KEYS = ("remind_channel_id", "remind_channel_id_dorm")  # 通生・寮生 両方に送信
 WEEKDAY_JP = ["月", "火", "水", "木", "金", "土", "日"]
@@ -4776,7 +4724,6 @@ def save_completion_api():
 scheduler.add_job(send_tomorrow_plans,     "cron", hour=20, minute=0)
 scheduler.add_job(send_today_plans_commute, "cron", hour=5,  minute=30)  # 通生（現行時間）
 scheduler.add_job(send_today_plans_dorm,    "cron", hour=7,  minute=20)  # 寮生
-scheduler.add_job(cleanup_past_plans,       "cron", hour=0,  minute=0)
 scheduler.add_job(send_weekly_plans,        "cron", day_of_week="sun", hour=14, minute=0)  # 毎週日曜14:00に今週の予定
 scheduler.add_job(check_study_timers,       "interval", minutes=1)  # ★ 勉強タイマーの3時間ごとの自動休憩チェック（最大1分遅れで検知）
 
