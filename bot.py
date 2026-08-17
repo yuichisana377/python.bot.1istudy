@@ -3677,13 +3677,17 @@ def delete_cards():
 #  ようにディスクへは永続化せず、プロセスのメモリ上（QUIZ_ROOMS）だけで
 #  管理する（LINK_CODES / OAUTH_STATES と同じ考え方）。
 #  ・code（5桁の招待コード）でルームを引く。
-#  ・state は "lobby"（開始待ち）→ "question"（出題中）→ "reveal"（正解発表）
-#    → （次の問題があれば "question" に戻る／無ければ "ended"）と遷移する。
+#  ・state は "lobby"（開始待ち）→ "countdown"（開始直後の5秒カウントダウン、
+#    最初の問題の前だけ）→ "intro"（「第N問」を大きく見せる区間、毎問の前）
+#    → "question"（出題中）→ "reveal"（正解発表）→ （次の問題があれば
+#    "intro" に戻る／無ければ "ended"）と遷移する。
 #    ホストの操作待ちにはせず、すべて自動で進行する：
-#      "question" → "reveal" … 全員が回答し終わった、または制限時間
+#      "countdown" → "intro" … QUIZ_COUNTDOWN_DURATION_SEC秒経ったら。
+#      "intro"     → "question" … QUIZ_INTRO_DURATION_SEC秒経ったら。
+#      "question"  → "reveal" … 全員が回答し終わった、または制限時間
 #                    （QUIZ_TIME_LIMIT_SEC）が経過したら自動的に切り替わる。
-#      "reveal"   → 次の問題 / "ended" … 発表から QUIZ_REVEAL_DURATION_SEC
-#                    秒経ったら自動的に進む。
+#      "reveal"    → 次の問題("intro") / "ended" … 発表から
+#                    QUIZ_REVEAL_DURATION_SEC秒経ったら自動的に進む。
 #    この判定は各APIリクエストのたびに _quiz_autoadvance_locked() で
 #    その場評価する（study_timers の自動休憩判定と同じ「アクセスの
 #    たびに評価する」方式。専用のバックグラウンドジョブは持たない）。
@@ -3705,6 +3709,8 @@ QUIZ_ROOM_IDLE_TTL_SEC = 3 * 60 * 60   # 3時間アクセスが無ければ破�
 QUIZ_ROOM_ENDED_TTL_SEC = 15 * 60      # 終了後もしばらくは結果画面を見られるよう残しておく
 QUIZ_TIME_LIMIT_SEC = 20        # 1問あたりの制限時間（固定）
 QUIZ_REVEAL_DURATION_SEC = 5    # 正解発表から次の問題に自動で進むまでの待ち時間
+QUIZ_COUNTDOWN_DURATION_SEC = 5 # ★ 追加：スタート直後の「5,4,3,2,1」カウントダウン（最初の問題の前だけ）
+QUIZ_INTRO_DURATION_SEC = 2     # ★ 追加：各問題の直前に「第N問」を大きく表示しておく時間
 QUIZ_MAX_QUESTIONS = 30
 QUIZ_ANSWER_BASE_POINTS = 10
 QUIZ_FIRST_CORRECT_BONUS = 2
@@ -3752,12 +3758,27 @@ def _quiz_autoadvance_locked(room, now):
     """QUIZ_ROOMS_LOCK を保持している状態で呼び出すこと。
     ホストの操作を待たず、時間経過や全員の回答状況に応じてルームの
     stateを自動的に1段階（必要なら複数段階）進める。
-      ・"question" → 全員が回答し終わった、または制限時間が過ぎたら → "reveal"
-      ・"reveal"   → 発表からQUIZ_REVEAL_DURATION_SEC秒経ったら
-                      → 次の問題（無ければ "ended"）
+      ・"countdown" → QUIZ_COUNTDOWN_DURATION_SEC秒経ったら → "intro"
+      ・"intro"     → QUIZ_INTRO_DURATION_SEC秒経ったら → "question"
+      ・"question"  → 全員が回答し終わった、または制限時間が過ぎたら → "reveal"
+      ・"reveal"    → 発表からQUIZ_REVEAL_DURATION_SEC秒経ったら
+                      → 次の問題("intro")（無ければ "ended"）
     """
     while True:
-        if room["state"] == "question":
+        if room["state"] == "countdown":
+            if now - room["countdown_started_at"] < QUIZ_COUNTDOWN_DURATION_SEC:
+                return
+            room["state"] = "intro"
+            room["intro_started_at"] = now
+        elif room["state"] == "intro":
+            if now - room["intro_started_at"] < QUIZ_INTRO_DURATION_SEC:
+                return
+            # ★ 「第N問」を見せ終えたこの瞬間から制限時間のカウントを始める
+            #   （イントロ表示中の時間は回答時間から差し引かれない）。
+            room["state"] = "question"
+            room["question_started_at"] = now
+            room["intro_started_at"] = None
+        elif room["state"] == "question":
             total = len(room["players"])
             answered = sum(1 for p in room["players"].values() if p["cur_answer"] is not None)
             time_up = (now - room["question_started_at"]) >= room["time_limit_sec"]
@@ -3775,8 +3796,10 @@ def _quiz_autoadvance_locked(room, now):
                 _archive_room_if_needed(room)
                 return
             room["current_q"] += 1
-            room["state"] = "question"
-            room["question_started_at"] = now
+            # ★ 変更：次の問題にすぐ切り替えず、まず"intro"（「第N問」表示）を挟む。
+            room["state"] = "intro"
+            room["intro_started_at"] = now
+            room["question_started_at"] = None
             room["reveal_started_at"] = None
             room["first_correct_id"] = None
             room["first_correct_nickname"] = None
@@ -3832,7 +3855,23 @@ def _quiz_room_snapshot(room, student_id):
         "host_nickname": room["host_nickname"],
         "players": _quiz_room_players_json(room),
     }
-    if room["state"] in ("question", "reveal"):
+    if room["state"] == "countdown":
+        snap.update({
+            "current_q": room["current_q"],
+            "total_questions": len(room["questions"]),
+            "countdown_started_at": room["countdown_started_at"],
+            "countdown_duration_sec": QUIZ_COUNTDOWN_DURATION_SEC,
+        })
+    elif room["state"] == "intro":
+        # ★ 「第N問」表示中は、まだ問題文・選択肢は渡さない
+        #   （question状態になってから渡せば十分で、渡す情報は少ない方がよい）。
+        snap.update({
+            "current_q": room["current_q"],
+            "total_questions": len(room["questions"]),
+            "intro_started_at": room["intro_started_at"],
+            "intro_duration_sec": QUIZ_INTRO_DURATION_SEC,
+        })
+    elif room["state"] in ("question", "reveal"):
         q = room["questions"][room["current_q"]]
         revealed = room["state"] == "reveal"
         question_payload = {"question": q["question"], "choices": q["choices"]}
@@ -4082,6 +4121,8 @@ def quiz_create():
             },
             "state": "lobby",
             "current_q": 0,
+            "countdown_started_at": None,
+            "intro_started_at": None,
             "question_started_at": None,
             "reveal_started_at": None,
             "first_correct_id": None,
@@ -4237,7 +4278,7 @@ def quiz_list_rooms():
                 "host_nickname": room["host_nickname"],
                 "player_count": len(room["players"]),
                 "question_count": len(room["questions"]),
-                "state": room["state"],  # "lobby" | "question" | "reveal"
+                "state": room["state"],  # "lobby" | "countdown" | "intro" | "question" | "reveal"
                 "current_q": room["current_q"] if room["state"] != "lobby" else None,
                 "allow_late_join": bool(room.get("allow_late_join")),
                 "created_at": room["created_at"],
@@ -4327,9 +4368,15 @@ def quiz_start():
             return jsonify({"ok": False, "error": "not_host"})
         if room["state"] != "lobby":
             return jsonify({"ok": False, "error": "quiz_already_started"})
-        room["state"] = "question"
+        # ★ 変更：いきなり出題(question)にはせず、まず"countdown"
+        #   （5,4,3,2,1のカウントダウン）→"intro"（「第1問」表示）を挟む。
+        #   実際の制限時間のカウントは、intro表示が終わってから始まる
+        #   （_quiz_autoadvance_locked参照）。
+        room["state"] = "countdown"
         room["current_q"] = 0
-        room["question_started_at"] = now
+        room["countdown_started_at"] = now
+        room["intro_started_at"] = None
+        room["question_started_at"] = None
         room["reveal_started_at"] = None
         room["first_correct_id"] = None
         room["first_correct_nickname"] = None
