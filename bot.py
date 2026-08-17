@@ -531,6 +531,7 @@ def save_study_timers(guild_id: int, timers: dict, sha=None):
     if sha is None:
         _, sha = local_get(f"study_timers_{guild_id}.json")
     local_put(f"study_timers_{guild_id}.json", timers, sha)
+    notify_change(guild_id)
 
 async def async_load_study_timers(guild_id: int) -> dict:
     data, _ = await async_local_get(f"study_timers_{guild_id}.json")
@@ -540,6 +541,7 @@ async def async_save_study_timers(guild_id: int, timers: dict, sha=None):
     if sha is None:
         _, sha = await async_local_get(f"study_timers_{guild_id}.json")
     await async_local_put(f"study_timers_{guild_id}.json", timers, sha)
+    notify_change(guild_id)
 
 def _finalize_study_timer(entry, now_ms):
     """
@@ -4413,6 +4415,7 @@ def save_notices_meta(meta, sha=None):
     if sha is None:
         _, sha = local_get(NOTICES_META_FILE)
     local_put(NOTICES_META_FILE, meta, sha)
+    notify_change()  # ★ お知らせもguildをまたいで共有されるため全体に通知
 
 
 @app.route("/list_notices", methods=["GET"])
