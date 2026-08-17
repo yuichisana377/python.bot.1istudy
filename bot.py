@@ -3892,18 +3892,26 @@ def _quiz_get_room_or_error(code):
         return None, jsonify({"ok": False, "error": "room_not_found"})
     return room, None
 
-def _quiz_room_players_json(room):
+def _quiz_room_players_json(room, include_correct=False):
     players = sorted(room["players"].values(), key=lambda p: -p["score"])
-    return [
-        {
+    result = []
+    for p in players:
+        entry = {
             "id": p["id"],
             "nickname": p["nickname"],
             "color": p["color"],
             "text_color": p["text_color"],
             "score": p["score"],
         }
-        for p in players
-    ]
+        if include_correct:
+            # ★ 正解発表(reveal)中だけ、他の参加者の今回の問題への正誤も見せる。
+            #   出題中(question)にこれを渡すと、まだ発表前の正解がバレてしまうため、
+            #   include_correct=True は reveal のときにしか呼ばない。
+            answered = p["cur_answer"] is not None
+            entry["answered"] = answered
+            entry["correct"] = bool(p["cur_correct"]) if answered else None
+        result.append(entry)
+    return result
 
 def _quiz_room_snapshot(room, student_id):
     snap = {
@@ -3951,6 +3959,8 @@ def _quiz_room_snapshot(room, student_id):
             snap["first_correct_nickname"] = room.get("first_correct_nickname")
             snap["reveal_started_at"] = room.get("reveal_started_at")
             snap["reveal_duration_sec"] = QUIZ_REVEAL_DURATION_SEC
+            # ★ 発表中だけ、全員分の正誤(◯×)を含めて players を上書きする
+            snap["players"] = _quiz_room_players_json(room, include_correct=True)
         player = room["players"].get(student_id)
         if player is not None and player["cur_answer"] is not None:
             snap["your_answer"] = player["cur_answer"]
@@ -4382,6 +4392,8 @@ def quiz_join():
         room["last_activity"] = now
         _quiz_autoadvance_locked(room, now)
         snap = _quiz_room_snapshot(room, student_id)
+    # ★ 遅延低減：参加者が増えたことを、他の端末のポーリング待ちなしで即座に知らせる
+    notify_change(guild_id)
     return jsonify({"ok": True, "is_host": is_host, "room": snap, "server_now": int(now * 1000)})
 
 @app.route("/quiz_state", methods=["GET"])
@@ -4443,6 +4455,8 @@ def quiz_start():
             p["cur_correct"] = None
         room["last_activity"] = now
         snap = _quiz_room_snapshot(room, student_id)
+    # ★ 遅延低減：カウントダウン開始を、他の端末のポーリング待ちなしで即座に知らせる
+    notify_change(guild_id)
     return jsonify({"ok": True, "room": snap, "server_now": int(now * 1000)})
 
 @app.route("/quiz_answer", methods=["POST"])
@@ -4483,6 +4497,9 @@ def quiz_answer():
         # ★ この回答で全員が回答し終わった場合、次のポーリングを待たずに
         #   その場で正解発表(reveal)へ進める（体感の速さのため）。
         _quiz_autoadvance_locked(room, now)
+    # ★ 遅延低減：回答数の増加・reveal切り替わりを、他の端末のポーリング待ちなしで
+    #   即座に知らせる（answer自体は毎秒送られるものではないので通知頻度も問題ない）。
+    notify_change(guild_id)
     return jsonify({"ok": True})
 
 @app.route("/quiz_end", methods=["POST"])
@@ -4503,6 +4520,7 @@ def quiz_end():
         room["ended_at"] = now
         room["last_activity"] = now
         _archive_room_if_needed(room)
+    notify_change(guild_id)
     return jsonify({"ok": True})
 
 @app.route("/quiz_leave", methods=["POST"])
@@ -4518,6 +4536,7 @@ def quiz_leave():
             return err
         room["players"].pop(student_id, None)
         room["last_activity"] = time.time()
+    notify_change(guild_id)
     return jsonify({"ok": True})
 
 # ================================
