@@ -3925,6 +3925,45 @@ def quiz_create():
     #   write_log（予定の追加・編集・削除ログ）には残さない。
     return jsonify({"ok": True, "code": code})
 
+@app.route("/quiz_list_rooms", methods=["GET"])
+def quiz_list_rooms():
+    """
+    ★ 参加者向け：コード入力の代わりに、今まさに参加できる（＝まだ開始していない
+      "lobby" 状態の）クイズルーム一覧をタイトルで選べるようにするためのAPI。
+      コード自体は quiz_join の内部識別子として引き続き使うが、参加者が
+      手入力する必要はなくなる（一覧の行をタップ→内部的にそのcodeでjoinする）。
+    ・開始済み／終了したルームは対象外（quiz_joinが元々lobby以外への参加を
+      拒否するのと同じ基準なので、一覧に出ているものは必ず参加できる）。
+    """
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    guild_id = int(guild_id)
+    student_id = resolve_session(request.args.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    now = time.time()
+    with QUIZ_ROOMS_LOCK:
+        _quiz_gc_locked(now)
+        rooms = [
+            {
+                "code": room["code"],
+                "title": room["title"],
+                "host_nickname": room["host_nickname"],
+                "player_count": len(room["players"]),
+                "question_count": len(room["questions"]),
+                "created_at": room["created_at"],
+            }
+            for room in QUIZ_ROOMS.values()
+            if room["guild_id"] == guild_id and room["state"] == "lobby"
+        ]
+    # ★ 新しく作られたルームほど上に来るようにする（参加者が今開催中のものを探しやすいように）
+    rooms.sort(key=lambda r: r["created_at"], reverse=True)
+    for r in rooms:
+        del r["created_at"]  # フロントには不要な内部情報なので落とす
+    return jsonify({"ok": True, "rooms": rooms})
+
 @app.route("/quiz_join", methods=["POST"])
 def quiz_join():
     data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
