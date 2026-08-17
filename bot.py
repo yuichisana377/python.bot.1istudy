@@ -1946,11 +1946,48 @@ def add_study_log():
 
 @app.route("/list_schedule", methods=["GET"])
 def list_schedule():
+    """
+    ★ scope 未指定時は従来通り全件を返す（Timetable/StudyLogなど、
+      過去分も含めた全件が必要な既存の呼び出し元との互換性を保つため）。
+    ・scope=future : 今日以降の予定を全件（日付昇順）で返す。
+      未来の予定は運用上そこまで多くならないため、ページングはしない。
+    ・scope=past   : 今日より前の予定を、直近の過去から順（日付降順）に
+      offset/limit でページングして返す。予定を自動削除しなくなった分、
+      過去分は年月とともに増え続けるため、一覧画面はこちらを使って
+      「これからの予定を先に表示 → 過去分は少しずつ追加読み込み」できるようにする。
+      has_more が true の間は、まだ続きがあることを示す。
+    """
     guild_id = request.args.get("guild_id")
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
-    plans = load_plans(int(guild_id))
-    return jsonify({"ok": True, "plans": sorted(plans, key=lambda p: p["date"])})
+    plans = sorted(load_plans(int(guild_id)), key=lambda p: p["date"])
+
+    scope = request.args.get("scope")
+    if not scope:
+        return jsonify({"ok": True, "plans": plans})
+
+    today_str = datetime.now(JST).strftime("%Y-%m-%d")
+    if scope == "future":
+        future = [p for p in plans if p["date"] >= today_str]
+        return jsonify({"ok": True, "plans": future})
+
+    if scope == "past":
+        past = [p for p in plans if p["date"] < today_str]
+        past.reverse()  # 直近の過去から順
+        try:
+            offset = max(0, int(request.args.get("offset", 0)))
+            limit  = max(1, min(200, int(request.args.get("limit", 50))))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "invalid offset/limit"})
+        page = past[offset: offset + limit]
+        return jsonify({
+            "ok": True,
+            "plans": page,
+            "total": len(past),
+            "has_more": offset + limit < len(past),
+        })
+
+    return jsonify({"ok": False, "error": "invalid scope"})
 
 
 
@@ -2066,12 +2103,34 @@ def delete_schedule():
 
 @app.route("/list_logs", methods=["GET"])
 def list_logs():
+    """
+    ★ offset/limit 未指定時は従来通り全件を返す（互換性維持）。
+      指定された場合は、新しい順に並んだログを offset/limit でページングして
+      返す（has_more で続きの有無を伝える）。ログ画面は「最近のログから
+      少しずつ読み込み、必要になったら『もっと読み込む』で追加取得する」
+      使い方を想定している。
+    """
     guild_id = request.args.get("guild_id")
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     logs, _ = local_get(f"logs_{guild_id}.json")
     logs = sorted(logs or [], key=lambda l: l["time"], reverse=True)
-    return jsonify({"ok": True, "logs": logs})
+
+    if request.args.get("offset") is None and request.args.get("limit") is None:
+        return jsonify({"ok": True, "logs": logs})
+
+    try:
+        offset = max(0, int(request.args.get("offset", 0)))
+        limit  = max(1, min(200, int(request.args.get("limit", 50))))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid offset/limit"})
+    page = logs[offset: offset + limit]
+    return jsonify({
+        "ok": True,
+        "logs": page,
+        "total": len(logs),
+        "has_more": offset + limit < len(logs),
+    })
 
 # ================================
 #  Flask API — 時間割
