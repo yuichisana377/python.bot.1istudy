@@ -3420,7 +3420,7 @@ def _meta_from_card_data(filename, data):
         "has_folder_id": "folder_id" in data,
         "published_by": (data.get("published_by") or {}).get("nickname"),
         "incomplete": bool(data.get("incomplete", False)),
-        "choice_mode": data.get("choice_mode"),  # ★ null=通常デッキ / "single" / "multi"（選択式デッキ）
+        "choice_mode": data.get("choice_mode"),  # ★ null/false=通常デッキ / true=選択式デッキ（単一/複数は問題ごとに決まる。旧形式の"single"/"multi"文字列もtruthyとして扱う）
     }
 
 def load_cards_index():
@@ -3509,7 +3509,7 @@ def get_card_set():
             "published_by": (data.get("published_by") or {}).get("nickname"),
             # ★ カード本体を開いた際にも未完成フラグを返す
             "incomplete": bool(data.get("incomplete", False)),
-            "choice_mode": data.get("choice_mode"),  # ★ null=通常デッキ / "single" / "multi"（選択式デッキ）
+            "choice_mode": data.get("choice_mode"),  # ★ null/false=通常デッキ / true=選択式デッキ（単一/複数は問題ごとに決まる。旧形式の"single"/"multi"文字列もtruthyとして扱う）
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -3579,7 +3579,7 @@ def save_cards():
             "nickname": publisher_nickname,
         },
         "incomplete": incomplete,  # ★ 未完成フラグを保存（他人の端末にも同じ表示をするため）
-        "choice_mode": choice_mode,  # ★ 選択式デッキかどうか（null / "single" / "multi"）
+        "choice_mode": choice_mode,  # ★ 選択式デッキかどうか（null/false=通常デッキ / true=選択式デッキ）
     }
 
     try:
@@ -3965,8 +3965,9 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
     ・questions は _validate_manual_questions の戻り値そのもの
       （[{"question", "choices"(4件), "correct_index"}, ...]）。
     ・choice_mode/choices/correct_indices は、CardMaker側の選択式デッキ共通
-      フォーマット（単一/複数正解に両対応）。Quiz.js自体は4択・単一正解の
-      固定フォーマットのままで、ここでの変換にしか影響しない。
+      フォーマット。単一/複数正解はデッキ単位ではなく問題ごとに
+      correct_indices の個数で決まる（CardMaker側の仕様）。Quiz.js自体は
+      4択・単一正解の固定フォーマットのままで、ここでの変換にしか影響しない。
     ・answer（正解の選択肢文言）も入れておく。これにより単語検索・一覧表示・
       作成済みリストなど、「answerは文字列である」という前提の既存コードを
       一切変更せずに動かせる（choices/correct_indices は選択式UIだけが見る）。
@@ -3991,7 +3992,7 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
             "folder_id": QUIZ_ARCHIVE_FOLDER_ID,
             "published_by": {"id": student_id, "nickname": nickname},
             "incomplete": False,
-            "choice_mode": "single",
+            "choice_mode": True,  # ★ 選択式デッキであることのマーカー（単一/複数は問題ごとにcorrect_indicesの個数で決まる）
         }
         put_card_file(filename, card_payload)
         upsert_cards_index_entry(filename, card_payload)
@@ -4150,10 +4151,12 @@ def quiz_archive_submit_score():
     #   （でたらめなfilenameを指定してスコアを偽造されるのを防ぐ）
     #   ★ 以前は「クイズ過去問フォルダ内かどうか」で判定していたが、選択式
     #     デッキが汎用機能になったため、choice_modeの有無で判定するよう変更。
+    #   ★ choice_modeはtruthyチェックにする（真偽値trueの新形式だけでなく、
+    #     移行前に保存された旧形式の文字列"single"/"multi"も引き続き通す）。
     card_data, _ = get_card_file(filename)
     if card_data is None:
         return jsonify({"ok": False, "error": "deck_not_found"})
-    if card_data.get("choice_mode") not in ("single", "multi"):
+    if not card_data.get("choice_mode"):
         return jsonify({"ok": False, "error": "not_a_choice_deck"})
 
     user = find_user(guild_id, student_id)
