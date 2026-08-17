@@ -71,7 +71,7 @@ DISCORD_CLIENT_ID     = os.getenv("DISCORD_CLIENT_ID", "1515358957542047975")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DISCORD_OAUTH_REDIRECT_URI = os.getenv(
     "DISCORD_OAUTH_REDIRECT_URI",
-    "https://chiro-ubuntuser.tail1130ba.ts.net/discord_oauth_callback"
+    "https://chiro-ubuntuserver.tail1130ba.ts.net/discord_oauth_callback"
 )
 if not DISCORD_CLIENT_SECRET:
     print("[WARN] 環境変数 DISCORD_CLIENT_SECRET が未設定です。"
@@ -2470,6 +2470,38 @@ def get_users():
             for u in users
         ]
         return jsonify({"ok": True, "users": public_users})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/check_student", methods=["GET"])
+def check_student():
+    """
+    ログイン画面（Login.js）が「この学籍番号は登録済みか」だけを確認するための
+    最小限API。
+    ★ 以前は同じ目的でも /get_users を呼んでおり、学籍番号を1文字でも入力する
+      （またはパスワード未入力でログインボタンを押す）たびに、認証なしで
+      全生徒の学籍番号・ニックネーム一覧が丸ごとブラウザに返ってしまっていた。
+      問い合わせた1件についてだけ最小限の情報を返すことで、全生徒名簿が
+      漏れるのを防ぐ。
+    """
+    guild_id   = request.args.get("guild_id")
+    student_id = (request.args.get("id") or "").strip().upper()
+    if not guild_id or not student_id:
+        return jsonify({"ok": False, "error": "missing fields"})
+    try:
+        guild_id = int(guild_id)
+    except ValueError:
+        return jsonify({"ok": False, "error": "invalid guild_id"})
+    try:
+        user = find_user(guild_id, student_id)
+        if not user:
+            return jsonify({"ok": True, "exists": False})
+        return jsonify({
+            "ok": True,
+            "exists": True,
+            "nickname": user.get("nickname"),
+            "has_password": bool(user.get("password_hash")),
+        })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
