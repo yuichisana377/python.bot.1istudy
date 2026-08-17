@@ -4,7 +4,7 @@ from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timedelta
 from datetime import date as _date
-from flask import Flask, request, jsonify, make_response, redirect
+from flask import Flask, request, jsonify, make_response, redirect, Response
 from flask_cors import CORS
 from threading import Thread, Lock
 from pytz import timezone
@@ -20,6 +20,7 @@ import re
 import secrets
 import random
 import difflib
+import queue
 from urllib.parse import urlencode
 
 # ================================
@@ -124,6 +125,82 @@ def handle_preflight():
         res.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         res.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         return res, 200
+
+# ================================
+#  ★ リアルタイム更新通知（Server-Sent Events）
+#  ─────────────────────────────
+#  以前は各ページ（予定一覧・時間割・CardMaker・学習ログなど）が10秒おきに
+#  ポーリングして内容のハッシュを比較する方式だったため、変更が画面に
+#  反映されるまで最大10秒のタイムラグがあった。実際には常時稼働している
+#  サーバーがあるので、データが保存された瞬間にpushで知らせて即座に
+#  再取得させる方式に変える。
+#  ・スレッド安全なQueueを使った単純なpub/sub（外部ミドルウェアは使わない）。
+#  ・guild_idごとに購読者（Queue）の集合を持つ。cards/folders/order のように
+#    guildをまたいで共有されるデータは guild_id=None で全購読者に配信する。
+#  ・接続は /events へのGETで張られ続ける（text/event-stream）。
+#    ブラウザがタブを閉じる／リロードするとジェネレータが終了し、
+#    finally節で自動的に購読解除される。
+#  ・イベントの中身自体は「〇〇が変わった」という合図だけで、実際のデータは
+#    含めない（受け取った側が、これまで通りの各GET APIで取りに行く）。
+#    これにより、通知漏れ・順序の入れ替わりが起きても「取りに行けば必ず
+#    最新の状態になる」という結果整合性が保たれ、実装がシンプルになる。
+#  ・万一 /events の接続が切れていても（スリープ復帰直後など）画面が
+#    永久に古いままにならないよう、フロント側では長めの間隔（60秒）の
+#    フォールバックポーリングも残してある。
+# ================================
+EVENT_SUBSCRIBERS = {}  # guild_id(int) or None(全guild共有分) -> set[queue.Queue]
+EVENT_SUBSCRIBERS_LOCK = Lock()
+EVENT_KEEPALIVE_SEC = 20  # プロキシ（Tailscale等）による無通信タイムアウト切断を防ぐ
+
+def notify_change(guild_id=None):
+    """
+    guild_id を指定：そのguildを購読しているクライアントにだけ通知する
+    （予定・時間割・学習ログなど、guildごとのデータ用）。
+    guild_id=None：全クライアントに通知する
+    （CardMakerのカード・フォルダ・並び順など、guildをまたいで共有される
+    データ用。guild_idの概念を持たないため）。
+    """
+    with EVENT_SUBSCRIBERS_LOCK:
+        targets = list(EVENT_SUBSCRIBERS.get(guild_id, ()))
+    for q in targets:
+        try:
+            q.put_nowait(1)
+        except Exception:
+            pass
+
+@app.route("/events", methods=["GET"])
+def sse_events():
+    guild_id = request.args.get("guild_id")
+    guild_id = int(guild_id) if guild_id else None
+
+    q = queue.Queue()
+    with EVENT_SUBSCRIBERS_LOCK:
+        EVENT_SUBSCRIBERS.setdefault(guild_id, set()).add(q)
+        # ついでに全guild共有分（None）も同じ接続で受け取れるようにする
+        # （CardMaker側はguild_idを渡さないので既にNoneキーそのものだが、
+        #  guild_id付きで接続しているページでも共有データの更新を拾えるように
+        #  Noneキューにも同じQueueを登録しておく）。
+        if guild_id is not None:
+            EVENT_SUBSCRIBERS.setdefault(None, set()).add(q)
+
+    def gen():
+        try:
+            while True:
+                try:
+                    q.get(timeout=EVENT_KEEPALIVE_SEC)
+                    yield "data: changed\n\n"
+                except queue.Empty:
+                    yield ": keep-alive\n\n"  # SSEコメント行。データ更新扱いにはならない
+        finally:
+            with EVENT_SUBSCRIBERS_LOCK:
+                EVENT_SUBSCRIBERS.get(guild_id, set()).discard(q)
+                if guild_id is not None:
+                    EVENT_SUBSCRIBERS.get(None, set()).discard(q)
+
+    return Response(gen(), mimetype="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",  # nginx等のプロキシでバッファリングされて遅延しないように
+    })
 
 @app.route("/")
 def home():
@@ -359,6 +436,7 @@ def load_plans(guild_id: int):
 def save_plans(guild_id: int, plans: list):
     _, sha = local_get(f"plans_{guild_id}.json")
     local_put(f"plans_{guild_id}.json", plans, sha)
+    notify_change(guild_id)
 
 async def async_load_plans(guild_id: int):
     data, _ = await async_local_get(f"plans_{guild_id}.json")
@@ -367,6 +445,7 @@ async def async_load_plans(guild_id: int):
 async def async_save_plans(guild_id: int, plans: list):
     _, sha = await async_local_get(f"plans_{guild_id}.json")
     await async_local_put(f"plans_{guild_id}.json", plans, sha)
+    notify_change(guild_id)
 
 # ================================
 #  ログ
@@ -405,6 +484,7 @@ def load_study_logs(guild_id: int):
 def save_study_logs(guild_id: int, logs: list):
     _, sha = local_get(f"study_logs_{guild_id}.json")
     local_put(f"study_logs_{guild_id}.json", logs, sha)
+    notify_change(guild_id)
 
 async def async_load_study_logs(guild_id: int):
     data, _ = await async_local_get(f"study_logs_{guild_id}.json")
@@ -413,6 +493,7 @@ async def async_load_study_logs(guild_id: int):
 async def async_save_study_logs(guild_id: int, logs: list):
     _, sha = await async_local_get(f"study_logs_{guild_id}.json")
     await async_local_put(f"study_logs_{guild_id}.json", logs, sha)
+    notify_change(guild_id)
 
 # ================================
 #  ★ 勉強タイマー状態（複数端末で共有）
@@ -715,6 +796,7 @@ def save_points(guild_id: int, pts: dict, sha=None):
     if sha is None:
         _, sha = local_get(f"points_{guild_id}.json")
     local_put(f"points_{guild_id}.json", pts, sha)
+    notify_change(guild_id)
 
 # ============================================================
 #  課題達成データ
@@ -727,6 +809,7 @@ def save_completed_tasks(guild_id: int, tasks: dict, sha=None):
     if sha is None:
         _, sha = local_get(f"completed_tasks_{guild_id}.json")
     local_put(f"completed_tasks_{guild_id}.json", tasks, sha)
+    notify_change(guild_id)
 
 
 def _task_id_of_plan(plan: dict) -> str:
@@ -2142,6 +2225,7 @@ def load_timetable(guild_id: int):
 def save_timetable(guild_id: int, data: dict):
     _, sha = local_get(f"timetable_{guild_id}.json")
     local_put(f"timetable_{guild_id}.json", data, sha)
+    notify_change(guild_id)
 
 @app.route("/list_timetable", methods=["GET"])
 def list_timetable():
@@ -2270,6 +2354,7 @@ def load_terms(guild_id: int):
 def save_terms(guild_id: int, terms: dict):
     _, sha = local_get(f"terms_{guild_id}.json")
     local_put(f"terms_{guild_id}.json", terms, sha)
+    notify_change(guild_id)
 
 @app.route("/list_terms", methods=["GET"])
 def list_terms():
@@ -3344,6 +3429,7 @@ def save_cards_index(index_list, sha=None):
     if sha is None:
         _, sha = local_get(CARDS_INDEX_FILE)
     local_put(CARDS_INDEX_FILE, index_list, sha)
+    notify_change()  # ★ list_cards はguildをまたいで共有されるため全体に通知
 
 def rebuild_cards_index():
     """
@@ -4494,6 +4580,7 @@ def save_card_folders(folders, sha=None):
     if sha is None:
         _, sha = local_get(FOLDERS_FILE)
     local_put(FOLDERS_FILE, folders, sha)
+    notify_change()  # ★ フォルダもguildをまたいで共有されるため全体に通知
 
 def _folder_level(folders, folder_id):
     lvl = 0
@@ -4624,6 +4711,7 @@ def save_list_order(order_map, sha=None):
     if sha is None:
         _, sha = local_get(ORDER_FILE)
     local_put(ORDER_FILE, order_map, sha)
+    notify_change()  # ★ 並び順もguildをまたいで共有されるため全体に通知
 
 def cleanup_list_order(remove_keys=None, remove_scopes=None):
     """
