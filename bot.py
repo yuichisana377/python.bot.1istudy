@@ -3885,6 +3885,12 @@ def quiz_create():
     else:
         return jsonify({"ok": False, "error": "invalid_source"})
 
+    # ★ 途中参加を許可するかどうかは、ホストが作成時に選ぶ（デフォルトは不許可＝従来通り）。
+    #   許可した場合、開始後（question/reveal中）でもルーム一覧に「プレイ中」として
+    #   表示され続け、そこから参加できる。不許可の場合は従来通り開始と同時に
+    #   一覧から実質参加不可になる（表示はされるが参加はできない）。
+    allow_late_join = bool(data.get("allow_late_join"))
+
     now = time.time()
     with QUIZ_ROOMS_LOCK:
         _quiz_gc_locked(now)
@@ -3900,6 +3906,7 @@ def quiz_create():
             "questions": questions,
             "host_id": student_id,
             "host_nickname": nickname,
+            "allow_late_join": allow_late_join,
             "players": {
                 student_id: {
                     "id": student_id,
@@ -3928,12 +3935,16 @@ def quiz_create():
 @app.route("/quiz_list_rooms", methods=["GET"])
 def quiz_list_rooms():
     """
-    ★ 参加者向け：コード入力の代わりに、今まさに参加できる（＝まだ開始していない
-      "lobby" 状態の）クイズルーム一覧をタイトルで選べるようにするためのAPI。
-      コード自体は quiz_join の内部識別子として引き続き使うが、参加者が
-      手入力する必要はなくなる（一覧の行をタップ→内部的にそのcodeでjoinする）。
-    ・開始済み／終了したルームは対象外（quiz_joinが元々lobby以外への参加を
-      拒否するのと同じ基準なので、一覧に出ているものは必ず参加できる）。
+    ★ 参加者向け：コード入力の代わりに、クイズルーム一覧をタイトルで選べるように
+      するためのAPI。コード自体は quiz_join の内部識別子として引き続き使うが、
+      参加者が手入力する必要はなくなる（一覧の行をタップ→内部的にそのcodeで
+      joinする）。
+    ・"lobby"（開始待ち）だけでなく、"question"/"reveal"（進行中）のルームも
+      「プレイ中」として一覧に出しっぱなしにする（終了するまで一覧から
+      消えない）。ホストが作成時に途中参加を許可していれば（allow_late_join）
+      進行中でもそこから参加できる。許可していなければ表示だけされ、
+      タップしても参加はできない（フロント側で押せないようにする）。
+    ・"ended"（終了）になったルームだけ一覧から外す。
     """
     guild_id = request.args.get("guild_id")
     if not guild_id:
@@ -3946,18 +3957,24 @@ def quiz_list_rooms():
     now = time.time()
     with QUIZ_ROOMS_LOCK:
         _quiz_gc_locked(now)
-        rooms = [
-            {
+        rooms = []
+        for room in QUIZ_ROOMS.values():
+            if room["guild_id"] != guild_id or room["state"] == "ended":
+                continue
+            _quiz_autoadvance_locked(room, now)  # 一覧表示中もstateを最新化しておく
+            if room["state"] == "ended":
+                continue
+            rooms.append({
                 "code": room["code"],
                 "title": room["title"],
                 "host_nickname": room["host_nickname"],
                 "player_count": len(room["players"]),
                 "question_count": len(room["questions"]),
+                "state": room["state"],  # "lobby" | "question" | "reveal"
+                "current_q": room["current_q"] if room["state"] != "lobby" else None,
+                "allow_late_join": bool(room.get("allow_late_join")),
                 "created_at": room["created_at"],
-            }
-            for room in QUIZ_ROOMS.values()
-            if room["guild_id"] == guild_id and room["state"] == "lobby"
-        ]
+            })
     # ★ 新しく作られたルームほど上に来るようにする（参加者が今開催中のものを探しやすいように）
     rooms.sort(key=lambda r: r["created_at"], reverse=True)
     for r in rooms:
@@ -3979,7 +3996,12 @@ def quiz_join():
             return err
         is_host = (student_id == room["host_id"])
         if not is_host and student_id not in room["players"]:
-            if room["state"] != "lobby":
+            # ★ lobby中は誰でも参加可能。開始後（question/reveal）は、
+            #   ホストが作成時に途中参加を許可していた場合のみ参加できる。
+            #   終了後（ended）はどちらの場合も参加不可。
+            if room["state"] == "ended":
+                return jsonify({"ok": False, "error": "quiz_already_started"})
+            if room["state"] != "lobby" and not room.get("allow_late_join"):
                 return jsonify({"ok": False, "error": "quiz_already_started"})
             color, text_color = _quiz_palette_for(student_id)
             room["players"][student_id] = {
