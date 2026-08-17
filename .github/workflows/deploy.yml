@@ -1,0 +1,24 @@
+name: Deploy bot.py
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "bot.py"
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Update bot.py
+        run: |
+          cd /home/chiro/python.bot.1istudy
+          git fetch origin
+          git restore --source=origin/main -- bot.py
+
+      - name: Restart Docker Bot
+        run: |
+          cd /home/chiro/python.bot.1istudy
+          docker compose restart
