@@ -3420,6 +3420,7 @@ def _meta_from_card_data(filename, data):
         "has_folder_id": "folder_id" in data,
         "published_by": (data.get("published_by") or {}).get("nickname"),
         "incomplete": bool(data.get("incomplete", False)),
+        "choice_mode": data.get("choice_mode"),  # ★ null=通常デッキ / "single" / "multi"（選択式デッキ）
     }
 
 def load_cards_index():
@@ -3508,6 +3509,7 @@ def get_card_set():
             "published_by": (data.get("published_by") or {}).get("nickname"),
             # ★ カード本体を開いた際にも未完成フラグを返す
             "incomplete": bool(data.get("incomplete", False)),
+            "choice_mode": data.get("choice_mode"),  # ★ null=通常デッキ / "single" / "multi"（選択式デッキ）
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -3533,6 +3535,8 @@ def save_cards():
     #     「更新されました」という誤った通知文言になってしまう。
     #   ・first_publish が明示的に渡されていれば、通知文言の判定はそちらを優先する。
     first_publish = data.get("first_publish")
+    # ★ 追加：選択式デッキかどうか（null=通常のフラッシュカードデッキ / "single" / "multi"）
+    choice_mode = data.get("choice_mode")
 
     if not name or not isinstance(cards, list):
         return jsonify({"ok": False, "error": "name と cards は必須です"})
@@ -3575,6 +3579,7 @@ def save_cards():
             "nickname": publisher_nickname,
         },
         "incomplete": incomplete,  # ★ 未完成フラグを保存（他人の端末にも同じ表示をするため）
+        "choice_mode": choice_mode,  # ★ 選択式デッキかどうか（null / "single" / "multi"）
     }
 
     try:
@@ -3767,6 +3772,7 @@ def _quiz_autoadvance_locked(room, now):
             if room["current_q"] + 1 >= len(room["questions"]):
                 room["state"] = "ended"
                 room["ended_at"] = now
+                _archive_room_if_needed(room)
                 return
             room["current_q"] += 1
             room["state"] = "question"
@@ -3954,14 +3960,17 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
     """
     ★ ホストが「自分で問題を作る」（オリジナル4択）で作成したクイズを、
       CardMakerの「クイズ過去問」フォルダにデッキとして自動保存する。
-      いつでも一人用4択モードで遊べる「過去問」として残すため。
+      いつでも一人用選択式モードで遊べる「過去問」として残すため。
+      呼び出し元は _archive_room_if_needed()（クイズが終了した時点で呼ばれる）。
     ・questions は _validate_manual_questions の戻り値そのもの
       （[{"question", "choices"(4件), "correct_index"}, ...]）。
-    ・各カードには choices/correct_index に加えて answer（正解の選択肢文言）も
-      入れておく。これにより単語検索・一覧表示・作成済みリストなど、
-      「answerは文字列である」という前提の既存コードを一切変更せずに動かせる
-      （choices/correct_index は4択専用UIだけが見る）。
-    ・アーカイブに失敗しても、クイズ自体の作成は失敗させない（ベストエフォート）。
+    ・choice_mode/choices/correct_indices は、CardMaker側の選択式デッキ共通
+      フォーマット（単一/複数正解に両対応）。Quiz.js自体は4択・単一正解の
+      固定フォーマットのままで、ここでの変換にしか影響しない。
+    ・answer（正解の選択肢文言）も入れておく。これにより単語検索・一覧表示・
+      作成済みリストなど、「answerは文字列である」という前提の既存コードを
+      一切変更せずに動かせる（choices/correct_indices は選択式UIだけが見る）。
+    ・アーカイブに失敗しても、クイズ自体の進行は失敗させない（ベストエフォート）。
     """
     try:
         _ensure_quiz_archive_folder()
@@ -3970,7 +3979,7 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
             "question": q["question"],
             "answer": q["choices"][q["correct_index"]],
             "choices": q["choices"],
-            "correct_index": q["correct_index"],
+            "correct_indices": [q["correct_index"]],
             "explanation": "",
             "imgs_q": [], "imgs_a": [], "imgs_e": [],
         } for q in questions]
@@ -3982,11 +3991,25 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
             "folder_id": QUIZ_ARCHIVE_FOLDER_ID,
             "published_by": {"id": student_id, "nickname": nickname},
             "incomplete": False,
+            "choice_mode": "single",
         }
         put_card_file(filename, card_payload)
         upsert_cards_index_entry(filename, card_payload)
     except Exception as e:
-        print(f"[WARN] クイズ過去問の保存に失敗しました（クイズ作成自体は続行）: {e}")
+        print(f"[WARN] クイズ過去問の保存に失敗しました（クイズの進行自体は続行）: {e}")
+
+def _archive_room_if_needed(room):
+    """
+    ★ QUIZ_ROOMS_LOCK を保持している状態で呼び出すこと。
+      ルームが終了(state=="ended")した瞬間に1回だけ呼ばれ、オリジナル4択
+      （source=="manual"）だったクイズをCardMakerへアーカイブする。
+      room["archived"] で二重登録を防ぐ（自然終了とホストの手動終了の
+      両方から呼ばれ得るため）。
+    """
+    if room.get("source") != "manual" or room.get("archived"):
+        return
+    room["archived"] = True
+    _archive_manual_quiz(room["title"], room["questions"], room["host_id"], room["host_nickname"])
 
 @app.route("/quiz_create", methods=["POST"])
 def quiz_create():
@@ -4016,9 +4039,8 @@ def quiz_create():
         err = reject_if_bug_chars(check_fields)
         if err:
             return err
-        # ★ オリジナル4択クイズは、CardMakerの「クイズ過去問」フォルダに
-        #   自動保存する（あとで一人用4択モードで遊べるようにするため）
-        _archive_manual_quiz(title, questions, student_id, nickname)
+        # ★ CardMakerへのアーカイブはここ（作成時）ではなく、クイズが終了した
+        #   瞬間に行う（_archive_room_if_needed、state=="ended"になった時点）。
     else:
         return jsonify({"ok": False, "error": "invalid_source"})
 
@@ -4041,6 +4063,8 @@ def quiz_create():
             "title": title,
             "time_limit_sec": QUIZ_TIME_LIMIT_SEC,
             "questions": questions,
+            "source": source,  # ★ "manual"のクイズだけ、終了時にCardMakerへアーカイブする
+            "archived": False,
             "host_id": student_id,
             "host_nickname": nickname,
             "allow_late_join": allow_late_join,
@@ -4124,12 +4148,13 @@ def quiz_archive_submit_score():
 
     # ★ このデッキが実際に「クイズ過去問」フォルダの中にあるか確認する
     #   （でたらめなfilenameを指定してスコアを偽造されるのを防ぐ）
+    #   ★ 以前は「クイズ過去問フォルダ内かどうか」で判定していたが、選択式
+    #     デッキが汎用機能になったため、choice_modeの有無で判定するよう変更。
     card_data, _ = get_card_file(filename)
     if card_data is None:
         return jsonify({"ok": False, "error": "deck_not_found"})
-    folders, _ = load_card_folders()
-    if not _is_in_archive_scope(folders, card_data.get("folder_id")):
-        return jsonify({"ok": False, "error": "not_a_quiz_archive_deck"})
+    if card_data.get("choice_mode") not in ("single", "multi"):
+        return jsonify({"ok": False, "error": "not_a_choice_deck"})
 
     user = find_user(guild_id, student_id)
     nickname = (user or {}).get("nickname") or str(student_id)
@@ -4369,6 +4394,7 @@ def quiz_end():
         room["state"] = "ended"
         room["ended_at"] = now
         room["last_activity"] = now
+        _archive_room_if_needed(room)
     return jsonify({"ok": True})
 
 @app.route("/quiz_leave", methods=["POST"])
