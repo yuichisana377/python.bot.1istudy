@@ -106,6 +106,7 @@ NO_CACHE_PATHS = {
     "/list_in_progress",
     "/timer_state",
     "/get_study_data",
+    "/deck_understanding",
     "/quiz_state",
 }
 
@@ -5220,7 +5221,7 @@ def _study_data_filename(guild_id: int, student_id: str) -> str:
     return f"study_data_{guild_id}_{safe}_{suffix}.json"
 
 def _empty_student_study_data():
-    return {"unsure": {}, "progress": {}, "completed": {}}
+    return {"unsure": {}, "progress": {}, "completed": {}, "seen": {}}
 
 def load_student_study_data(guild_id: int, student_id: str):
     data, sha = local_get(_study_data_filename(guild_id, student_id))
@@ -5230,6 +5231,9 @@ def load_student_study_data(guild_id: int, student_id: str):
         "unsure":    data.get("unsure", {}),
         "progress":  data.get("progress", {}),
         "completed": data.get("completed", {}),
+        # ★ 追加：「わかる率」集計用に、実際に表示した（学習した）カードキーを
+        #   デッキごとに記録しておく（"わからない"と違い、一度見たら外れない）。
+        "seen":      data.get("seen", {}),
     }, sha
 
 def save_student_study_data(guild_id: int, student_id: str, data: dict, sha=None):
@@ -5299,6 +5303,78 @@ def save_unsure():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/save_seen", methods=["POST"])
+def save_seen():
+    """指定したデッキで実際に表示した（学習した）カードキーの配列を丸ごと置き換える。
+    「わかる率」（/deck_understanding）の分母（＝学習済みカード数）に使う。
+    「わからない」と違い一度記録したカードキーが外れることはないので、
+    クライアント側は毎回「今までに見た分＋今回のカード」の全体を送ってくる想定。"""
+    guild_id, student_id, err = _timer_auth_from_json()
+    if err:
+        return err
+    data    = request.json or {}
+    deck_id = data.get("deck_id")
+    seen    = data.get("seen")
+    if not deck_id or not isinstance(seen, list):
+        return jsonify({"ok": False, "error": "deck_id と seen は必須です"})
+    try:
+        def _mutate(my_data):
+            if seen:
+                my_data.setdefault("seen", {})[deck_id] = seen
+            else:
+                my_data.setdefault("seen", {}).pop(deck_id, None)
+        update_student_study_data(guild_id, student_id, _mutate)
+        return jsonify({"ok": True})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/deck_understanding", methods=["GET"])
+def deck_understanding():
+    """指定デッキ（複数可、カンマ区切り）について、自分だけでなく全生徒分を
+    合算した「わかる率」を返す。
+    ・「学習した（seen）カードのうち、今わからないマークが付いていない」割合。
+    ・生徒ごとに別ファイル（study_data_{guild_id}_*.json）に分かれているため、
+      対象ギルドの全ファイルを読んで合算する。ローカルディスクの読み込みなので
+      生徒数が多くても軽い（GitHub API等を叩きに行くわけではない）。
+    """
+    guild_id = request.args.get("guild_id")
+    filenames = request.args.get("filenames")  # カンマ区切りのdeck_id（=カードセットのfilename）
+    if not guild_id or not filenames:
+        return jsonify({"ok": False, "error": "missing guild_id or filenames"})
+    guild_id = int(guild_id)
+    if not resolve_session(request.args.get("session_token"), guild_id):
+        return jsonify({"ok": False, "error": "not_logged_in"})
+    target_filenames = [f for f in filenames.split(",") if f]
+    if not target_filenames:
+        return jsonify({"ok": False, "error": "missing filenames"})
+
+    prefix = f"study_data_{guild_id}_"
+    studied = 0
+    understood = 0
+    try:
+        names = os.listdir(DATA_DIR)
+    except OSError:
+        names = []
+    for name in names:
+        if not (name.startswith(prefix) and name.endswith(".json")):
+            continue
+        data, _ = local_get(name)
+        if not data:
+            continue
+        seen_map   = data.get("seen", {}) or {}
+        unsure_map = data.get("unsure", {}) or {}
+        for fn in target_filenames:
+            seen_keys = seen_map.get(fn)
+            if not seen_keys:
+                continue
+            unsure_keys = set(unsure_map.get(fn) or [])
+            studied += len(seen_keys)
+            understood += sum(1 for k in seen_keys if k not in unsure_keys)
+
+    return jsonify({"ok": True, "studied": studied, "understood": understood})
 
 @app.route("/save_study_progress", methods=["POST"])
 def save_study_progress_api():
