@@ -5549,10 +5549,11 @@ BACKUP_GITHUB_TOKEN = os.getenv("BACKUP_GITHUB_TOKEN")
 BACKUP_REPO_URL = os.getenv(
     "BACKUP_REPO_URL", "https://github.com/yuichisana377/python.bot.1istudy-backup.git"
 )
-BACKUP_REPO_DIR = os.getenv(
-    "BACKUP_REPO_DIR",
-    os.path.join(os.path.dirname(os.path.abspath(DATA_DIR)) or ".", "1istudy-backup-repo"),
-)
+#   ★ 修正：以前はDATA_DIRの1つ上の階層を既定値にしていたが、DATA_DIRが
+#     コンテナのアプリルート直下（例: /app）に設定されている環境だと、
+#     その1つ上＝ファイルシステムのルート直下に作ろうとしてしまい、
+#     権限エラー等で失敗する。DATA_DIRの場所に依存しない固定の既定値にする。
+BACKUP_REPO_DIR = os.getenv("BACKUP_REPO_DIR", "/tmp/1istudy-backup-repo")
 
 def _run_git(args, cwd, use_auth=False):
     cmd = ["git"]
@@ -5583,12 +5584,27 @@ def backup_data_to_github():
             _run_git(["fetch", "origin", "main"], cwd=BACKUP_REPO_DIR, use_auth=True)
             _run_git(["reset", "--hard", "origin/main"], cwd=BACKUP_REPO_DIR)
 
-        # 2) data/ 以下をDATA_DIRの中身で丸ごと置き換える
-        #    （shutil.rmtree→copytreeにすることで、削除されたファイルも反映される）
+        # 2) data/ 以下を「実データだけ」で置き換える
+        #    ★ 修正：環境によってはDATA_DIRがコード本体と同じディレクトリ
+        #    （例: docker-composeで "./:/app" をマウントし、DATA_DIR=/app）
+        #    になっている場合があり、DATA_DIR全体を丸ごとコピーすると
+        #    bot.py・.git・.env（秘密情報）まで巻き込んでしまう。
+        #    このリポジトリの .gitignore が「データ」とみなしている範囲
+        #    （直下の*.jsonファイル、notices/・words/サブディレクトリ）
+        #    だけを選んでコピーする。
+        #    （shutil.rmtree→再作成にすることで、削除されたファイルも反映される）
         dest = os.path.join(BACKUP_REPO_DIR, "data")
         if os.path.isdir(dest):
             shutil.rmtree(dest)
-        shutil.copytree(DATA_DIR, dest)
+        os.makedirs(dest, exist_ok=True)
+        for name in os.listdir(DATA_DIR):
+            src = os.path.join(DATA_DIR, name)
+            if os.path.isfile(src) and name.endswith(".json"):
+                shutil.copy2(src, os.path.join(dest, name))
+        for sub in ("notices", "words"):
+            src_sub = os.path.join(DATA_DIR, sub)
+            if os.path.isdir(src_sub):
+                shutil.copytree(src_sub, os.path.join(dest, sub))
 
         # 3) 前回から変化が無ければコミットしない（空コミットの量産を防ぐ）
         status = _run_git(["status", "--porcelain"], cwd=BACKUP_REPO_DIR)
