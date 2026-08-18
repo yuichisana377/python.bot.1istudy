@@ -4815,29 +4815,13 @@ NOTICES_META_FILE = "notices_meta.json"
 NOTICE_ALLOWED_EXT = (".md", ".txt")
 
 
-def _is_path_safe_notice_filename(filename: str) -> bool:
-    """パストラバーサル対策・拡張子チェックのみ。
-    削除・既存ファイルの参照など「今あるファイルを安全に扱えるか」だけを見る用途向け
-    （下の _is_safe_notice_filename と違い、表示上の安全性チェックは含めない。
-    過去に不正な記号を含む名前で保存されてしまったファイルでも、
-    削除など後始末はできるようにするため）。"""
+def _is_safe_notice_filename(filename: str) -> bool:
+    """パストラバーサル対策・拡張子チェック"""
     if not filename:
         return False
     if "/" in filename or "\\" in filename or ".." in filename:
         return False
     return filename.lower().endswith(NOTICE_ALLOWED_EXT)
-
-
-def _is_safe_notice_filename(filename: str) -> bool:
-    """新規アップロード（新しい名前を保存してよいか）用。上記に加えて、
-    お知らせ一覧がファイル名をそのままHTMLへ表示するため、HTML/属性/JS文字列を
-    壊せる記号は保存自体を拒否する（多層防御。表示側＝Notice.jsのesc()での
-    無害化が本体、ここはその保険）。"""
-    if not _is_path_safe_notice_filename(filename):
-        return False
-    if any(ch in filename for ch in '<>"\'`&'):
-        return False
-    return True
 
 
 def list_notice_files():
@@ -4894,7 +4878,7 @@ def list_notices():
 def get_notice():
     """お知らせ1件の中身（テキスト本文）と投稿者名を返す"""
     filename = request.args.get("filename", "")
-    if not _is_path_safe_notice_filename(filename):
+    if not _is_safe_notice_filename(filename):
         return jsonify({"ok": False, "error": "invalid filename"})
     try:
         path = _data_path(f"{NOTICES_DIR}/{filename}")
@@ -4993,7 +4977,7 @@ def delete_notice():
     """お知らせファイルを削除する（メタ情報も合わせて削除）"""
     data = request.json or {}
     filename = data.get("filename", "")
-    if not _is_path_safe_notice_filename(filename):
+    if not _is_safe_notice_filename(filename):
         return jsonify({"ok": False, "error": "invalid filename"})
 
     path = _data_path(f"{NOTICES_DIR}/{filename}")
@@ -5033,7 +5017,7 @@ def set_notice_done():
     data = request.json or {}
     filename = data.get("filename")
     done = bool(data.get("done"))
-    if not _is_path_safe_notice_filename(filename):
+    if not _is_safe_notice_filename(filename):
         return jsonify({"ok": False, "error": "invalid filename"})
     try:
         last_err = None
