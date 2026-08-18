@@ -107,6 +107,7 @@ NO_CACHE_PATHS = {
     "/timer_state",
     "/get_study_data",
     "/deck_understanding",
+    "/list_notices",
     "/quiz_state",
 }
 
@@ -4799,6 +4800,7 @@ def list_notices():
                 "ext": f["name"].rsplit(".", 1)[-1].lower(),
                 "uploader": m.get("uploader"),
                 "uploaded_at": m.get("uploaded_at"),
+                "done": bool(m.get("done")),  # ★ 追加：実行済み（全員共有）
             })
         # ファイル名（先頭に日付を付ける運用を推奨）で新しい順に並べる
         notices.sort(key=lambda n: n["filename"], reverse=True)
@@ -4934,6 +4936,41 @@ def delete_notice():
         print(f"[WARN] notices_meta からの削除に失敗しました: {e}")
 
     return jsonify({"ok": True})
+
+
+# ================================
+#  Flask API — お知らせの「実行済み」（全員共有）
+#  ─────────────────────────────
+#  生徒ごとではなく、みんなで1つの状態を共有する
+#  （誰か1人が実行済みにしたら、全員の一覧で下に移動・薄く表示される）。
+#  既存の notices_meta.json（投稿者名など）に "done" フラグを
+#  追加するだけで、新しい保存先は増やさない。
+# ================================
+@app.route("/set_notice_done", methods=["POST"])
+def set_notice_done():
+    """指定したお知らせの「実行済み」状態（true/false）を、全員共有で設定する。"""
+    data = request.json or {}
+    filename = data.get("filename")
+    done = bool(data.get("done"))
+    if not _is_safe_notice_filename(filename):
+        return jsonify({"ok": False, "error": "invalid filename"})
+    try:
+        last_err = None
+        for _ in range(4):
+            meta, sha = load_notices_meta()
+            entry = meta.get(filename, {})
+            entry["done"] = done
+            meta[filename] = entry
+            try:
+                save_notices_meta(meta, sha)
+                return jsonify({"ok": True})
+            except DataWriteError as e:
+                last_err = e
+                continue  # 他の端末の書き込みと競合した場合、最新を読み直してやり直す
+        return jsonify({"ok": False, "error": f"local_write_failed: {last_err}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
 
 # ================================
 #  Flask API — カードのフォルダ（みんなで共有）
