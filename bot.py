@@ -335,6 +335,53 @@ async def async_local_put(filename, content_obj, sha=None):
     return await loop.run_in_executor(None, local_put, filename, content_obj, sha)
 
 # ================================
+#  システム運用ログ（Webの「サービス情報」ページに表示する）
+#  ─────────────────────────────────────────────
+#  ・目的：これまでprintでしか見えなかった「何がいつ変更されたか」を、
+#    ログインしていれば誰でもWeb上で確認できるようにする（利用者が11人の
+#    小規模運用のため、閲覧に管理者権限のような特別な区分けは設けない）。
+#  ・粒度：JSONファイルへの書き込み単位ではなく「1つのユーザー操作」単位で
+#    1件にまとめる（例：勉強時間の記録は study_logs と points の2つの
+#    JSONを書き換えるが、ログには1件だけ残す）。呼び出し側で、複数の保存
+#    処理が終わったあとに1回だけ log_event() を呼ぶ形にすること。
+#  ・生徒個人を特定できる情報（Discord ID・本名等）は記録しない。
+# ================================
+SYSTEM_LOG_FILE = "system_log.json"
+SYSTEM_LOG_MAX_ENTRIES = 300
+_system_log_lock = Lock()
+
+def log_event(category, summary, level="info"):
+    """運用ログに1件追加する。summary は日本語の短い説明文（個人が特定できる
+    情報は含めないこと）。level は "info" または "error"（失敗をWeb側で
+    視覚的に区別するため）。失敗してもBot本体は止めない。"""
+    try:
+        with _system_log_lock:
+            entries, sha = local_get(SYSTEM_LOG_FILE)
+            if not isinstance(entries, list):
+                entries = []
+            entries.append({
+                "time": datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S"),
+                "category": category,
+                "summary": summary,
+                "level": level,
+            })
+            entries = entries[-SYSTEM_LOG_MAX_ENTRIES:]
+            local_put(SYSTEM_LOG_FILE, entries, sha)
+    except Exception as e:
+        print(f"[WARN] システムログの記録に失敗しました: {e}")
+
+@app.route("/system_log", methods=["GET"])
+def system_log():
+    entries, _ = local_get(SYSTEM_LOG_FILE)
+    if not isinstance(entries, list):
+        entries = []
+    try:
+        limit = max(1, min(200, int(request.args.get("limit", 100))))
+    except (TypeError, ValueError):
+        limit = 100
+    return jsonify({"ok": True, "entries": list(reversed(entries))[:limit]})
+
+# ================================
 #  設定ファイル
 # ================================
 def load_config(guild_id: int):
@@ -1935,6 +1982,8 @@ def add_schedule():
         bot.loop
     )
     ok, msg = future.result(timeout=30)
+    if ok:
+        log_event("schedule", "予定を追加しました。")
     if ok and guild:
         target_channel = get_subject_channel_by_name(guild, subject)
         if target_channel:
@@ -2107,6 +2156,7 @@ def add_study_log():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
+    log_event("study", f"学習ログを記録しました（{entry['minutes']}分・{earned}pt加算）。")
     return jsonify({"ok": True, "earned": earned, "total": pts[entry["student_id"]]})
 
 
@@ -2223,6 +2273,7 @@ def edit_schedule():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
     write_log(guild_id, "edit", detail=f"{before_str} → {after_str}")
+    log_event("schedule", "予定を編集しました。")
     if guild:
         target_channel = get_subject_channel_by_name(guild, found["subject"])
         if target_channel:
@@ -2259,6 +2310,7 @@ def delete_schedule():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(guild_id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
+    log_event("schedule", "予定を削除しました。")
     if guild:
         target_channel = get_subject_channel_by_name(guild, deleted["subject"])
         if target_channel:
@@ -2346,6 +2398,7 @@ def update_timetable():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"時間割変更: {key} → {data.get('subject')}")
+    log_event("timetable", "時間割を更新しました。")
     return jsonify({"ok": True})
 
 @app.route("/set_holiday", methods=["POST"])
@@ -2368,6 +2421,7 @@ def set_holiday():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"休校設定: {data.get('date')} {data.get('reason')}")
+    log_event("timetable", "休校設定を更新しました。")
     return jsonify({"ok": True})
 
 @app.route("/set_period_holiday", methods=["POST"])
@@ -2400,6 +2454,7 @@ def set_period_holiday():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"1コマ休み設定: {data.get('date')} {period}限 {data.get('reason')}")
+    log_event("timetable", "休校設定を更新しました。")
     return jsonify({"ok": True})
 
 @app.route("/delete_timetable", methods=["POST"])
@@ -2417,6 +2472,7 @@ def delete_timetable():
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         write_log(int(guild_id), "edit", detail=f"時間割変更削除: {key}")
+        log_event("timetable", "時間割の変更を削除しました。")
     return jsonify({"ok": True})
 
 # ================================
@@ -2487,6 +2543,7 @@ def save_term():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"学期時間割保存: {name}（{start_date}〜{end_date}）")
+    log_event("timetable", "学期の基本時間割を保存しました。")
     return jsonify({"ok": True, "id": term_id})
 
 @app.route("/delete_term", methods=["POST"])
@@ -2505,6 +2562,7 @@ def delete_term():
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         write_log(int(guild_id), "edit", detail=f"学期時間割削除: {name}")
+        log_event("timetable", "学期の基本時間割を削除しました。")
     return jsonify({"ok": True})
 
 # ================================
@@ -2595,6 +2653,7 @@ def add_user():
             "password_salt": pw_salt,
         })
         save_users(guild_id, users)
+        log_event("user", "新しいユーザーが登録されました。")
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -3452,6 +3511,7 @@ def complete_task():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
+    log_event("task", "課題を達成にしました。")
     return jsonify({"ok": True, "total": pts[student_id]})
 
 
@@ -3500,6 +3560,7 @@ def uncomplete_task():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
+    log_event("task", "課題の達成を取り消しました。")
     return jsonify({"ok": True, "total": pts[student_id]})
 
 # ================================
@@ -3765,6 +3826,8 @@ def save_cards():
         except Exception as e:
             print(f"[WARN] save_cards notify failed: {e}")
 
+    is_actual_update = is_update and not bool(first_publish)
+    log_event("card", f"カードデッキを{'更新' if is_actual_update else '公開'}しました（{len(cards)}問）。")
     return jsonify({"ok": True, "filename": filename, "is_update": is_update})
 
 @app.route("/delete_cards", methods=["POST"])
@@ -3794,6 +3857,7 @@ def delete_cards():
     # ★ 並び順（list_order.json）からも、このデッキのキーを取り除いておく
     cleanup_list_order(remove_keys={f"deck:{filename}"})
 
+    log_event("card", "カードデッキを削除しました。")
     return jsonify({"ok": True})
 
 # ================================
@@ -4228,6 +4292,7 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
         }
         put_card_file(filename, card_payload)
         upsert_cards_index_entry(filename, card_payload)
+        log_event("card", f"みんなでクイズの結果を「クイズ過去問」に保存しました（{len(cards)}問）。")
     except Exception as e:
         print(f"[WARN] クイズ過去問の保存に失敗しました（クイズの進行自体は続行）: {e}")
 
@@ -4971,6 +5036,7 @@ def upload_notice():
         except Exception as e:
             print(f"[WARN] upload_notice notify failed: {e}")
 
+    log_event("notice", f"お知らせを{'更新' if is_update else '追加'}しました。")
     return jsonify({"ok": True, "filename": filename, "is_update": is_update, "uploader": uploader})
 
 
@@ -5002,6 +5068,7 @@ def delete_notice():
     except DataWriteError as e:
         print(f"[WARN] notices_meta からの削除に失敗しました: {e}")
 
+    log_event("notice", "お知らせを削除しました。")
     return jsonify({"ok": True})
 
 
@@ -5030,6 +5097,7 @@ def set_notice_done():
             meta[filename] = entry
             try:
                 save_notices_meta(meta, sha)
+                log_event("notice", f"お知らせを{'実行済み' if done else '未実行'}にしました。")
                 return jsonify({"ok": True})
             except DataWriteError as e:
                 last_err = e
@@ -5172,6 +5240,7 @@ def save_folder():
             folders.append({"id": folder_id, "name": name, "parent_id": parent_id})
 
         save_card_folders(folders, sha)
+        log_event("card", "フォルダを保存しました。")
         return jsonify({"ok": True, "id": folder_id})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -5201,6 +5270,7 @@ def delete_folder():
             remove_scopes=remove_ids,
         )
 
+        log_event("card", "フォルダを削除しました。")
         return jsonify({"ok": True, "deleted_ids": list(remove_ids)})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -5576,6 +5646,57 @@ def _redact_token(text):
         return text
     return text.replace(BACKUP_GITHUB_TOKEN, "***REDACTED***")
 
+_BACKUP_CATEGORY_PREFIXES = [
+    ("study_data_", "学習データ"),
+    ("study_logs_", "学習ログ"),
+    ("study_timers_", "学習タイマー"),
+    ("points_", "ポイント"),
+    ("users_", "ユーザー情報"),
+    ("completed_tasks_", "達成課題"),
+    ("config_", "設定"),
+    ("discord_login_links_", "Discordログイン連携"),
+    ("discord_links_", "Discordリンク"),
+    ("timetable_", "時間割"),
+    ("cards_index", "カード"),
+    ("folders", "フォルダ"),
+    ("list_order", "表示順"),
+    ("notices_meta", "お知らせ"),
+    ("in_progress_decks", "学習中デッキ"),
+    ("plans", "予定"),
+    ("logs_", "ログ"),
+    ("system_log", "システムログ"),
+]
+
+def _backup_category(rel_path):
+    """変更されたファイルのパスから、個人を特定できるID等を含まない
+    大まかな種別ラベルへ変換する（生徒個人が特定できるファイル名を
+    そのままログに出さないため）。"""
+    name = os.path.basename(rel_path)
+    if rel_path.startswith("notices/") or rel_path.startswith("notices\\"):
+        return "お知らせ（ファイル）"
+    if rel_path.startswith("words/") or rel_path.startswith("words\\"):
+        return "単語セット"
+    for prefix, label in _BACKUP_CATEGORY_PREFIXES:
+        if name.startswith(prefix):
+            return label
+    return "その他データ"
+
+def _summarize_backup_changes(porcelain_output):
+    """`git status --porcelain`の出力から、種別ごとの変更件数を
+    「学習データ2件、ポイント1件」のような短い日本語にまとめる。"""
+    counts = {}
+    for line in porcelain_output.splitlines():
+        if len(line) < 4:
+            continue
+        rel = line[3:].strip().split(" -> ")[-1]
+        if rel.startswith("data/"):
+            rel = rel[len("data/"):]
+        label = _backup_category(rel)
+        counts[label] = counts.get(label, 0) + 1
+    if not counts:
+        return ""
+    return "、".join(f"{label}{n}件" for label, n in counts.items())
+
 def backup_data_to_github():
     """DATA_DIRの中身をまるごとバックアップ用リポジトリへコミット・pushする。
     失敗してもBot本体を止めないよう、例外は外に投げずログだけ出す。"""
@@ -5625,6 +5746,8 @@ def backup_data_to_github():
             print("[backup] 前回から変更が無いため、コミットはスキップしました。")
             return
 
+        change_summary = _summarize_backup_changes(status.stdout)
+
         timestamp = datetime.now(timezone("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
         _run_git(["add", "-A"], cwd=BACKUP_REPO_DIR)
         _run_git(
@@ -5634,14 +5757,18 @@ def backup_data_to_github():
         )
         _run_git(["push", "origin", "HEAD:main"], cwd=BACKUP_REPO_DIR, use_auth=True)
         print(f"[backup] {timestamp} のバックアップをpushしました。")
+        log_event("backup", f"データをバックアップしました（{change_summary}）" if change_summary else "データをバックアップしました。")
     except subprocess.CalledProcessError as e:
         # ★ 修正：e.cmd には use_auth=True 時の -c http.extraheader=...（トークン本体）
         #   がそのまま含まれるため、ログに出す前に必ず伏せ字にする。
         safe_cmd = _redact_token(" ".join(e.cmd))
         safe_stderr = _redact_token(e.stderr or "")
         print(f"[backup] 失敗しました（{safe_cmd}）: {safe_stderr}")
+        log_event("backup", f"バックアップに失敗しました: {safe_stderr[:200]}", level="error")
     except Exception as e:
-        print(f"[backup] 失敗しました: {_redact_token(str(e))}")
+        safe_msg = _redact_token(str(e))
+        print(f"[backup] 失敗しました: {safe_msg}")
+        log_event("backup", f"バックアップに失敗しました: {safe_msg[:200]}", level="error")
 
 async def scheduled_backup_data_to_github():
     """★ backup_data_to_github() はブロッキングI/O（subprocess・ファイルコピー）
