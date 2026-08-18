@@ -3770,6 +3770,7 @@ QUIZ_REVEAL_DURATION_SEC = 5    # 正解発表から次の問題に自動で進�
 QUIZ_COUNTDOWN_DURATION_SEC = 5 # ★ 追加：スタート直後の「5,4,3,2,1」カウントダウン（最初の問題の前だけ）
 QUIZ_INTRO_DURATION_SEC = 2     # ★ 追加：各問題の直前に「第N問」を大きく表示しておく時間
 QUIZ_MAX_QUESTIONS = 30
+QUIZ_MAX_SOURCE_DECKS = 30  # ★ 追加：「デッキから自動作成」で一度に選べるデッキ数の上限（フォルダ選択で一気に増えうるため）
 QUIZ_ANSWER_BASE_POINTS = 10
 QUIZ_FIRST_CORRECT_BONUS = 2
 
@@ -4032,18 +4033,35 @@ def _pick_distractors(correct: str, pool: list, k: int) -> list:
     return random.sample(scored[:pool_size], k)
 
 
-def _build_deck_questions(deck_filename, num_questions):
+def _build_deck_questions(deck_filenames, num_questions):
     """単語カードのデッキ（表面=question／裏面=answer）から、答えをシャッフルした
-    4択問題を自動生成する。(questions, error_code) を返す（成功時 error_code は None）。"""
-    if "/" in deck_filename or "\\" in deck_filename or ".." in deck_filename:
+    4択問題を自動生成する。
+    ★ deck_filenames は単一のファイル名（文字列）でも、複数のファイル名のリストでも
+      受け取れる。複数指定した場合（Web側でフォルダごと選んだ場合を含む）は、
+      それぞれのデッキのカードをまとめて1つの問題プールとして扱い、
+      distractor（不正解の選択肢）も選んだデッキ全体から選ぶ。
+    (questions, error_code) を返す（成功時 error_code は None）。"""
+    if isinstance(deck_filenames, str):
+        deck_filenames = [deck_filenames]
+    if not isinstance(deck_filenames, list) or not deck_filenames:
         return None, "deck_not_found"
-    data, _ = get_card_file(deck_filename)
-    if data is None:
-        return None, "deck_not_found"
-    cards = [
-        c for c in data.get("cards", [])
-        if isinstance(c, dict) and str(c.get("question") or "").strip() and str(c.get("answer") or "").strip()
-    ]
+    # ★ 重複を除きつつ順序は維持する
+    seen_filenames = set()
+    deck_filenames = [f for f in deck_filenames if not (f in seen_filenames or seen_filenames.add(f))]
+    if len(deck_filenames) > QUIZ_MAX_SOURCE_DECKS:
+        return None, "too_many_decks"
+
+    cards = []
+    for deck_filename in deck_filenames:
+        if not isinstance(deck_filename, str) or "/" in deck_filename or "\\" in deck_filename or ".." in deck_filename:
+            return None, "deck_not_found"
+        data, _ = get_card_file(deck_filename)
+        if data is None:
+            return None, "deck_not_found"
+        cards.extend(
+            c for c in data.get("cards", [])
+            if isinstance(c, dict) and str(c.get("question") or "").strip() and str(c.get("answer") or "").strip()
+        )
     unique_answers = {c["answer"].strip() for c in cards}
     # ★ 4択（正解1つ＋不正解3つ）を作るには、答えの異なり（ユニークな値）が
     #   最低4つ必要。html側の注意書き（「答えの種類が4つ以上あるデッキが必要」）と対応。
@@ -4167,10 +4185,15 @@ def quiz_create():
 
     source = data.get("source")
     if source == "deck":
-        deck_filename = data.get("deck_filename")
-        if not deck_filename:
+        # ★ deck_filenames（複数選択・フォルダ選択に対応）を優先し、
+        #   後方互換として旧形式の単一 deck_filename も引き続き受け付ける。
+        deck_filenames = data.get("deck_filenames")
+        if not deck_filenames:
+            single = data.get("deck_filename")
+            deck_filenames = [single] if single else None
+        if not deck_filenames:
             return jsonify({"ok": False, "error": "deck_not_found"})
-        questions, q_err = _build_deck_questions(deck_filename, data.get("num_questions"))
+        questions, q_err = _build_deck_questions(deck_filenames, data.get("num_questions"))
         if q_err:
             return jsonify({"ok": False, "error": q_err})
         err = reject_if_bug_chars({"タイトル": title})
