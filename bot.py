@@ -119,6 +119,21 @@ def add_no_cache_headers(response):
         response.headers["Expires"] = "0"
     return response
 
+# ★ 追加：一般的なWebアプリのベースラインとして推奨される、
+#   HTTPレスポンスの標準的なセキュリティヘッダー。
+#   ・X-Content-Type-Options: ブラウザがContent-Typeを勝手に
+#     「推測」して実行してしまう（MIMEスニッフィング）のを防ぐ。
+#   ・X-Frame-Options: 他サイトの<iframe>にこのAPIの応答を埋め込ませない
+#     （クリックジャッキング対策。JSON APIなので実害は薄いが定番として）。
+#   ・Referrer-Policy: 他サイトへ移動する際、URL（クエリにトークン等が
+#     含まれる可能性がある）を丸ごとreferrerとして渡さないようにする。
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
 @app.before_request
 def handle_preflight():
     if request.method == "OPTIONS":
@@ -889,6 +904,42 @@ def verify_password(password: str, salt_hex: str, expected_hash_hex: str) -> boo
     actual_hash_hex, _ = hash_password(password, salt_hex)
     # ★ タイミング攻撃対策のため、単純な == ではなく定数時間比較を使う
     return hmac.compare_digest(actual_hash_hex, expected_hash_hex)
+
+# ================================
+#  ★ 追加：簡易レート制限（総当たり攻撃対策）
+#  ─────────────────────────────
+#  ログイン・パスワード確認コード（6桁・100万通り）など、繰り返し
+#  試行される攻撃の的になりやすいエンドポイント向け。外部ライブラリを
+#  増やさず、プロセス内メモリだけでIPアドレス単位の直近の試行回数を
+#  数える簡易実装（この用途には十分。複数プロセス/複数台で動かす
+#  場合はRedis等の共有ストアへの置き換えが必要）。
+# ================================
+_rate_limit_hits = {}  # "{bucket}:{ip}" -> [試行時刻, ...]
+RATE_LIMIT_WINDOW_SEC = 15 * 60  # 15分
+RATE_LIMIT_MAX_HITS = 10         # この回数を超えたら一時的に拒否
+
+def _client_ip() -> str:
+    # ★ リバースプロキシ配下でも実クライアントIPを見られるよう、
+    #   X-Forwarded-For があれば先頭（＝最初にプロキシへ渡ってきた値）を使う。
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+def rate_limited(bucket: str) -> bool:
+    """呼び出すたびに1回分の試行として記録する。直近 RATE_LIMIT_WINDOW_SEC 秒
+    以内の試行数が RATE_LIMIT_MAX_HITS を超えていれば True（＝拒否すべき）。"""
+    key = f"{bucket}:{_client_ip()}"
+    now = time.time()
+    hits = _rate_limit_hits.setdefault(key, [])
+    hits[:] = [t for t in hits if now - t < RATE_LIMIT_WINDOW_SEC]
+    if len(hits) >= RATE_LIMIT_MAX_HITS:
+        return True
+    hits.append(now)
+    return False
+
+def rate_limit_response():
+    return jsonify({"ok": False, "error": "too_many_attempts", "retry_after_sec": RATE_LIMIT_WINDOW_SEC}), 429
 
 # ================================
 #  ★ ログインセッション（署名付きトークン方式・状態を持たない）
@@ -2556,6 +2607,8 @@ def login():
       トークンから student_id を特定する（クライアントが送ってくる
       student_id は信用しない）。
     """
+    if rate_limited("login"):  # ★ 追加：パスワード総当たり対策
+        return rate_limit_response()
     data       = request.json or {}
     guild_id   = data.get("guild_id")
     student_id = (data.get("id") or "").strip().upper()
@@ -2621,6 +2674,8 @@ def change_password():
     ログイン済み（session_tokenを持っている）本人が、現在のパスワードを
     確認した上で新しいパスワードに変更する。
     """
+    if rate_limited("change_password"):  # ★ 追加：現在のパスワードの総当たり対策
+        return rate_limit_response()
     data         = request.json or {}
     guild_id     = data.get("guild_id")
     token        = data.get("session_token")
@@ -3095,6 +3150,8 @@ def change_nickname():
 @app.route("/request_password_change_code", methods=["POST"])
 def request_password_change_code():
     """ログイン済み本人が、パスワード変更用の確認コードをDiscord DMで受け取る。"""
+    if rate_limited("request_password_change_code"):  # ★ 追加：DM連打対策（本人ごとのクールダウンとは別に、IP単位でも制限）
+        return rate_limit_response()
     data     = request.json or {}
     guild_id = data.get("guild_id")
     if not guild_id:
@@ -3137,6 +3194,8 @@ def request_password_change_code():
 @app.route("/confirm_password_change", methods=["POST"])
 def confirm_password_change():
     """確認コード＋新しいパスワードを受け取り、一致していればパスワードを更新する。"""
+    if rate_limited("confirm_password_change"):  # ★ 追加：6桁コード（100万通り）の総当たり対策
+        return rate_limit_response()
     data         = request.json or {}
     guild_id     = data.get("guild_id")
     code         = (data.get("code") or "").strip()
@@ -3194,6 +3253,8 @@ def request_password_reset_code():
     body: { guild_id, id }
     未ログイン状態で、学籍番号だけを頼りに確認コードをDiscord DMで受け取る。
     """
+    if rate_limited("request_password_reset_code"):  # ★ 追加：DM連打・学籍番号総当たり対策
+        return rate_limit_response()
     data       = request.json or {}
     guild_id   = data.get("guild_id")
     student_id = (data.get("id") or "").strip().upper()
@@ -3242,6 +3303,10 @@ def confirm_password_reset():
     ★ session_token は使わない（そもそも持っていないから困っている）ので、
       本人確認はこの確認コードだけが担う。
     """
+    # ★ 追加：6桁コード（100万通り）の総当たり対策。session_tokenによる
+    #   本人確認が無い分、ここが最も重要（成功すればアカウント乗っ取りになる）。
+    if rate_limited("confirm_password_reset"):
+        return rate_limit_response()
     data         = request.json or {}
     guild_id     = data.get("guild_id")
     student_id   = (data.get("id") or "").strip().upper()
