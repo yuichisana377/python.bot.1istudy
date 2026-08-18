@@ -5559,9 +5559,22 @@ def _run_git(args, cwd, use_auth=False):
     cmd = ["git"]
     if use_auth:
         # ★ トークンをファイルに残さず、この1回のHTTPリクエストだけに使う
-        cmd += ["-c", f"http.extraheader=AUTHORIZATION: bearer {BACKUP_GITHUB_TOKEN}"]
+        #   ★ 修正：GitHubのgit HTTP認証は "bearer" スキームを受け付けず、
+        #     Basic認証（x-access-token:<token> をbase64化）である必要がある。
+        #     以前はbearerを使っていたため401→ユーザー名入力待ちで失敗していた。
+        basic = base64.b64encode(f"x-access-token:{BACKUP_GITHUB_TOKEN}".encode()).decode()
+        cmd += ["-c", f"http.extraheader=AUTHORIZATION: basic {basic}"]
     cmd += args
     return subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True, timeout=120)
+
+
+def _redact_token(text):
+    """ログにトークンを絶対に出さないための保険。万一 use_auth 付きコマンドが
+    失敗して stderr や cmd の中に -c http.extraheader=... が含まれていても、
+    トークン本体は必ず伏せ字にする。"""
+    if not BACKUP_GITHUB_TOKEN:
+        return text
+    return text.replace(BACKUP_GITHUB_TOKEN, "***REDACTED***")
 
 def backup_data_to_github():
     """DATA_DIRの中身をまるごとバックアップ用リポジトリへコミット・pushする。
@@ -5622,9 +5635,13 @@ def backup_data_to_github():
         _run_git(["push", "origin", "HEAD:main"], cwd=BACKUP_REPO_DIR, use_auth=True)
         print(f"[backup] {timestamp} のバックアップをpushしました。")
     except subprocess.CalledProcessError as e:
-        print(f"[backup] 失敗しました（{' '.join(e.cmd)}）: {e.stderr}")
+        # ★ 修正：e.cmd には use_auth=True 時の -c http.extraheader=...（トークン本体）
+        #   がそのまま含まれるため、ログに出す前に必ず伏せ字にする。
+        safe_cmd = _redact_token(" ".join(e.cmd))
+        safe_stderr = _redact_token(e.stderr or "")
+        print(f"[backup] 失敗しました（{safe_cmd}）: {safe_stderr}")
     except Exception as e:
-        print(f"[backup] 失敗しました: {e}")
+        print(f"[backup] 失敗しました: {_redact_token(str(e))}")
 
 async def scheduled_backup_data_to_github():
     """★ backup_data_to_github() はブロッキングI/O（subprocess・ファイルコピー）
