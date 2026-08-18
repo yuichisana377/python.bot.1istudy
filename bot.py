@@ -21,6 +21,8 @@ import secrets
 import random
 import difflib
 import queue
+import subprocess
+import shutil
 from urllib.parse import urlencode
 
 # ================================
@@ -5524,8 +5526,102 @@ def save_completion_api():
         return jsonify({"ok": False, "error": str(e)})
 
 # ================================
+#  ★ 追加：データの自動バックアップ（毎日0:00・GitHubのプライベートリポジトリへ）
+#  ─────────────────────────────
+#  DATA_DIR（実行時データ・生徒の個人情報を含む）はサーバーのローカル
+#  ディスクにしか置いておらず、これまで自動バックアップが存在しなかった
+#  （以前はGitHub Contents APIで直接読み書きしていたが、ローカルディスク
+#  方式への移行でその経路ごと無くなっていた）。
+#  ここでは「毎晩、DATA_DIRの中身をまるごと専用のプライベートリポジトリへ
+#  git push する」だけのシンプルな仕組みを追加する。
+#
+#  ★ サーバー側で別途用意する必要があるもの：
+#    ・git コマンドが使えること（コンテナ内に無ければ別途インストールが必要）
+#    ・環境変数 BACKUP_GITHUB_TOKEN に、対象リポジトリへ push できる
+#      GitHubのPersonal Access Token（対象リポジトリのContents:
+#      Read and write 権限）を設定しておくこと
+#  上記が揃っていない場合、バックアップは（Bot本体を止めずに）
+#  スキップされ、理由だけがログに出力される。
+#  ★ セキュリティ：トークンは .git/config 等のファイルに残さないよう、
+#    リモートURLには埋め込まず、git実行時だけ一時的なHTTPヘッダーとして渡す。
+# ================================
+BACKUP_GITHUB_TOKEN = os.getenv("BACKUP_GITHUB_TOKEN")
+BACKUP_REPO_URL = os.getenv(
+    "BACKUP_REPO_URL", "https://github.com/yuichisana377/python.bot.1istudy-backup.git"
+)
+BACKUP_REPO_DIR = os.getenv(
+    "BACKUP_REPO_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(DATA_DIR)) or ".", "1istudy-backup-repo"),
+)
+
+def _run_git(args, cwd, use_auth=False):
+    cmd = ["git"]
+    if use_auth:
+        # ★ トークンをファイルに残さず、この1回のHTTPリクエストだけに使う
+        cmd += ["-c", f"http.extraheader=AUTHORIZATION: bearer {BACKUP_GITHUB_TOKEN}"]
+    cmd += args
+    return subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True, timeout=120)
+
+def backup_data_to_github():
+    """DATA_DIRの中身をまるごとバックアップ用リポジトリへコミット・pushする。
+    失敗してもBot本体を止めないよう、例外は外に投げずログだけ出す。"""
+    if not BACKUP_GITHUB_TOKEN:
+        print("[backup] 環境変数 BACKUP_GITHUB_TOKEN が未設定のため、自動バックアップをスキップしました。")
+        return
+    if shutil.which("git") is None:
+        print("[backup] git コマンドが見つからないため、自動バックアップをスキップしました。")
+        return
+
+    try:
+        # 1) バックアップ用ローカルクローンを用意する（無ければclone、あれば最新に揃える）
+        if not os.path.isdir(os.path.join(BACKUP_REPO_DIR, ".git")):
+            parent = os.path.dirname(BACKUP_REPO_DIR)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            _run_git(["clone", BACKUP_REPO_URL, BACKUP_REPO_DIR], cwd=".", use_auth=True)
+        else:
+            _run_git(["fetch", "origin", "main"], cwd=BACKUP_REPO_DIR, use_auth=True)
+            _run_git(["reset", "--hard", "origin/main"], cwd=BACKUP_REPO_DIR)
+
+        # 2) data/ 以下をDATA_DIRの中身で丸ごと置き換える
+        #    （shutil.rmtree→copytreeにすることで、削除されたファイルも反映される）
+        dest = os.path.join(BACKUP_REPO_DIR, "data")
+        if os.path.isdir(dest):
+            shutil.rmtree(dest)
+        shutil.copytree(DATA_DIR, dest)
+
+        # 3) 前回から変化が無ければコミットしない（空コミットの量産を防ぐ）
+        status = _run_git(["status", "--porcelain"], cwd=BACKUP_REPO_DIR)
+        if not status.stdout.strip():
+            print("[backup] 前回から変更が無いため、コミットはスキップしました。")
+            return
+
+        timestamp = datetime.now(timezone("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ")
+        _run_git(["add", "-A"], cwd=BACKUP_REPO_DIR)
+        _run_git(
+            ["-c", "user.email=backup@1istudy.local", "-c", "user.name=1istudy-backup",
+             "commit", "-m", f"backup {timestamp}"],
+            cwd=BACKUP_REPO_DIR,
+        )
+        _run_git(["push", "origin", "HEAD:main"], cwd=BACKUP_REPO_DIR, use_auth=True)
+        print(f"[backup] {timestamp} のバックアップをpushしました。")
+    except subprocess.CalledProcessError as e:
+        print(f"[backup] 失敗しました（{' '.join(e.cmd)}）: {e.stderr}")
+    except Exception as e:
+        print(f"[backup] 失敗しました: {e}")
+
+async def scheduled_backup_data_to_github():
+    """★ backup_data_to_github() はブロッキングI/O（subprocess・ファイルコピー）
+    を含む同期関数なので、asyncioのイベントループ（Discordの通信もここで
+    動いている）を止めないよう、別スレッドで実行する。
+    他のバックグラウンドジョブ（async_local_get等）と同じ考え方。"""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, backup_data_to_github)
+
+# ================================
 #  スケジューラー & 起動
 # ================================
+scheduler.add_job(scheduled_backup_data_to_github, "cron", hour=0, minute=0)  # ★ 追加：毎日0:00（JST）にデータを自動バックアップ
 scheduler.add_job(send_tomorrow_plans,     "cron", hour=20, minute=0)
 scheduler.add_job(send_today_plans_commute, "cron", hour=5,  minute=30)  # 通生（現行時間）
 scheduler.add_job(send_today_plans_dorm,    "cron", hour=7,  minute=20)  # 寮生
