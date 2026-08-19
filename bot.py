@@ -417,6 +417,20 @@ def log_event(category, summary, level="info", actor=None, detail=None):
     except Exception as e:
         print(f"[WARN] システムログの記録に失敗しました: {e}")
 
+def _json_block(fields, label=None):
+    """「フィールド名: 値」の一覧を、GitHubのコミット差分でJSONファイルを
+    見るときのような { ... } のブロック（複数行のリスト）にする
+    （2026/08/19、ユーザーの要望により追加）。新規追加/削除された
+    レコードでは { と } を含む全行が +/- として表示され、実際のJSONファイルの
+    コミット差分に近い見た目になる（1フィールドだけの変更時は、この機能の
+    元々の方針通り、変わった行だけが表示され { }自体は出ない＝差分自体は
+    今まで通り簡潔なまま）。fields は (ラベル, 値) のタプルのリスト。"""
+    open_line = f"{label} {{" if label else "{"
+    lines = [open_line]
+    lines.extend(f"  {k}: {v}" for k, v in fields)
+    lines.append("}")
+    return lines
+
 def file_diff(file, old_text, new_text, max_lines=60):
     """指定したファイル1つ分の変更を、+/- 形式の行テキストにまとめて
     返す（GitHubのファイル差分と同じ考え方）。差分が無ければ None。
@@ -578,17 +592,24 @@ async def async_load_plans(guild_id: int):
     data, _ = await async_local_get(f"plans_{guild_id}.json")
     return data or []
 
-def _plan_line(p):
-    """運用ログ用：予定1件を1行のテキストにする（GitHubのコミット差分に
-    使うfile_diff()と組み合わせて、plans_{guild_id}.jsonの変更点だけを
-    +/- で浮かび上がらせるために使う）。"""
-    line = f"{p.get('date')} / {p.get('subject')} / {p.get('content')}"
+def _plan_lines(p):
+    """運用ログ用：予定1件を { ... } のブロックにする（GitHubのコミット
+    差分に使うfile_diff()と組み合わせて、plans_{guild_id}.jsonの変更点
+    だけを +/- で浮かび上がらせるために使う）。"""
+    fields = [
+        ("日付", p.get('date')),
+        ("科目", p.get('subject')),
+        ("内容", p.get('content')),
+    ]
     if p.get("points") is not None:
-        line += f"（{p['points']}pt）"
-    return line
+        fields.append(("ポイント", f"{p['points']}pt"))
+    return _json_block(fields)
 
 def _plans_text(plans):
-    return "\n".join(_plan_line(p) for p in (plans or []))
+    lines = []
+    for p in (plans or []):
+        lines.extend(_plan_lines(p))
+    return "\n".join(lines)
 
 async def async_save_plans(guild_id: int, plans: list):
     _, sha = await async_local_get(f"plans_{guild_id}.json")
@@ -634,15 +655,22 @@ def save_study_logs(guild_id: int, logs: list):
     local_put(f"study_logs_{guild_id}.json", logs, sha)
     notify_change(guild_id)
 
-def _study_log_line(l):
-    """運用ログ用：勉強ログ1件を1行のテキストにする。"""
-    line = f"{l.get('time')} {l.get('nickname')}: {l.get('subject')} {l.get('minutes')}分"
-    if l.get("memo"):
-        line += f"（メモ: {l['memo']}）"
-    return line
+def _study_log_lines(l):
+    """運用ログ用：勉強ログ1件を { ... } のブロックにする。"""
+    fields = [
+        ("記録日時", l.get('time')),
+        ("実行者", l.get('nickname')),
+        ("科目", l.get('subject')),
+        ("時間", f"{l.get('minutes')}分"),
+        ("メモ", l.get('memo') or "(なし)"),
+    ]
+    return _json_block(fields)
 
 def _study_logs_text(logs):
-    return "\n".join(_study_log_line(l) for l in (logs or []))
+    lines = []
+    for l in (logs or []):
+        lines.extend(_study_log_lines(l))
+    return "\n".join(lines)
 
 async def async_load_study_logs(guild_id: int):
     data, _ = await async_local_get(f"study_logs_{guild_id}.json")
@@ -1014,10 +1042,13 @@ def save_users(guild_id: int, users: list):
     local_put(f"users_{guild_id}.json", users, sha)
 
 def _users_text(users):
-    """運用ログ用：users_{guild_id}.json を1行1ユーザーのテキストにする。
+    """運用ログ用：users_{guild_id}.json を { ... } のブロックの並びにする。
     ★ password_hash/password_saltは絶対に含めない（他の項目とは違い、
     これは公開してよい情報ではないため）。"""
-    return "\n".join(f"{u.get('id')} / {u.get('nickname')}" for u in (users or []))
+    lines = []
+    for u in (users or []):
+        lines.extend(_json_block([("学籍番号", u.get('id')), ("ニックネーム", u.get('nickname'))]))
+    return "\n".join(lines)
 
 def find_user(guild_id: int, student_id: str):
     users = load_users(guild_id)
@@ -2573,21 +2604,30 @@ def save_timetable(guild_id: int, data: dict):
     local_put(f"timetable_{guild_id}.json", data, sha)
     notify_change(guild_id)
 
-def _timetable_entry_line(e):
-    """運用ログ用：時間割の変更1件を1行のテキストにする。"""
+_TIMETABLE_TYPE_LABELS = {"change": "授業変更", "holiday": "休校", "period_holiday": "1コマ休み"}
+
+def _timetable_entry_lines(e):
+    """運用ログ用：時間割の変更1件を { ... } のブロックにする。"""
     t = e.get("type")
-    note = f" 備考: {e['note']}" if e.get("note") else ""
+    fields = [
+        ("種別", _TIMETABLE_TYPE_LABELS.get(t, t)),
+        ("日付", e.get("date")),
+    ]
+    if t in ("change", "period_holiday"):
+        fields.append(("時限", f"{e.get('period')}限"))
     if t == "change":
-        items = f"（持ち物: {', '.join(e.get('items') or [])}）" if e.get("items") else ""
-        return f"{e.get('date')} {e.get('period')}限: {e.get('subject')}{items}{note}"
-    if t == "holiday":
-        return f"{e.get('date')}: 休校（{e.get('reason')}）{note}"
-    if t == "period_holiday":
-        return f"{e.get('date')} {e.get('period')}限: 休み（{e.get('reason')}）{note}"
-    return f"{e.get('date')}: {e}"
+        fields.append(("科目", e.get("subject")))
+        fields.append(("持ち物", "、".join(e.get("items") or []) or "(なし)"))
+    else:
+        fields.append(("理由", e.get("reason")))
+    fields.append(("備考", e.get("note") or "(なし)"))
+    return _json_block(fields)
 
 def _timetable_text(tt):
-    return "\n".join(_timetable_entry_line(e) for e in (tt or {}).values())
+    lines = []
+    for e in (tt or {}).values():
+        lines.extend(_timetable_entry_lines(e))
+    return "\n".join(lines)
 
 @app.route("/list_timetable", methods=["GET"])
 def list_timetable():
@@ -2765,11 +2805,15 @@ def save_terms(guild_id: int, terms: dict):
 _TERM_DAY_LABELS = {"mon": "月", "tue": "火", "wed": "水", "thu": "木", "fri": "金"}
 
 def _term_lines(t):
-    """運用ログ用：学期の基本時間割1件を複数行にする。★ 2026/08/19、
-    以前はコマ数の合計だけを出していて、曜日・時限ごとの科目を入れ替えても
-    diffに出ない（コマ数が変わらなければ検知できない）抜けがあったため、
-    曜日ごとに実際の科目を1行で並べるよう修正。"""
-    lines = [f"学期: {t.get('name')}（{t.get('start_date')}〜{t.get('end_date')}）"]
+    """運用ログ用：学期の基本時間割1件を { ... } のブロックにする。
+    ★ 2026/08/19、以前はコマ数の合計だけを出していて、曜日・時限ごとの
+    科目を入れ替えてもdiffに出ない（コマ数が変わらなければ検知できない）
+    抜けがあったため、曜日ごとに実際の科目を1フィールドで並べるよう修正。"""
+    fields = [
+        ("学期名", t.get('name')),
+        ("開始日", t.get('start_date')),
+        ("終了日", t.get('end_date')),
+    ]
     tt = t.get("timetable") or {}
     for day_key, label in _TERM_DAY_LABELS.items():
         periods = tt.get(day_key) or []
@@ -2779,8 +2823,8 @@ def _term_lines(t):
             f"{i+1}限:{(p.get('subject') if isinstance(p, dict) else None) or '(空きコマ)'}"
             for i, p in enumerate(periods)
         )
-        lines.append(f"  {t.get('name')} {label}曜: {subjects}")
-    return lines
+        fields.append((f"{label}曜", subjects))
+    return _json_block(fields)
 
 def _terms_text(terms):
     lines = []
@@ -3929,32 +3973,31 @@ def _image_count_text(imgs):
     return f"{n}枚" if n else "(なし)"
 
 def _card_lines(i, c):
-    """カード1件分を、フィールドごとの複数行にして返す。★ 2026/08/19、
-    ユーザーから実際のカードJSON（id/question/answer/explanation/imgs_q等）
-    を示され、「idは要らない・英語のフィールド名（question等）は日本語
-    （問題等）に・imgs_qは『問題の画像』のように書き換えて」と指定された
-    ため、idを内部の突き合わせ用キーとしてのみ使い（表示しない）、
-    それ以外のフィールドを日本語ラベルで1行ずつ並べる形にした。
-    画像本体（base64等）はログに出すには大きすぎるため、実データではなく
-    枚数だけを表示する。"""
-    prefix = f"カード{i}"
-    lines = [
-        f"{prefix} 問題: {_clip_text(c.get('question')) or '(空)'}",
-        f"{prefix} 解答: {_clip_text(c.get('answer')) or '(空)'}",
-        f"{prefix} 解説: {_clip_text(c.get('explanation')) or '(空)'}",
-        f"{prefix} 問題の画像: {_image_count_text(c.get('imgs_q'))}",
-        f"{prefix} 解答の画像: {_image_count_text(c.get('imgs_a'))}",
-        f"{prefix} 解説の画像: {_image_count_text(c.get('imgs_e'))}",
+    """カード1件分を、GitHubのJSONファイル差分のような { ... } ブロックに
+    して返す。★ 2026/08/19、ユーザーから実際のカードJSON（id/question/
+    answer/explanation/imgs_q等）を示され、「idは要らない・英語のフィールド名
+    （question等）は日本語（問題等）に・imgs_qは『問題の画像』のように
+    書き換えて・JSONなら{}も書いて」と指定されたため、idを内部の突き合わせ
+    用キーとしてのみ使い（表示しない）、それ以外のフィールドを日本語ラベルで
+    _json_block()に渡している。画像本体（base64等）はログに出すには
+    大きすぎるため、実データではなく枚数だけを表示する。"""
+    fields = [
+        ("問題", _clip_text(c.get('question')) or '(空)'),
+        ("解答", _clip_text(c.get('answer')) or '(空)'),
+        ("解説", _clip_text(c.get('explanation')) or '(空)'),
+        ("問題の画像", _image_count_text(c.get('imgs_q'))),
+        ("解答の画像", _image_count_text(c.get('imgs_a'))),
+        ("解説の画像", _image_count_text(c.get('imgs_e'))),
     ]
     choices = c.get("choices")
     if choices:
         letters = ["A", "B", "C", "D", "E"]
         labeled = [f"{letters[idx]}. {choices[idx]}" if idx < len(letters) else str(choices[idx]) for idx in range(len(choices))]
-        lines.append(f"{prefix} 選択肢: {' / '.join(labeled)}")
+        fields.append(("選択肢", " / ".join(labeled)))
         correct = c.get("correct_indices") or []
         correct_labels = [letters[idx] for idx in correct if idx < len(letters)]
-        lines.append(f"{prefix} 正解: {', '.join(correct_labels) if correct_labels else '(未設定)'}")
-    return lines
+        fields.append(("正解", ", ".join(correct_labels) if correct_labels else "(未設定)"))
+    return _json_block(fields, label=f"カード{i}")
 
 def _card_key(c, idx):
     """カードの突き合わせ用キー。idがあればそれを使う（Cardmaker.js側で
@@ -4085,6 +4128,42 @@ def _meta_from_card_data(filename, data):
         "choice_mode": data.get("choice_mode"),  # ★ null/false=通常デッキ / true=選択式デッキ（単一/複数は問題ごとに決まる。旧形式の"single"/"multi"文字列もtruthyとして扱う）
     }
 
+def _card_index_entry_lines(entry, folder_names=None):
+    """cards_index.json の1エントリ（1デッキ分の索引情報）を { ... } の
+    ブロックにする。★ 2026/08/19、ユーザーの指定により：filenameは内部の
+    識別子なので表示しない、name/count/subject/folder_idは日本語ラベルに
+    置き換える、published_by/incompleteも日本語にし、incompleteの
+    true/falseは分かりやすい言葉に書き換える。has_folder_idはfolder_idと
+    実質同じ情報のため省略。"""
+    if entry is None:
+        return []
+    folder_names = folder_names or {}
+    folder_id = entry.get("folder_id")
+    fields = [
+        ("デッキ名", entry.get("name") or ""),
+        ("問題数", f"{entry.get('count', 0)}問"),
+        ("科目", entry.get("subject") or "(未設定)"),
+        ("フォルダ", folder_names.get(folder_id, folder_id) if folder_id else "(フォルダなし)"),
+        ("公開者", entry.get("published_by") or "(不明)"),
+        ("状態", "未完成（作成中）" if entry.get("incomplete") else "完成"),
+        ("形式", "選択式デッキ" if entry.get("choice_mode") else "暗記カード（通常デッキ）"),
+    ]
+    return _json_block(fields)
+
+def _card_index_diff(old_entry, new_entry, folder_names=None):
+    """索引ファイル内の1エントリの変更を、log_event の detail に渡す
+    {"file","diff","status"} の形にする（無ければNone）。upsert/remove
+    のたびに呼び、デッキ本体のファイルだけでなく索引ファイルも実際に
+    書き換わっていることを運用ログに残す（2026/08/19追加）。"""
+    folder_names = folder_names if folder_names is not None else _card_folder_name_map()
+    old_text = "\n".join(_card_index_entry_lines(old_entry, folder_names))
+    new_text = "\n".join(_card_index_entry_lines(new_entry, folder_names))
+    diff = _text_diff_lines(old_text, new_text)
+    if not diff:
+        return None
+    status = "added" if old_entry is None else ("deleted" if new_entry is None else "modified")
+    return {"file": CARDS_INDEX_FILE, "diff": diff, "status": status}
+
 def load_cards_index():
     """索引ファイルを取得する。存在しない場合は None を返す（呼び出し側で再構築する）。"""
     data, sha = local_get(CARDS_INDEX_FILE)
@@ -4115,31 +4194,42 @@ def rebuild_cards_index():
     return index
 
 def upsert_cards_index_entry(filename, data):
-    """save_cards のたびに呼び出し、索引ファイル内の該当エントリだけを更新する。"""
+    """save_cards のたびに呼び出し、索引ファイル内の該当エントリだけを更新する。
+    運用ログ用に、このエントリの変更差分（無ければNone）を返す
+    （2026/08/19追加。呼び出し側でdetailの2件目として渡す）。"""
     index, sha = load_cards_index()
     if index is None:
         index = rebuild_cards_index()
         index, sha = load_cards_index()
     meta = _meta_from_card_data(filename, data)
+    old_entry = None
     found = False
     for i, entry in enumerate(index):
         if entry.get("filename") == filename:
+            old_entry = entry
             index[i] = meta
             found = True
             break
     if not found:
         index.append(meta)
     save_cards_index(index, sha)
+    return _card_index_diff(old_entry, meta)
 
 def remove_cards_index_entry(filename):
-    """delete_cards のたびに呼び出し、索引ファイルから該当エントリを削除する。"""
+    """delete_cards のたびに呼び出し、索引ファイルから該当エントリを削除する。
+    運用ログ用に、削除されたエントリの差分（無ければNone）を返す
+    （2026/08/19追加）。"""
     index, sha = load_cards_index()
     if index is None:
         index = rebuild_cards_index()
         index, sha = load_cards_index()
+    removed_entry = next((e for e in index if e.get("filename") == filename), None)
     new_index = [e for e in index if e.get("filename") != filename]
     if len(new_index) != len(index):
         save_cards_index(new_index, sha)
+    if removed_entry is None:
+        return None
+    return _card_index_diff(removed_entry, None)
 
 
 @app.route("/list_cards", methods=["GET"])
@@ -4259,8 +4349,9 @@ def save_cards():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     # ★ 索引ファイルも合わせて更新する（list_cardsを軽く保つため）
+    index_change = None
     try:
-        upsert_cards_index_entry(filename, card_payload)
+        index_change = upsert_cards_index_entry(filename, card_payload)
     except DataWriteError as e:
         # カード本体の保存自体は成功しているので、索引更新の失敗は警告に留める。
         # 次回 list_cards アクセス時に再構築されるので実害は小さい。
@@ -4312,11 +4403,12 @@ def save_cards():
     is_actual_update = is_update and not bool(first_publish)
     old_deck_for_diff = existing_data if (is_update and existing_data) else None
     change = deck_file_diff(f"{CARDS_DIR}/{filename}", old_deck_for_diff, card_payload)
+    detail = [c for c in (change, index_change) if c]  # ★ デッキ本体＋索引ファイルの両方の変更を載せる
     log_event(
         "card",
         f"カードデッキ「{name}」を{'更新' if is_actual_update else '公開'}しました（{len(cards)}問）。",
         actor=publisher_nickname,
-        detail=[change] if change else None,
+        detail=detail if detail else None,
     )
     return jsonify({"ok": True, "filename": filename, "is_update": is_update})
 
@@ -4347,8 +4439,9 @@ def delete_cards():
         return jsonify({"ok": False, "error": f"local_delete_failed: {e}"})
 
     # ★ 索引ファイルからも削除する
+    index_change = None
     try:
-        remove_cards_index_entry(filename)
+        index_change = remove_cards_index_entry(filename)
     except DataWriteError as e:
         print(f"[WARN] cards_index からの削除に失敗しました: {e}")
 
@@ -4356,11 +4449,12 @@ def delete_cards():
     cleanup_list_order(remove_keys={f"deck:{filename}"})
 
     change = deck_file_diff(f"{CARDS_DIR}/{filename}", deleted_data, None)
+    detail = [c for c in (change, index_change) if c]
     log_event(
         "card",
         f"カードデッキ「{deleted_name}」を削除しました。" if deleted_name else "カードデッキを削除しました。",
         actor=nickname,
-        detail=[change] if change else None,
+        detail=detail if detail else None,
     )
     return jsonify({"ok": True})
 
@@ -4795,13 +4889,14 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
             "choice_mode": True,  # ★ 選択式デッキであることのマーカー（単一/複数は問題ごとにcorrect_indicesの個数で決まる）
         }
         put_card_file(filename, card_payload)
-        upsert_cards_index_entry(filename, card_payload)
+        index_change = upsert_cards_index_entry(filename, card_payload)
         change = deck_file_diff(f"{CARDS_DIR}/{filename}", None, card_payload)
+        detail = [c for c in (change, index_change) if c]
         log_event(
             "card",
             f"みんなでクイズの結果を「{title}」として「クイズ過去問」に保存しました（{len(cards)}問）。",
             actor=nickname,
-            detail=[change] if change else None,
+            detail=detail if detail else None,
         )
     except Exception as e:
         print(f"[WARN] クイズ過去問の保存に失敗しました（クイズの進行自体は続行）: {e}")
@@ -5428,11 +5523,18 @@ def save_notices_meta(meta, sha=None):
 
 def _notices_meta_text(meta):
     """運用ログ用：notices_meta.json（投稿者・実行済みフラグ等）を
-    1行1ファイルのテキストにする。"""
+    { ... } のブロックの並びにする。★ お知らせのfilenameはNotice.js上で
+    そのままタイトルとして全員に表示されている情報なので、他のカテゴリの
+    内部ファイル名とは違い、フィールドとして表示してよい。"""
     lines = []
     for filename, entry in (meta or {}).items():
-        status = "実行済み" if entry.get("done") else "未実行"
-        lines.append(f"{filename}: {entry.get('uploader')}（{entry.get('uploaded_at')}） [{status}]")
+        fields = [
+            ("お知らせ", filename),
+            ("投稿者", entry.get('uploader')),
+            ("投稿日時", entry.get('uploaded_at')),
+            ("状態", "実行済み" if entry.get("done") else "未実行"),
+        ]
+        lines.extend(_json_block(fields))
     return "\n".join(lines)
 
 
@@ -5685,14 +5787,17 @@ def save_card_folders(folders, sha=None):
     notify_change()  # ★ フォルダもguildをまたいで共有されるため全体に通知
 
 def _folders_text(folders):
-    """運用ログ用：folders.json（全フォルダ一覧）を1行1フォルダのテキストにする。"""
+    """運用ログ用：folders.json（全フォルダ一覧）を { ... } のブロックの並びにする。"""
     folders = folders or []
     by_id = {f.get("id"): f.get("name") for f in folders}
     lines = []
     for f in folders:
         parent_id = f.get("parent_id")
-        loc = f"（{by_id.get(parent_id, parent_id)}の中）" if parent_id else ""
-        lines.append(f"{f.get('name')}{loc}")
+        fields = [
+            ("フォルダ名", f.get('name')),
+            ("親フォルダ", by_id.get(parent_id, parent_id) if parent_id else "(なし・最上位)"),
+        ]
+        lines.extend(_json_block(fields))
     return "\n".join(lines)
 
 def _folder_level(folders, folder_id):
