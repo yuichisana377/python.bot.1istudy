@@ -2762,15 +2762,31 @@ def save_terms(guild_id: int, terms: dict):
     local_put(f"terms_{guild_id}.json", terms, sha)
     notify_change(guild_id)
 
-def _term_line(t):
-    """運用ログ用：学期の基本時間割1件を1行のテキストにする（曜日ごとの
-    コマ数だけを添えて、時間割そのもの全部は出さない＝長すぎるため）。"""
+_TERM_DAY_LABELS = {"mon": "月", "tue": "火", "wed": "水", "thu": "木", "fri": "金"}
+
+def _term_lines(t):
+    """運用ログ用：学期の基本時間割1件を複数行にする。★ 2026/08/19、
+    以前はコマ数の合計だけを出していて、曜日・時限ごとの科目を入れ替えても
+    diffに出ない（コマ数が変わらなければ検知できない）抜けがあったため、
+    曜日ごとに実際の科目を1行で並べるよう修正。"""
+    lines = [f"学期: {t.get('name')}（{t.get('start_date')}〜{t.get('end_date')}）"]
     tt = t.get("timetable") or {}
-    total_periods = sum(len(v) for v in tt.values() if isinstance(v, list))
-    return f"{t.get('name')}: {t.get('start_date')}〜{t.get('end_date')}（時間割 計{total_periods}コマ）"
+    for day_key, label in _TERM_DAY_LABELS.items():
+        periods = tt.get(day_key) or []
+        if not periods:
+            continue
+        subjects = "、".join(
+            f"{i+1}限:{(p.get('subject') if isinstance(p, dict) else None) or '(空きコマ)'}"
+            for i, p in enumerate(periods)
+        )
+        lines.append(f"  {t.get('name')} {label}曜: {subjects}")
+    return lines
 
 def _terms_text(terms):
-    return "\n".join(_term_line(t) for t in (terms or {}).values())
+    lines = []
+    for t in (terms or {}).values():
+        lines.extend(_term_lines(t))
+    return "\n".join(lines)
 
 @app.route("/list_terms", methods=["GET"])
 def list_terms():
@@ -3904,13 +3920,29 @@ def put_card_file(filename, content_obj, sha=None):
 #    浮かび上がる（変化していない行は表示されない＝diff_cardsの考え方を
 #    ファイル全体に拡張したもの）。
 # ================================
-def _card_label(c, max_len=60):
-    """ログ表示用に「問題文 / 解答」の形へ短く整形する。"""
-    def _clip(s):
-        s = (s or "").strip().replace("\n", " ")
-        return s if len(s) <= max_len else s[:max_len] + "…"
-    q, a = _clip(c.get("question")), _clip(c.get("answer"))
-    return f"{q} / {a}" if a else (q or "(内容なし)")
+def _clip_text(s, max_len=150):
+    s = (s or "").strip().replace("\n", " ")
+    return s if len(s) <= max_len else s[:max_len] + "…"
+
+def _card_lines(i, c):
+    """カード1件分を、内容の抜け漏れが無いよう複数行にして返す（問題・解答
+    だけでなく解説・選択肢・正解も含める。★ 2026/08/19、問題/解答だけの
+    1行にまとめていたときは解説や選択式デッキの選択肢を変更しても
+    diffに出ない抜けがあったため、フィールドごとに行を分けるよう修正）。
+    画像（imgs_q/imgs_a/imgs_e）はBase64等の大きなデータでログ表示に
+    向かないため対象外のまま。"""
+    lines = [f"カード{i}: 問題={_clip_text(c.get('question')) or '(なし)'} / 解答={_clip_text(c.get('answer')) or '(なし)'}"]
+    if c.get("explanation"):
+        lines.append(f"  カード{i} 解説: {_clip_text(c.get('explanation'))}")
+    choices = c.get("choices")
+    if choices:
+        letters = ["A", "B", "C", "D", "E"]
+        labeled = [f"{letters[idx]}. {choices[idx]}" if idx < len(letters) else str(choices[idx]) for idx in range(len(choices))]
+        lines.append(f"  カード{i} 選択肢: {' / '.join(labeled)}")
+        correct = c.get("correct_indices") or []
+        correct_labels = [letters[idx] for idx in correct if idx < len(letters)]
+        lines.append(f"  カード{i} 正解: {', '.join(correct_labels) if correct_labels else '(未設定)'}")
+    return lines
 
 def _card_folder_name_map():
     """folder_id → フォルダ名 の対応表（ログ表示で内部IDを出さないため）。"""
@@ -3937,7 +3969,7 @@ def _deck_text(data, folder_names=None):
     cards = data.get('cards') or []
     for i, c in enumerate(cards, 1):
         if isinstance(c, dict):
-            lines.append(f"カード{i}: {_card_label(c)}")
+            lines.extend(_card_lines(i, c))
     return "\n".join(lines)
 
 def _text_diff_lines(old_text, new_text, max_lines=60):
