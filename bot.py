@@ -670,11 +670,49 @@ def _study_log_lines(l):
     ]
     return _json_block(fields)
 
-def _study_logs_text(logs):
+def _study_log_key(l, idx):
+    """勉強ログの突き合わせ用キー。delete_study_logと同じくtime（秒単位の
+    記録日時）を安定キーとして使う（1件ずつ専用idを新設していないため）。"""
+    if isinstance(l, dict) and l.get("time"):
+        return l["time"]
+    return f"__pos_{idx}"
+
+def _diff_study_logs(file, old_logs, new_logs, max_lines=40):
+    """勉強ログ配列の差分を、time（記録日時）で突き合わせてから作る。
+    ★ 2026/08/19判明・修正：study_logs_{guild_id}.json全体を1本のテキスト
+    （_study_logs_text）にしてから行差分（difflib）を取っていたため、
+    カードデッキで一度直したのと同じ不具合が起きていた：各エントリの
+    { }行が全エントリで完全に同一のため、真ん中の1件を削除しただけでも
+    difflibが別エントリの{ }同士を誤って対応付けてしまい、削除UIで
+    「メモ: ｝｛」のように中身が化けて見える形で表面化していた
+    （ユーザー報告：「勉強ログで削除したとき、編集文章｝｛と表示された」）。
+    _diff_deck_cards()と同じ考え方（idベースの突き合わせ）に直した。
+    ★ 勉強ログは現状「追加」「削除」のみで既存エントリの編集機能が無い
+    ため、_diff_deck_cardsと違って「内容が変わった同キーのエントリ」を
+    比較する分岐は無い（将来編集機能ができたら追加すること）。"""
+    old_logs = old_logs or []
+    new_logs = new_logs or []
+    old_by_key = {_study_log_key(l, i): l for i, l in enumerate(old_logs) if isinstance(l, dict)}
+    new_by_key = {_study_log_key(l, i): l for i, l in enumerate(new_logs) if isinstance(l, dict)}
+
     lines = []
-    for l in (logs or []):
-        lines.extend(_study_log_lines(l))
-    return "\n".join(lines)
+    for key, l in new_by_key.items():
+        if key not in old_by_key:
+            lines.extend(f"+ {ln}" for ln in _study_log_lines(l))
+    for key, l in old_by_key.items():
+        if key not in new_by_key:
+            lines.extend(f"- {ln}" for ln in _study_log_lines(l))
+
+    if not lines:
+        return None
+    if len(lines) > max_lines:
+        lines = lines[:max_lines] + [f"…ほか{len(lines) - max_lines}行"]
+    # ★ study_logs_{guild_id}.json自体は生徒全員で共有する既存ファイルで、
+    #   ここでは常に「中の1エントリの追加/削除」なので、ファイル自体の
+    #   新規作成/削除（"added"/"deleted"）ではなく常に"modified"にする
+    #   （file_diff()のstatus判定はファイル単位の追加/削除を表すためのもの
+    #   で、この関数の"追加/削除"＝エントリ単位の意味とは別物）。
+    return {"file": file, "diff": "\n".join(lines), "status": "modified"}
 
 async def async_load_study_logs(guild_id: int):
     data, _ = await async_local_get(f"study_logs_{guild_id}.json")
@@ -2310,9 +2348,8 @@ def add_study_log():
         l for l in logs
         if (now - datetime.strptime(l["date"], "%Y-%m-%d").date()).days <= 30
     ]
-    old_logs_text = _study_logs_text(logs)  # ★ 運用ログでファイル全体の差分を見せるため、
-                                             #   30日以上前のログを間引いた"後"（＝今回の記録による
-                                             #   変化だけが差分に出るように）に控えておく
+    old_logs = list(logs)  # ★ 運用ログで差分を見せるため、30日以上前のログを間引いた
+                            #   "後"（＝今回の記録による変化だけが差分に出るように）に控えておく
     logs.append(entry)
     try:
         save_study_logs(guild_id, logs)
@@ -2328,7 +2365,7 @@ def add_study_log():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    change = file_diff(f"study_logs_{guild_id}.json", old_logs_text, _study_logs_text(logs))
+    change = _diff_study_logs(f"study_logs_{guild_id}.json", old_logs, logs)
     log_event(
         "study",
         f"学習ログ「{subject}」を記録しました（{entry['minutes']}分・{earned}pt加算）。",
@@ -2364,7 +2401,6 @@ def delete_study_log():
     if not target:
         return jsonify({"ok": False, "error": "log not found"})
 
-    old_logs_text = _study_logs_text(logs)
     new_logs = [l for l in logs if l is not target]
     try:
         save_study_logs(guild_id, new_logs)
@@ -2380,7 +2416,7 @@ def delete_study_log():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    change = file_diff(f"study_logs_{guild_id}.json", old_logs_text, _study_logs_text(new_logs))
+    change = _diff_study_logs(f"study_logs_{guild_id}.json", logs, new_logs)
     log_event(
         "study",
         f"学習ログ「{target.get('subject')}」を削除しました（{target.get('minutes')}分・{earned}pt減算）。",
