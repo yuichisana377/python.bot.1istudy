@@ -3522,6 +3522,333 @@ def notify_dm():
 
 
 # ================================
+#  ★ 削除の作成者確認（カードデッキ／お知らせ）（2026/08/19）
+#  ─────────────────────────────
+#  背景：カードデッキ（words/*.json）・お知らせ（notices/*）は、作成者本人
+#  以外の誰でも削除（お知らせは/delete_notice、デッキは/delete_cards＝
+#  Cardmaker.jsの「非公開に戻す」もこのAPIを叩くため両方含む）できてしまい、
+#  作成者が知らないうちに自分の作ったものが消えることがあった。
+#  ここでは「本人以外は直接削除できないようにし、削除したい場合は理由付きで
+#  作成者にDiscord DMを送って承認/拒否してもらう」フローを実装する。
+#
+#  ・作成者チェック本体は _delete_cards / _delete_notice 側（それぞれ
+#    _deck_owner / _notice_owner を使用）に入れてある。ここにあるのは
+#    「作成者以外からの削除依頼」を仲介する部分だけ。
+#  ・依頼〜承認はDBを持たず、create_session()と同じ「署名付きトークンに
+#    必要な情報を全部載せる」方式（ステートレス）にした。このアプリの
+#    規模でトークン失効リストのような仕組みまで持つのはオーバーエンジニアと
+#    判断したのは、SESSION_SECRETまわりの既存コメントと同じ考え方。
+#    そのため：
+#      - トークンは14日間で自然に失効する。
+#      - 承認/拒否はDMのリンクを開くだけで完了する（本人のDiscordにしか
+#        届かない前提で、あえてログインを要求していない）。
+#      - 同じリンクを2回押す（例：承認後にもう一度承認）といった操作は
+#        「その時点の実ファイルに対してもう一度実行する」だけなので、
+#        既に消えていれば「ファイルが見つかりません」を返して実害はない
+#        （＝厳密な二重実行防止は持たない）。
+#  ・作成者がDiscord未連携（/id連携未実施）の場合は依頼を送れない
+#    （＝安全側に倒して削除をブロックしたままにする。連携すれば解決する）。
+#  ・作成者が記録されていない古いデッキ／お知らせ（この機能の導入前に
+#    公開されたもの）は、従来通り誰でも直接削除できる（_deck_owner /
+#    _notice_owner が (None, None) を返すため）。
+# ================================
+DELETE_APPROVAL_URL = "https://1istudyweb.pages.dev/DeleteApproval.html"
+DELETE_REQUEST_TOKEN_TTL_SEC = 60 * 60 * 24 * 14  # 14日間有効
+
+def create_delete_request_token(payload: dict) -> str:
+    body = dict(payload)
+    body["_t"] = int(time.time())
+    payload_json = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode()).decode()
+    sig = hmac.new(SESSION_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{sig}"
+
+def resolve_delete_request_token(token: str):
+    """有効な署名付きトークンならペイロード(dict)を返す。無効・期限切れ・
+    改ざんなら None。"""
+    if not token or "." not in token:
+        return None
+    try:
+        payload_b64, sig = token.rsplit(".", 1)
+        expected_sig = hmac.new(SESSION_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()).decode())
+        if time.time() - payload.get("_t", 0) > DELETE_REQUEST_TOKEN_TTL_SEC:
+            return None
+        return payload
+    except Exception:
+        return None
+
+def load_pending_delete_requests(guild_id):
+    """Discord未連携のためDMを送れなかった削除依頼の控え（Web確認待ち）。
+    guildごとに1ファイル（discord_links_{guild_id}.json等と同じ考え方）。"""
+    data, sha = local_get(f"pending_delete_requests_{guild_id}.json")
+    return (data or []), sha
+
+def save_pending_delete_requests(guild_id, items, sha=None):
+    if sha is None:
+        _, sha = local_get(f"pending_delete_requests_{guild_id}.json")
+    local_put(f"pending_delete_requests_{guild_id}.json", items, sha)
+
+def _delete_target_summary(category, filename):
+    """「今まさに削除されようとしている中身」を人が読める形にする。
+    (表示名, 詳細行のリスト) を返す。読めない場合は (filename, [])。
+    ★ 承認ページはリンクを開いた時点の最新の中身を都度取得して表示する
+    （依頼を送った時点のスナップショットではない＝実際に消える中身と一致する）。"""
+    if category == "deck":
+        data, _ = get_card_file(filename)
+        if not data:
+            return filename, []
+        name = data.get("name") or filename
+        cards = data.get("cards") or []
+        lines = [
+            f"科目: {data.get('subject') or '（なし）'}",
+            f"問題数: {len(cards)}問",
+            "状態: " + ("未完成（作成中）" if data.get("incomplete") else "完成"),
+        ]
+        preview = [f"・{(c.get('question') or '').strip()[:60]}" for c in cards[:5] if (c.get("question") or "").strip()]
+        if preview:
+            lines.append("--- 内容（先頭" + str(len(preview)) + "問の問題文） ---")
+            lines.extend(preview)
+        return name, lines
+    elif category == "notice":
+        path = _data_path(f"{NOTICES_DIR}/{filename}")
+        content = None
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except OSError:
+                content = None
+        return filename, [content if content is not None else "（内容を読み込めませんでした）"]
+    return filename, []
+
+@app.route("/request_delete", methods=["POST"])
+def request_delete():
+    """
+    作成者本人以外がデッキ／お知らせを削除しようとしたときの入口。
+    実際には削除せず、理由を添えて作成者にDiscord DMで確認を送るだけ。
+    body: { guild_id, session_token, category: "deck"/"notice", filename, reason }
+    """
+    data = request.json or {}
+    guild_id, requester_id, requester_nickname, err = require_login_json(data)
+    if err:
+        return err
+    category = data.get("category")
+    filename = data.get("filename")
+    reason = (data.get("reason") or "").strip()
+    if category not in ("deck", "notice"):
+        return jsonify({"ok": False, "error": "invalid category"})
+    if not filename:
+        return jsonify({"ok": False, "error": "filename は必須です"})
+    if not reason:
+        return jsonify({"ok": False, "error": "理由を入力してください"})
+    if len(reason) > 500:
+        return jsonify({"ok": False, "error": "理由は500文字以内で入力してください"})
+    err = reject_if_bug_chars({"削除理由": reason})
+    if err:
+        return err
+
+    if category == "deck":
+        if "/" in filename or "\\" in filename or ".." in filename:
+            return jsonify({"ok": False, "error": "invalid filename"})
+        owner_id, owner_nickname = _deck_owner(filename)
+    else:
+        if not _is_safe_notice_filename(filename):
+            return jsonify({"ok": False, "error": "invalid filename"})
+        owner_id, owner_nickname = _notice_owner(filename)
+
+    if not owner_id:
+        return jsonify({"ok": False, "error": "作成者が記録されていないため、確認を送れません。"})
+    if str(owner_id) == str(requester_id):
+        return jsonify({"ok": False, "error": "本人はこの手続きを使わず直接削除できます。"})
+
+    target_name, _lines = _delete_target_summary(category, filename)
+
+    token = create_delete_request_token({
+        "guild_id": guild_id,
+        "category": category,
+        "filename": filename,
+        "owner_id": owner_id,
+        "owner_nickname": owner_nickname,
+        "requester_id": requester_id,
+        "requester_nickname": requester_nickname,
+        "reason": reason,
+    })
+    review_url = f"{DELETE_APPROVAL_URL}?token={token}"
+    category_label = "カードデッキ" if category == "deck" else "お知らせ"
+    message = (
+        f"{requester_nickname}さんが、あなたが作成した{category_label}\n"
+        f"「{target_name}」の削除を依頼しています。\n\n"
+        f"理由: {reason}\n\n"
+        f"内容を確認してから、承認／拒否を選んでください。\n"
+        f"{review_url}"
+    )
+    notified_via = "discord_dm"
+    try:
+        send_discord_dm(guild_id, owner_id, "🗑 削除の確認依頼", message)
+    except ValueError:
+        # ★ 作成者がDiscord未連携（/id連携未実施）でDMを送れないケースの
+        #   受け皿。ここで諦めて削除依頼自体を失敗にすると、作成者に確認する
+        #   手段が無いまま永久に削除できなくなってしまう。代わりにサーバー側
+        #   （pending_delete_requests_{guild_id}.json）に依頼を控えておき、
+        #   作成者が次にWebサイトのいずれかのページを開いたとき
+        #   （PendingDeleteCheck.js）に確認モーダルを出す形でフォールバックする。
+        try:
+            items, sha = load_pending_delete_requests(guild_id)
+            items.append({
+                "token": token,
+                "category": category,
+                "target_name": target_name,
+                "owner_id": owner_id,
+                "requester_nickname": requester_nickname,
+                "reason": reason,
+                "created_at": int(time.time()),
+            })
+            save_pending_delete_requests(guild_id, items, sha)
+        except DataWriteError as e:
+            return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
+        notified_via = "web_pending"
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"dm_failed: {e}"})
+
+    log_event(
+        "card" if category == "deck" else "notice",
+        f"「{target_name}」の削除を{requester_nickname}さんが{owner_nickname or '作成者'}さんに依頼しました（承認待ち）。",
+        actor=requester_nickname,
+        detail=[{"file": None, "diff": f"理由: {reason}"}],
+    )
+    return jsonify({"ok": True, "owner_nickname": owner_nickname, "notified_via": notified_via})
+
+@app.route("/pending_delete_requests", methods=["GET"])
+def pending_delete_requests():
+    """ログイン中の本人宛の、Web確認待ちの削除依頼一覧を返す
+    （/request_deleteがDiscord未連携でDMを送れなかったケースの受け皿）。
+    PendingDeleteCheck.jsがサイトを開くたびに呼び、あれば確認モーダルを出す。"""
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    try:
+        guild_id = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid guild_id"})
+    student_id = resolve_session(request.args.get("session_token"), guild_id)
+    if not student_id:
+        return jsonify({"ok": False, "error": "not_logged_in"})
+
+    items, _ = load_pending_delete_requests(guild_id)
+    now = time.time()
+    mine = [
+        it for it in items
+        if str(it.get("owner_id")) == str(student_id)
+        and now - it.get("created_at", 0) <= DELETE_REQUEST_TOKEN_TTL_SEC  # ★ トークンと同じ期限で表示から外す
+    ]
+    return jsonify({"ok": True, "requests": [
+        {
+            "token": it.get("token"),
+            "category": it.get("category"),
+            "target_name": it.get("target_name"),
+            "requester_nickname": it.get("requester_nickname"),
+            "reason": it.get("reason"),
+        }
+        for it in mine
+    ]})
+
+@app.route("/delete_request_info", methods=["GET"])
+def delete_request_info():
+    """削除承認ページ（DeleteApproval.html）が、リンクのtokenから
+    「何を消そうとしているか」を表示するための情報を取得する。
+    トークンさえ分かれば閲覧できる（DMで本人にだけ届く前提）ため、
+    ログイン不要にしてある。"""
+    token = request.args.get("token", "")
+    payload = resolve_delete_request_token(token)
+    if not payload:
+        return jsonify({"ok": False, "error": "リンクが無効か、期限切れです。"})
+    category = payload.get("category")
+    filename = payload.get("filename")
+    target_name, detail_lines = _delete_target_summary(category, filename)
+    exists = (
+        os.path.isfile(_data_path(f"{CARDS_DIR}/{filename}")) if category == "deck"
+        else os.path.isfile(_data_path(f"{NOTICES_DIR}/{filename}"))
+    )
+    return jsonify({
+        "ok": True,
+        "category": category,
+        "target_name": target_name,
+        "detail_lines": detail_lines,
+        "requester_nickname": payload.get("requester_nickname"),
+        "owner_nickname": payload.get("owner_nickname"),
+        "reason": payload.get("reason"),
+        "requested_at": payload.get("_t"),
+        "already_gone": not exists,  # 既に削除済み・取り下げ済みなど
+    })
+
+@app.route("/respond_delete_request", methods=["POST"])
+def respond_delete_request():
+    """削除承認ページからの承諾／拒否。ログイン不要（DMで本人にだけ届いた
+    tokenの所持自体を本人確認の代わりにしている）。
+    body: { token, action: "approve"/"reject" }"""
+    data = request.json or {}
+    payload = resolve_delete_request_token(data.get("token", ""))
+    if not payload:
+        return jsonify({"ok": False, "error": "リンクが無効か、期限切れです。"})
+    action = data.get("action")
+    if action not in ("approve", "reject"):
+        return jsonify({"ok": False, "error": "invalid action"})
+
+    category = payload.get("category")
+    filename = payload.get("filename")
+    owner_nickname = payload.get("owner_nickname") or "作成者"
+    requester_id = payload.get("requester_id")
+    requester_nickname = payload.get("requester_nickname") or "依頼者"
+    guild_id = payload.get("guild_id")
+    target_name, _lines = _delete_target_summary(category, filename)
+
+    if action == "reject":
+        log_event(
+            "card" if category == "deck" else "notice",
+            f"「{target_name}」の削除依頼を{owner_nickname}さんが却下しました。",
+            actor=owner_nickname,
+        )
+        result = jsonify({"ok": True, "action": "reject"})
+    else:
+        note = f"（{requester_nickname}さんの削除依頼を{owner_nickname}さんが承認）"
+        if category == "deck":
+            result = _delete_card_deck_file(filename, owner_nickname, approval_note=note)
+        else:
+            result = _delete_notice_file(filename, owner_nickname, approval_note=note)
+
+    # ★ pending_delete_requests（Discord未連携でWeb確認待ちになっていた控え）に
+    #   このtokenのエントリが残っていれば取り除く。承認・拒否どちらの経路で
+    #   応答されても、次にサイトを開いたときにもう出てこないようにするため
+    #   （DM経由で応答された場合も、Web確認待ちに二重登録されていることは
+    #   無いはずだが、念のため同じ処理でまとめて掃除する）。
+    if guild_id:
+        try:
+            items, sha = load_pending_delete_requests(guild_id)
+            new_items = [it for it in items if it.get("token") != data.get("token")]
+            if len(new_items) != len(items):
+                save_pending_delete_requests(guild_id, new_items, sha)
+        except Exception:
+            pass
+
+    # ★ 依頼した本人にも結果を伝える（ベストエフォート：Discord未連携／
+    #   送信失敗でも承認・拒否そのものは成立させたいので例外は握りつぶす）。
+    if guild_id and requester_id:
+        try:
+            outcome = "承認され、削除されました" if action == "approve" else "却下されました"
+            send_discord_dm(
+                int(guild_id), requester_id, "🗑 削除依頼の結果",
+                f"「{target_name}」の削除依頼は{owner_nickname}さんに{outcome}。",
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+# ================================
 #  ★ アカウント設定（ニックネーム変更・パスワード変更）
 #  ─────────────────────────────
 #  ・ニックネーム変更はログイン済み（session_token）であれば即座に可能。
@@ -4323,6 +4650,7 @@ def save_cards():
         filename = generate_card_filename()
 
     sha = None
+    existing_published_by = None
     if is_update:
         existing_data, sha = get_card_file(filename)
         # ★「クイズ過去問」フォルダの中身は、その外へ移動できない
@@ -4333,6 +4661,18 @@ def save_cards():
             folders_for_check, _ = load_card_folders()
             if _is_in_archive_scope(folders_for_check, old_folder_id) and not _is_in_archive_scope(folders_for_check, folder_id):
                 return jsonify({"ok": False, "error": "クイズ過去問フォルダの外には移動できません"})
+            existing_published_by = existing_data.get("published_by")
+
+    # ★ 追加：published_by.id は「デッキの作成者」を表す唯一の場所（削除の
+    #   作成者確認機能で使う）。nicknameは元からクライアント側（deck.published_by
+    #   キャッシュ）が「元の公開者のまま維持する」よう送ってきているが、idは
+    #   syncDeckToServerが毎回“今ログインしている編集者自身”のstudent_idを
+    #   送ってきてしまっており、他人のデッキを1回編集しただけで作成者IDが
+    #   編集者にすり替わってしまっていた。既に published_by.id が記録されている
+    #   更新（＝作成中の初回公開より後）では、クライアントの値を無視して
+    #   元のidを維持する。初回公開時（記録がまだ無い場合）だけクライアントの
+    #   publisher_idをそのまま採用する。
+    final_publisher_id = (existing_published_by or {}).get("id") or publisher_id
 
     card_payload = {
         "name": name,
@@ -4340,7 +4680,7 @@ def save_cards():
         "subject": subject,
         "folder_id": folder_id,
         "published_by": {
-            "id": publisher_id,
+            "id": final_publisher_id,
             "nickname": publisher_nickname,
         },
         "incomplete": incomplete,  # ★ 未完成フラグを保存（他人の端末にも同じ表示をするため）
@@ -4416,19 +4756,21 @@ def save_cards():
     )
     return jsonify({"ok": True, "filename": filename, "is_update": is_update})
 
-@app.route("/delete_cards", methods=["POST"])
-def delete_cards():
-    data     = request.json
-    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
-    if err:
-        return err
-    filename = data.get("filename")
-    if not filename:
-        return jsonify({"ok": False, "error": "filename は必須です"})
-    # ★ パストラバーサル対策：filename はクライアントからの入力なので、
-    #   "/" や ".." を含む値でCARDS_DIR外のファイルを操作されないようにする。
-    if "/" in filename or "\\" in filename or ".." in filename:
-        return jsonify({"ok": False, "error": "invalid filename"})
+def _deck_owner(filename):
+    """デッキの作成者 (owner_id, owner_nickname) を返す。
+    読めない／記録が無い（作成者確認機能より前に公開された古いデッキ等）
+    場合は (None, None)。owner_id が None のときは「作成者不明」として
+    従来通り誰でも削除できる扱いにする（過去のデッキを誰も削除できなくなる
+    事態を避けるため）。"""
+    data, _ = get_card_file(filename)
+    if not data:
+        return None, None
+    pub = data.get("published_by") or {}
+    return pub.get("id"), pub.get("nickname")
+
+def _delete_card_deck_file(filename, actor_nickname, approval_note=None):
+    """デッキファイル削除の実処理（本人による直接削除・削除依頼の承認の
+    どちらからも呼ばれる共通処理）。作成者チェックは呼び出し側の責務。"""
     path = _data_path(f"{CARDS_DIR}/{filename}")
     if not os.path.isfile(path):
         return jsonify({"ok": False, "error": "ファイルが見つかりません"})
@@ -4454,13 +4796,36 @@ def delete_cards():
 
     change = deck_file_diff(f"{CARDS_DIR}/{filename}", deleted_data, None)
     detail = [c for c in (change, index_change) if c]
-    log_event(
-        "card",
-        f"カードデッキ「{deleted_name}」を削除しました。" if deleted_name else "カードデッキを削除しました。",
-        actor=nickname,
-        detail=detail if detail else None,
-    )
+    summary = f"カードデッキ「{deleted_name}」を削除しました。" if deleted_name else "カードデッキを削除しました。"
+    if approval_note:
+        summary += approval_note
+    log_event("card", summary, actor=actor_nickname, detail=detail if detail else None)
     return jsonify({"ok": True})
+
+@app.route("/delete_cards", methods=["POST"])
+def delete_cards():
+    data     = request.json
+    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
+    filename = data.get("filename")
+    if not filename:
+        return jsonify({"ok": False, "error": "filename は必須です"})
+    # ★ パストラバーサル対策：filename はクライアントからの入力なので、
+    #   "/" や ".." を含む値でCARDS_DIR外のファイルを操作されないようにする。
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return jsonify({"ok": False, "error": "invalid filename"})
+    # ★ 追加：作成者本人以外は直接削除できない（非公開に戻す＝menuUnpublish()も
+    #   このAPIを叩くため、ここを守るだけで「削除」「非公開に戻す」両方に効く）。
+    #   作成者以外が削除したい場合は /request_delete で本人にDiscord確認を送る。
+    owner_id, owner_nickname = _deck_owner(filename)
+    if owner_id and str(owner_id) != str(_student_id):
+        return jsonify({
+            "ok": False,
+            "error": "creator_approval_required",
+            "owner_nickname": owner_nickname or "作成者",
+        })
+    return _delete_card_deck_file(filename, nickname)
 
 # ================================
 #  ★ Flask API — みんなでクイズ（オンライン早押し4択）
@@ -5668,6 +6033,12 @@ def upload_notice():
         old_meta_entry = meta.get(filename)
         meta[filename] = {
             "uploader": uploader,
+            # ★ 追加：削除の作成者確認機能で使うため、投稿者の学籍番号（student_id）も
+            #   保存しておく。uploaderは表示名（ニックネーム）で改名され得るため、
+            #   本人特定にはこちらを使う。運用ログの表示（_notice_meta_entry_lines）
+            #   には出さない（Discord ID等と同じ扱いで、ニックネーム以上に個人を
+            #   特定できる情報を公開の場に出さない方針のため）。
+            "uploader_id": _student_id,
             "uploaded_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
         }
         save_notices_meta(meta, meta_sha)
@@ -5707,17 +6078,17 @@ def upload_notice():
     return jsonify({"ok": True, "filename": filename, "is_update": is_update, "uploader": uploader})
 
 
-@app.route("/delete_notice", methods=["POST"])
-def delete_notice():
-    """お知らせファイルを削除する（メタ情報も合わせて削除）"""
-    data = request.json or {}
-    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
-    if err:
-        return err
-    filename = data.get("filename", "")
-    if not _is_safe_notice_filename(filename):
-        return jsonify({"ok": False, "error": "invalid filename"})
+def _notice_owner(filename):
+    """お知らせの投稿者 (uploader_id, uploader_nickname) を返す。
+    記録が無い（作成者確認機能より前に投稿された古いお知らせ等）場合は
+    (None, None)＝作成者不明として従来通り誰でも削除できる扱いにする。"""
+    meta, _ = load_notices_meta()
+    entry = meta.get(filename) or {}
+    return entry.get("uploader_id"), entry.get("uploader")
 
+def _delete_notice_file(filename, actor_nickname, approval_note=None):
+    """お知らせファイル削除の実処理（本人による直接削除・削除依頼の承認の
+    どちらからも呼ばれる共通処理）。作成者チェックは呼び出し側の責務。"""
     path = _data_path(f"{NOTICES_DIR}/{filename}")
     if not os.path.isfile(path):
         return jsonify({"ok": False, "error": "ファイルが見つかりません"})
@@ -5749,13 +6120,32 @@ def delete_notice():
 
     change = file_diff(f"{NOTICES_DIR}/{filename}", deleted_content, None)
     detail = [c for c in (change, meta_change) if c]
-    log_event(
-        "notice",
-        f"お知らせ「{filename}」を削除しました。",
-        actor=nickname,
-        detail=detail if detail else None,
-    )
+    summary = f"お知らせ「{filename}」を削除しました。"
+    if approval_note:
+        summary += approval_note
+    log_event("notice", summary, actor=actor_nickname, detail=detail if detail else None)
     return jsonify({"ok": True})
+
+@app.route("/delete_notice", methods=["POST"])
+def delete_notice():
+    """お知らせファイルを削除する（メタ情報も合わせて削除）"""
+    data = request.json or {}
+    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
+    filename = data.get("filename", "")
+    if not _is_safe_notice_filename(filename):
+        return jsonify({"ok": False, "error": "invalid filename"})
+    # ★ 追加：投稿者本人以外は直接削除できない。それ以外の人が削除したい
+    #   場合は /request_delete で本人にDiscord確認を送る。
+    owner_id, owner_nickname = _notice_owner(filename)
+    if owner_id and str(owner_id) != str(_student_id):
+        return jsonify({
+            "ok": False,
+            "error": "creator_approval_required",
+            "owner_nickname": owner_nickname or "投稿者",
+        })
+    return _delete_notice_file(filename, nickname)
 
 
 # ================================
