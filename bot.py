@@ -1013,6 +1013,12 @@ def save_users(guild_id: int, users: list):
     _, sha = local_get(f"users_{guild_id}.json")
     local_put(f"users_{guild_id}.json", users, sha)
 
+def _users_text(users):
+    """運用ログ用：users_{guild_id}.json を1行1ユーザーのテキストにする。
+    ★ password_hash/password_saltは絶対に含めない（他の項目とは違い、
+    これは公開してよい情報ではないため）。"""
+    return "\n".join(f"{u.get('id')} / {u.get('nickname')}" for u in (users or []))
+
 def find_user(guild_id: int, student_id: str):
     users = load_users(guild_id)
     return next((u for u in users if u.get("id") == student_id), None)
@@ -2931,6 +2937,7 @@ def add_user():
         users = load_users(guild_id)
         if any(u["id"] == user_id for u in users):
             return jsonify({"ok": False, "error": "already_exists"})
+        old_users_text = _users_text(users)  # ★ 追加前に控えておく（password関連は含まない）
         # ★ パスワードは平文で保存せず、ソルト付きハッシュのみ保存する
         #   （users_{guild_id}.json はサーバーのローカルディスクに保存されるが、
         #     万一ファイルが閲覧されても影響を抑えるため）
@@ -2943,7 +2950,8 @@ def add_user():
             "password_salt": pw_salt,
         })
         save_users(guild_id, users)
-        log_event("user", "新しいユーザーが登録されました。", actor=nickname)
+        change = file_diff(f"users_{guild_id}.json", old_users_text, _users_text(users))
+        log_event("user", "新しいユーザーが登録されました。", actor=nickname, detail=[change] if change else None)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -5317,6 +5325,15 @@ def save_notices_meta(meta, sha=None):
     local_put(NOTICES_META_FILE, meta, sha)
     notify_change()  # ★ お知らせもguildをまたいで共有されるため全体に通知
 
+def _notices_meta_text(meta):
+    """運用ログ用：notices_meta.json（投稿者・実行済みフラグ等）を
+    1行1ファイルのテキストにする。"""
+    lines = []
+    for filename, entry in (meta or {}).items():
+        status = "実行済み" if entry.get("done") else "未実行"
+        lines.append(f"{filename}: {entry.get('uploader')}（{entry.get('uploaded_at')}） [{status}]")
+    return "\n".join(lines)
+
 
 @app.route("/list_notices", methods=["GET"])
 def list_notices():
@@ -5528,12 +5545,19 @@ def set_notice_done():
         last_err = None
         for _ in range(4):
             meta, sha = load_notices_meta()
+            old_meta_text = _notices_meta_text(meta)  # ★ 上書き前に控えておく
             entry = meta.get(filename, {})
             entry["done"] = done
             meta[filename] = entry
             try:
                 save_notices_meta(meta, sha)
-                log_event("notice", f"お知らせ「{filename}」を{'実行済み' if done else '未実行'}にしました。", actor=nickname)
+                change = file_diff(NOTICES_META_FILE, old_meta_text, _notices_meta_text(meta))
+                log_event(
+                    "notice",
+                    f"お知らせ「{filename}」を{'実行済み' if done else '未実行'}にしました。",
+                    actor=nickname,
+                    detail=[change] if change else None,
+                )
                 return jsonify({"ok": True})
             except DataWriteError as e:
                 last_err = e
