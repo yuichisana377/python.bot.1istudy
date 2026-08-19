@@ -355,6 +355,10 @@ async def async_local_put(filename, content_obj, sha=None):
 #    だけを載せてよい、という基準）。この基準により課題の達成/取り消し
 #    （StudyLog.js上「自分のみ」表示）は log_event を呼ばない。学習ログは
 #    「みんなの記録」で全員に見えているためこの基準に反せず対象のまま。
+#    累計ポイント（points_{guild_id}.json）も同じ基準で対象外（2026/08/19、
+#    ユーザーの指摘で追加。ヘッダーバッジで見えるのは自分の累計だけで、
+#    週間ランキングはstudy_logsから毎回再計算した別の値のため、
+#    points_{guild_id}.json自体の中身は本人にしか見えない）。
 # ================================
 SYSTEM_LOG_FILE = "system_log.json"
 SYSTEM_LOG_MAX_ENTRIES = 300
@@ -5521,21 +5525,42 @@ def save_notices_meta(meta, sha=None):
     local_put(NOTICES_META_FILE, meta, sha)
     notify_change()  # ★ お知らせもguildをまたいで共有されるため全体に通知
 
+def _notice_meta_entry_lines(filename, entry):
+    """notices_meta.json内の1エントリを { ... } のブロックにする。
+    ★ お知らせのfilenameはNotice.js上でそのままタイトルとして全員に
+    表示されている情報なので、他のカテゴリの内部ファイル名とは違い、
+    フィールドとして表示してよい。"""
+    if not entry:
+        return []
+    fields = [
+        ("お知らせ", filename),
+        ("投稿者", entry.get('uploader')),
+        ("投稿日時", entry.get('uploaded_at')),
+        ("状態", "実行済み" if entry.get("done") else "未実行"),
+    ]
+    return _json_block(fields)
+
 def _notices_meta_text(meta):
     """運用ログ用：notices_meta.json（投稿者・実行済みフラグ等）を
-    { ... } のブロックの並びにする。★ お知らせのfilenameはNotice.js上で
-    そのままタイトルとして全員に表示されている情報なので、他のカテゴリの
-    内部ファイル名とは違い、フィールドとして表示してよい。"""
+    { ... } のブロックの並びにする。"""
     lines = []
     for filename, entry in (meta or {}).items():
-        fields = [
-            ("お知らせ", filename),
-            ("投稿者", entry.get('uploader')),
-            ("投稿日時", entry.get('uploaded_at')),
-            ("状態", "実行済み" if entry.get("done") else "未実行"),
-        ]
-        lines.extend(_json_block(fields))
+        lines.extend(_notice_meta_entry_lines(filename, entry))
     return "\n".join(lines)
+
+def _notice_meta_entry_diff(filename, old_entry, new_entry):
+    """notices_meta.json内の1エントリの変更を、log_event の detail に
+    渡す {"file","diff","status"} の形にする（無ければNone）。
+    ★ 追加（2026/08/19）：upload_notice/delete_noticeは、お知らせ本体の
+    ファイルだけでなくnotices_meta.json（投稿者・投稿日時）も実際に
+    書き換えているのに、これまで運用ログに出ていなかったため対応。"""
+    old_text = "\n".join(_notice_meta_entry_lines(filename, old_entry))
+    new_text = "\n".join(_notice_meta_entry_lines(filename, new_entry))
+    diff = _text_diff_lines(old_text, new_text)
+    if not diff:
+        return None
+    status = "added" if old_entry is None else ("deleted" if new_entry is None else "modified")
+    return {"file": NOTICES_META_FILE, "diff": diff, "status": status}
 
 
 @app.route("/list_notices", methods=["GET"])
@@ -5637,13 +5662,16 @@ def upload_notice():
         })
 
     # --- 投稿者メタ情報を notices_meta.json に保存 ---
+    meta_change = None
     try:
         meta, meta_sha = load_notices_meta()
+        old_meta_entry = meta.get(filename)
         meta[filename] = {
             "uploader": uploader,
             "uploaded_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
         }
         save_notices_meta(meta, meta_sha)
+        meta_change = _notice_meta_entry_diff(filename, old_meta_entry, meta[filename])
     except DataWriteError as e:
         # 本体の保存自体は成功しているので、メタ情報の失敗は警告に留める
         print(f"[WARN] notices_meta の更新に失敗しました: {e}")
@@ -5669,11 +5697,12 @@ def upload_notice():
             print(f"[WARN] upload_notice notify failed: {e}")
 
     change = file_diff(f"{NOTICES_DIR}/{filename}", old_content, content)
+    detail = [c for c in (change, meta_change) if c]
     log_event(
         "notice",
         f"お知らせ「{filename}」を{'更新' if is_update else '追加'}しました。",
         actor=uploader,
-        detail=[change] if change else None,
+        detail=detail if detail else None,
     )
     return jsonify({"ok": True, "filename": filename, "is_update": is_update, "uploader": uploader})
 
@@ -5707,20 +5736,24 @@ def delete_notice():
         })
 
     # メタ情報からも削除
+    meta_change = None
     try:
         meta, meta_sha = load_notices_meta()
         if filename in meta:
+            old_meta_entry = meta[filename]
             del meta[filename]
             save_notices_meta(meta, meta_sha)
+            meta_change = _notice_meta_entry_diff(filename, old_meta_entry, None)
     except DataWriteError as e:
         print(f"[WARN] notices_meta からの削除に失敗しました: {e}")
 
     change = file_diff(f"{NOTICES_DIR}/{filename}", deleted_content, None)
+    detail = [c for c in (change, meta_change) if c]
     log_event(
         "notice",
         f"お知らせ「{filename}」を削除しました。",
         actor=nickname,
-        detail=[change] if change else None,
+        detail=detail if detail else None,
     )
     return jsonify({"ok": True})
 
