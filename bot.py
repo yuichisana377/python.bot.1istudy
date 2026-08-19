@@ -3924,25 +3924,83 @@ def _clip_text(s, max_len=150):
     s = (s or "").strip().replace("\n", " ")
     return s if len(s) <= max_len else s[:max_len] + "…"
 
+def _image_count_text(imgs):
+    n = len(imgs) if isinstance(imgs, list) else 0
+    return f"{n}枚" if n else "(なし)"
+
 def _card_lines(i, c):
-    """カード1件分を、内容の抜け漏れが無いよう複数行にして返す（問題・解答
-    だけでなく解説・選択肢・正解も含める。★ 2026/08/19、問題/解答だけの
-    1行にまとめていたときは解説や選択式デッキの選択肢を変更しても
-    diffに出ない抜けがあったため、フィールドごとに行を分けるよう修正）。
-    画像（imgs_q/imgs_a/imgs_e）はBase64等の大きなデータでログ表示に
-    向かないため対象外のまま。"""
-    lines = [f"カード{i}: 問題={_clip_text(c.get('question')) or '(なし)'} / 解答={_clip_text(c.get('answer')) or '(なし)'}"]
-    if c.get("explanation"):
-        lines.append(f"  カード{i} 解説: {_clip_text(c.get('explanation'))}")
+    """カード1件分を、フィールドごとの複数行にして返す。★ 2026/08/19、
+    ユーザーから実際のカードJSON（id/question/answer/explanation/imgs_q等）
+    を示され、「idは要らない・英語のフィールド名（question等）は日本語
+    （問題等）に・imgs_qは『問題の画像』のように書き換えて」と指定された
+    ため、idを内部の突き合わせ用キーとしてのみ使い（表示しない）、
+    それ以外のフィールドを日本語ラベルで1行ずつ並べる形にした。
+    画像本体（base64等）はログに出すには大きすぎるため、実データではなく
+    枚数だけを表示する。"""
+    prefix = f"カード{i}"
+    lines = [
+        f"{prefix} 問題: {_clip_text(c.get('question')) or '(空)'}",
+        f"{prefix} 解答: {_clip_text(c.get('answer')) or '(空)'}",
+        f"{prefix} 解説: {_clip_text(c.get('explanation')) or '(空)'}",
+        f"{prefix} 問題の画像: {_image_count_text(c.get('imgs_q'))}",
+        f"{prefix} 解答の画像: {_image_count_text(c.get('imgs_a'))}",
+        f"{prefix} 解説の画像: {_image_count_text(c.get('imgs_e'))}",
+    ]
     choices = c.get("choices")
     if choices:
         letters = ["A", "B", "C", "D", "E"]
         labeled = [f"{letters[idx]}. {choices[idx]}" if idx < len(letters) else str(choices[idx]) for idx in range(len(choices))]
-        lines.append(f"  カード{i} 選択肢: {' / '.join(labeled)}")
+        lines.append(f"{prefix} 選択肢: {' / '.join(labeled)}")
         correct = c.get("correct_indices") or []
         correct_labels = [letters[idx] for idx in correct if idx < len(letters)]
-        lines.append(f"  カード{i} 正解: {', '.join(correct_labels) if correct_labels else '(未設定)'}")
+        lines.append(f"{prefix} 正解: {', '.join(correct_labels) if correct_labels else '(未設定)'}")
     return lines
+
+def _card_key(c, idx):
+    """カードの突き合わせ用キー。idがあればそれを使う（Cardmaker.js側で
+    発行される安定id）。無い場合は位置をキーにする（それでも一致すれば
+    「変化なし」として扱われるので実害は小さい）。"""
+    if isinstance(c, dict) and c.get("id"):
+        return c["id"]
+    return f"__pos_{idx}"
+
+def _diff_deck_cards(old_cards, new_cards, max_lines=40):
+    """カード配列の差分を、idで突き合わせてから作る。★ 2026/08/19、
+    カード全体を1本のテキストにしてから行差分を取る方式だと、デッキの
+    途中に1問挿入しただけで、それより後ろの無関係なカードまで「番号が
+    ずれた」せいで変更されたように見えてしまう不具合があったため、
+    diff_cards()（idベースの突き合わせ）の考え方に戻しつつ、
+    _card_lines()によるフィールドごとの表示は維持した。"""
+    old_cards = old_cards or []
+    new_cards = new_cards or []
+    old_by_key = {_card_key(c, i): c for i, c in enumerate(old_cards) if isinstance(c, dict)}
+    new_by_key = {_card_key(c, i): c for i, c in enumerate(new_cards) if isinstance(c, dict)}
+
+    lines = []
+    for i, (key, c) in enumerate(new_by_key.items(), 1):
+        if key not in old_by_key:
+            lines.extend(f"+ {l}" for l in _card_lines(i, c))
+    for i, (key, c) in enumerate(old_by_key.items(), 1):
+        if key not in new_by_key:
+            lines.extend(f"- {l}" for l in _card_lines(i, c))
+    for i, (key, c) in enumerate(new_by_key.items(), 1):
+        old_c = old_by_key.get(key)
+        if old_c is None:
+            continue
+        # ★ 変わっていないカードは番号だけがずれても比較に出さないよう、
+        #   新旧どちらも同じ表示番号(i)でラベルして比較する（内容差だけを検知）。
+        old_text = "\n".join(_card_lines(i, old_c))
+        new_text = "\n".join(_card_lines(i, c))
+        if old_text != new_text:
+            per_card_diff = _text_diff_lines(old_text, new_text, max_lines=12)
+            if per_card_diff:
+                lines.extend(per_card_diff.split("\n"))
+
+    if not lines:
+        return None
+    if len(lines) > max_lines:
+        lines = lines[:max_lines] + [f"…ほか{len(lines) - max_lines}行"]
+    return "\n".join(lines)
 
 def _card_folder_name_map():
     """folder_id → フォルダ名 の対応表（ログ表示で内部IDを出さないため）。"""
@@ -3952,10 +4010,10 @@ def _card_folder_name_map():
     except Exception:
         return {}
 
-def _deck_text(data, folder_names=None):
-    """カードデッキ（1ファイル分）の中身を、人が読める行テキストに変換する。
-    デッキ名・科目・状態・形式・フォルダ・各カードを1行ずつに並べ、
-    difflib で前後を比較すると「変わった行だけ」が浮かび上がる。"""
+def _deck_meta_text(data, folder_names=None):
+    """カードデッキのメタ情報（カードそのものは含まない）を、人が読める
+    行テキストに変換する。デッキ名・科目・状態・形式・フォルダを1行ずつ
+    並べ、difflib で前後を比較すると「変わった行だけ」が浮かび上がる。"""
     if not data:
         return ""
     folder_names = folder_names or {}
@@ -3966,11 +4024,27 @@ def _deck_text(data, folder_names=None):
     lines.append(f"形式: {'選択式デッキ' if data.get('choice_mode') else '暗記カード（通常デッキ）'}")
     folder_id = data.get('folder_id')
     lines.append(f"フォルダ: {folder_names.get(folder_id, folder_id) if folder_id else '(フォルダなし)'}")
-    cards = data.get('cards') or []
-    for i, c in enumerate(cards, 1):
-        if isinstance(c, dict):
-            lines.extend(_card_lines(i, c))
     return "\n".join(lines)
+
+def deck_file_diff(file, old_data, new_data, folder_names=None):
+    """カードデッキ1ファイル分の運用ログ差分エントリを作る（file_diff()と
+    同じ {"file","diff","status"} の形）。メタ情報は単純な行差分、カードは
+    idベースの突き合わせ（_diff_deck_cards）と使い分けている点が
+    file_diff()とは異なる（デッキの途中への挿入・並び替えで無関係な
+    カードまでdiffに出ないようにするため）。"""
+    folder_names = folder_names if folder_names is not None else _card_folder_name_map()
+    meta_diff = _text_diff_lines(_deck_meta_text(old_data, folder_names), _deck_meta_text(new_data, folder_names))
+    cards_diff = _diff_deck_cards((old_data or {}).get("cards"), (new_data or {}).get("cards"))
+    parts = [p for p in (meta_diff, cards_diff) if p]
+    if not parts:
+        return None
+    if not old_data:
+        status = "added"
+    elif not new_data:
+        status = "deleted"
+    else:
+        status = "modified"
+    return {"file": file, "diff": "\n".join(parts), "status": status}
 
 def _text_diff_lines(old_text, new_text, max_lines=60):
     """2つのテキストを行単位で比較し、GitHubのコミット差分のような
@@ -4237,12 +4311,7 @@ def save_cards():
 
     is_actual_update = is_update and not bool(first_publish)
     old_deck_for_diff = existing_data if (is_update and existing_data) else None
-    folder_names = _card_folder_name_map()
-    change = file_diff(
-        f"{CARDS_DIR}/{filename}",
-        _deck_text(old_deck_for_diff, folder_names),
-        _deck_text(card_payload, folder_names),
-    )
+    change = deck_file_diff(f"{CARDS_DIR}/{filename}", old_deck_for_diff, card_payload)
     log_event(
         "card",
         f"カードデッキ「{name}」を{'更新' if is_actual_update else '公開'}しました（{len(cards)}問）。",
@@ -4286,7 +4355,7 @@ def delete_cards():
     # ★ 並び順（list_order.json）からも、このデッキのキーを取り除いておく
     cleanup_list_order(remove_keys={f"deck:{filename}"})
 
-    change = file_diff(f"{CARDS_DIR}/{filename}", _deck_text(deleted_data, _card_folder_name_map()), "")
+    change = deck_file_diff(f"{CARDS_DIR}/{filename}", deleted_data, None)
     log_event(
         "card",
         f"カードデッキ「{deleted_name}」を削除しました。" if deleted_name else "カードデッキを削除しました。",
@@ -4727,7 +4796,7 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
         }
         put_card_file(filename, card_payload)
         upsert_cards_index_entry(filename, card_payload)
-        change = file_diff(f"{CARDS_DIR}/{filename}", "", _deck_text(card_payload, _card_folder_name_map()))
+        change = deck_file_diff(f"{CARDS_DIR}/{filename}", None, card_payload)
         log_event(
             "card",
             f"みんなでクイズの結果を「{title}」として「クイズ過去問」に保存しました（{len(cards)}問）。",
