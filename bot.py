@@ -3781,13 +3781,19 @@ def request_delete():
     notified_via = "discord_dm"
     try:
         send_discord_dm(guild_id, owner_id, "🗑 削除の確認依頼", message)
-    except ValueError:
-        # ★ 作成者がDiscord未連携（/id連携未実施）でDMを送れないケースの
-        #   受け皿。ここで諦めて削除依頼自体を失敗にすると、作成者に確認する
-        #   手段が無いまま永久に削除できなくなってしまう。代わりにサーバー側
-        #   （pending_delete_requests_{guild_id}.json）に依頼を控えておき、
-        #   作成者が次にWebサイトのいずれかのページを開いたとき
-        #   （PendingDeleteCheck.js）に確認モーダルを出す形でフォールバックする。
+    except Exception as e:
+        # ★ DMを送れないケース（作成者がDiscord未連携＝ValueError("not_linked")
+        #   だけでなく、DM拒否設定・Discord側の一時的な通信エラー等、
+        #   send_discord_dm が投げうるその他の例外も含めて全て同じ扱いにする。
+        #   ここで諦めて削除依頼自体を失敗にすると、作成者に確認する手段が
+        #   無いまま（DMも届かず、依頼も残らない）永久に削除できなくなって
+        #   しまう。★以前はValueErrorだけこのフォールバックに乗せ、それ以外の
+        #   例外はdm_failedとして依頼自体を失敗させていたが、「DMは失敗した
+        #   のに通知が一切残らない」事故につながるため、常にフォールバックする
+        #   方針に変更した（2026/08/19）。
+        #   代わりにサーバー側（pending_delete_requests_{guild_id}.json）に
+        #   依頼を控えておき、作成者が次にWebサイトのいずれかのページを
+        #   開いたとき（PendingDeleteCheck.js）に確認モーダルを出す。
         try:
             items, sha = load_pending_delete_requests(guild_id)
             items.append({
@@ -3800,11 +3806,9 @@ def request_delete():
                 "created_at": int(time.time()),
             })
             save_pending_delete_requests(guild_id, items, sha)
-        except DataWriteError as e:
-            return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
+        except DataWriteError as write_err:
+            return jsonify({"ok": False, "error": f"local_write_failed: {write_err}"})
         notified_via = "web_pending"
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"dm_failed: {e}"})
 
     log_event(
         "card" if category == "deck" else "notice",
