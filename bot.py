@@ -608,6 +608,16 @@ def save_study_logs(guild_id: int, logs: list):
     local_put(f"study_logs_{guild_id}.json", logs, sha)
     notify_change(guild_id)
 
+def _study_log_line(l):
+    """運用ログ用：勉強ログ1件を1行のテキストにする。"""
+    line = f"{l.get('time')} {l.get('nickname')}: {l.get('subject')} {l.get('minutes')}分"
+    if l.get("memo"):
+        line += f"（メモ: {l['memo']}）"
+    return line
+
+def _study_logs_text(logs):
+    return "\n".join(_study_log_line(l) for l in (logs or []))
+
 async def async_load_study_logs(guild_id: int):
     data, _ = await async_local_get(f"study_logs_{guild_id}.json")
     return data or []
@@ -2244,7 +2254,9 @@ def add_study_log():
         l for l in logs
         if (now - datetime.strptime(l["date"], "%Y-%m-%d").date()).days <= 30
     ]
-
+    old_logs_text = _study_logs_text(logs)  # ★ 運用ログでファイル全体の差分を見せるため、
+                                             #   30日以上前のログを間引いた"後"（＝今回の記録による
+                                             #   変化だけが差分に出るように）に控えておく
     logs.append(entry)
     try:
         save_study_logs(guild_id, logs)
@@ -2260,13 +2272,66 @@ def add_study_log():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
+    change = file_diff(f"study_logs_{guild_id}.json", old_logs_text, _study_logs_text(logs))
     log_event(
         "study",
         f"学習ログ「{subject}」を記録しました（{entry['minutes']}分・{earned}pt加算）。",
         actor=nickname,
-        detail=f"+ {memo}" if memo else None,  # ★ メモが無ければ何も出さない（summaryで十分なため）
+        detail=[change] if change else None,
     )
     return jsonify({"ok": True, "earned": earned, "total": pts[entry["student_id"]]})
+
+@app.route("/delete_study_log", methods=["POST"])
+def delete_study_log():
+    """
+    自分の勉強ログ1件を削除する（2026/08/19追加）。
+    ・本人の記録以外は削除できない（student_idはセッションから特定、
+      クライアント自己申告は信用しない）。
+    ・記録済みのポイント（5分ごとに1pt）はその分だけ差し引く（0未満にはしない）。
+    ・study_logs_{guild_id}.jsonは全生徒共有の1ファイルなので、ここから
+      該当エントリを取り除くだけで「みんなの記録」からも自動的に消える
+      （StudyLog.jsのrenderEveryone()は同じファイルを見ているため）。
+    ・エントリを一意に特定するキーは、専用のidを新設せず既存の"time"
+      （秒単位で記録される日時。本人の記録内で衝突する心配は実質無い）を使う。
+      これにより、この機能を追加する前からあった過去のログもそのまま削除できる。
+    """
+    data = request.json or {}
+    guild_id, student_id, nickname, err = require_login_json(data)
+    if err:
+        return err
+    time_key = data.get("time")
+    if not time_key:
+        return jsonify({"ok": False, "error": "missing time"})
+
+    logs = load_study_logs(guild_id)
+    target = next((l for l in logs if l.get("student_id") == student_id and l.get("time") == time_key), None)
+    if not target:
+        return jsonify({"ok": False, "error": "log not found"})
+
+    old_logs_text = _study_logs_text(logs)
+    new_logs = [l for l in logs if l is not target]
+    try:
+        save_study_logs(guild_id, new_logs)
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
+
+    # --- ポイント減算（記録時に加算した分だけ差し引く。0未満にはしない） ---
+    earned = (target.get("minutes") or 0) // 5
+    pts = load_points(guild_id)
+    pts[student_id] = max(0, pts.get(student_id, 0) - earned)
+    try:
+        save_points(guild_id, pts)
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
+
+    change = file_diff(f"study_logs_{guild_id}.json", old_logs_text, _study_logs_text(new_logs))
+    log_event(
+        "study",
+        f"学習ログ「{target.get('subject')}」を削除しました（{target.get('minutes')}分・{earned}pt減算）。",
+        actor=nickname,
+        detail=[change] if change else None,
+    )
+    return jsonify({"ok": True, "total": pts[student_id]})
 
 
 @app.route("/list_schedule", methods=["GET"])
