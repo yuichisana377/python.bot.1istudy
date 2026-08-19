@@ -23,6 +23,7 @@ import difflib
 import queue
 import subprocess
 import shutil
+import html
 from urllib.parse import urlencode
 
 # ================================
@@ -83,6 +84,11 @@ if not DISCORD_CLIENT_SECRET:
 # --- 通生/寮生 振り分け用の絵文字 ---
 EMOJI_COMMUTER = "🚃"  # 通生
 EMOJI_DORM     = "🏠"  # 寮生
+
+# --- サイトのJSが全く動かない場合の「問題を報告する」フォーム（/report_problem）が
+#     DMを送る宛先。学籍番号で指定する（send_discord_dmと同じ、discord_links経由で
+#     Discordアカウントに変換される）。 ---
+REPORT_PROBLEM_ADMIN_STUDENT_ID = os.getenv("REPORT_PROBLEM_ADMIN_STUDENT_ID", "32618")
 
 scheduler = AsyncIOScheduler(timezone=JST)
 
@@ -3555,6 +3561,57 @@ def notify_dm():
         return jsonify({"ok": False, "error": "not_linked"})
     except Exception as e:
         return jsonify({"ok": False, "error": f"dm_failed: {e}"})
+
+
+def _report_problem_result_page(success: bool, message: str) -> str:
+    """/report_problem 送信後にブラウザへ表示する簡易HTML。"""
+    color = "#16a34a" if success else "#dc2626"
+    icon  = "✓" if success else "✕"
+    return f"""<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>問題の報告</title></head>
+<body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;
+             min-height:100vh;margin:0;background:#f1f5f9;">
+  <div style="background:#fff;border-radius:16px;padding:32px;max-width:360px;width:90%;
+              text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.15);">
+    <div style="font-size:40px;color:{color};margin-bottom:12px;">{icon}</div>
+    <div style="font-size:15px;color:#334155;line-height:1.6;">{html.escape(message)}</div>
+  </div>
+</body></html>"""
+
+
+@app.route("/report_problem", methods=["POST"])
+def report_problem():
+    """
+    ★ 2026/08/19 追加：サイトのJSが完全に動かなくなった場合でも必ず表示される
+      「読み込み中…」の代替表示（各ページの<body>の一番先頭に生HTMLで
+      埋め込んである。各ページのJSが最後まで正常に初期化できたときだけ
+      非表示にする＝JSが途中で止まっていれば表示され続ける）から送られる、
+      普通の<form method="POST">（fetchではない）。JSが完全に死んでいても
+      ブラウザの標準機能だけで送信できることが目的。
+      ログイン中かどうかも問わない（JSが動かない前提のため、localStorageの
+      セッション情報を読み出せるとは限らない）＝匿名の報告として扱う。
+    """
+    guild_id_raw = request.form.get("guild_id")
+    page    = (request.form.get("page") or "不明なページ").strip()[:80]
+    message = (request.form.get("message") or "").strip()[:500]
+
+    try:
+        guild_id = int(guild_id_raw)
+    except (TypeError, ValueError):
+        return _report_problem_result_page(False, "不正なリクエストです。")
+
+    body = f"ページ: {page}\n" + (f"内容: {message}" if message else "（内容の記入なし）")
+    body += "\n※JSが動かない状態からの送信のため、送信者は匿名です。"
+
+    try:
+        send_discord_dm(guild_id, REPORT_PROBLEM_ADMIN_STUDENT_ID, "サイトの問題報告", body)
+        return _report_problem_result_page(True, "報告を送信しました。ありがとうございます。")
+    except ValueError:
+        return _report_problem_result_page(False, "管理者への送信に失敗しました（Discord未連携）。直接Discordで連絡してください。")
+    except Exception:
+        return _report_problem_result_page(False, "送信に失敗しました。時間を置いてもう一度お試しください。")
 
 
 # ================================
