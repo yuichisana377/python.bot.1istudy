@@ -344,16 +344,22 @@ async def async_local_put(filename, content_obj, sha=None):
 #    1件にまとめる（例：勉強時間の記録は study_logs と points の2つの
 #    JSONを書き換えるが、ログには1件だけ残す）。呼び出し側で、複数の保存
 #    処理が終わったあとに1回だけ log_event() を呼ぶ形にすること。
-#  ・生徒個人を特定できる情報（Discord ID・本名等）は記録しない。
+#  ・Discord ID・本名など、ニックネーム以上に個人を特定できる情報は記録しない。
+#    ニックネームは他の画面（学習ログ・カード公開者名等）でも既に表示されて
+#    いるため、実行者として記録してよいことになっている（2026/08/19、
+#    ユーザーの要望により追加。バックアップ等サーバー主導の処理は
+#    実行者が存在しないため actor=None のまま記録する）。
 # ================================
 SYSTEM_LOG_FILE = "system_log.json"
 SYSTEM_LOG_MAX_ENTRIES = 300
 _system_log_lock = Lock()
 
-def log_event(category, summary, level="info"):
-    """運用ログに1件追加する。summary は日本語の短い説明文（個人が特定できる
-    情報は含めないこと）。level は "info" または "error"（失敗をWeb側で
-    視覚的に区別するため）。失敗してもBot本体は止めない。"""
+def log_event(category, summary, level="info", actor=None):
+    """運用ログに1件追加する。summary は日本語の短い説明文。
+    actor は実行者のニックネーム（分からない/サーバー主導の処理の場合は
+    Noneのままでよい。Discord IDなどより強く個人を特定できる情報は渡さない
+    こと）。level は "info" または "error"（失敗をWeb側で視覚的に区別する
+    ため）。失敗してもBot本体は止めない。"""
     try:
         with _system_log_lock:
             entries, sha = local_get(SYSTEM_LOG_FILE)
@@ -364,6 +370,7 @@ def log_event(category, summary, level="info"):
                 "category": category,
                 "summary": summary,
                 "level": level,
+                "actor": actor,
             })
             entries = entries[-SYSTEM_LOG_MAX_ENTRIES:]
             local_put(SYSTEM_LOG_FILE, entries, sha)
@@ -1962,6 +1969,7 @@ def add_schedule():
     category = data.get("category")
     content  = data.get("content")
     points   = data.get("points")  # ★ 追加（提出・宿題のみ有効。省略時は5pt）
+    nickname = data.get("nickname")  # ★ 追加：運用ログの実行者表示用（クライアント自己申告）
 
     if not all([guild_id, date, subject, category, content]):
         return jsonify({"ok": False, "error": "missing fields"})
@@ -1983,7 +1991,7 @@ def add_schedule():
     )
     ok, msg = future.result(timeout=30)
     if ok:
-        log_event("schedule", "予定を追加しました。")
+        log_event("schedule", "予定を追加しました。", actor=nickname)
     if ok and guild:
         target_channel = get_subject_channel_by_name(guild, subject)
         if target_channel:
@@ -2156,7 +2164,7 @@ def add_study_log():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    log_event("study", f"学習ログを記録しました（{entry['minutes']}分・{earned}pt加算）。")
+    log_event("study", f"学習ログを記録しました（{entry['minutes']}分・{earned}pt加算）。", actor=nickname)
     return jsonify({"ok": True, "earned": earned, "total": pts[entry["student_id"]]})
 
 
@@ -2217,6 +2225,7 @@ def edit_schedule():
     new_category = data.get("category")
     new_content  = data.get("content")
     new_points   = data.get("points")  # ★ 追加
+    nickname     = data.get("nickname")  # ★ 追加：運用ログの実行者表示用（クライアント自己申告）
 
     if not all([guild_id, target]):
         return jsonify({"ok": False, "error": "missing fields"})
@@ -2273,7 +2282,7 @@ def edit_schedule():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
     write_log(guild_id, "edit", detail=f"{before_str} → {after_str}")
-    log_event("schedule", "予定を編集しました。")
+    log_event("schedule", "予定を編集しました。", actor=nickname)
     if guild:
         target_channel = get_subject_channel_by_name(guild, found["subject"])
         if target_channel:
@@ -2290,6 +2299,7 @@ def delete_schedule():
     data     = request.json
     guild_id = data.get("guild_id")
     target   = data.get("target")
+    nickname = data.get("nickname")  # ★ 追加：運用ログの実行者表示用（クライアント自己申告）
     if not all([guild_id, target]):
         return jsonify({"ok": False, "error": "missing fields"})
     guild_id  = int(guild_id)
@@ -2310,7 +2320,7 @@ def delete_schedule():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(guild_id, "delete", detail=f"{deleted['date']} / {deleted['subject']} / {deleted['content']}")
-    log_event("schedule", "予定を削除しました。")
+    log_event("schedule", "予定を削除しました。", actor=nickname)
     if guild:
         target_channel = get_subject_channel_by_name(guild, deleted["subject"])
         if target_channel:
@@ -2398,7 +2408,7 @@ def update_timetable():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"時間割変更: {key} → {data.get('subject')}")
-    log_event("timetable", "時間割を更新しました。")
+    log_event("timetable", "時間割を更新しました。", actor=data.get("nickname"))
     return jsonify({"ok": True})
 
 @app.route("/set_holiday", methods=["POST"])
@@ -2421,7 +2431,7 @@ def set_holiday():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"休校設定: {data.get('date')} {data.get('reason')}")
-    log_event("timetable", "休校設定を更新しました。")
+    log_event("timetable", "休校設定を更新しました。", actor=data.get("nickname"))
     return jsonify({"ok": True})
 
 @app.route("/set_period_holiday", methods=["POST"])
@@ -2454,7 +2464,7 @@ def set_period_holiday():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"1コマ休み設定: {data.get('date')} {period}限 {data.get('reason')}")
-    log_event("timetable", "休校設定を更新しました。")
+    log_event("timetable", "休校設定を更新しました。", actor=data.get("nickname"))
     return jsonify({"ok": True})
 
 @app.route("/delete_timetable", methods=["POST"])
@@ -2472,7 +2482,7 @@ def delete_timetable():
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         write_log(int(guild_id), "edit", detail=f"時間割変更削除: {key}")
-        log_event("timetable", "時間割の変更を削除しました。")
+        log_event("timetable", "時間割の変更を削除しました。", actor=data.get("nickname"))
     return jsonify({"ok": True})
 
 # ================================
@@ -2543,7 +2553,7 @@ def save_term():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     write_log(int(guild_id), "edit", detail=f"学期時間割保存: {name}（{start_date}〜{end_date}）")
-    log_event("timetable", "学期の基本時間割を保存しました。")
+    log_event("timetable", "学期の基本時間割を保存しました。", actor=data.get("nickname"))
     return jsonify({"ok": True, "id": term_id})
 
 @app.route("/delete_term", methods=["POST"])
@@ -2562,7 +2572,7 @@ def delete_term():
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         write_log(int(guild_id), "edit", detail=f"学期時間割削除: {name}")
-        log_event("timetable", "学期の基本時間割を削除しました。")
+        log_event("timetable", "学期の基本時間割を削除しました。", actor=data.get("nickname"))
     return jsonify({"ok": True})
 
 # ================================
@@ -2653,7 +2663,7 @@ def add_user():
             "password_salt": pw_salt,
         })
         save_users(guild_id, users)
-        log_event("user", "新しいユーザーが登録されました。")
+        log_event("user", "新しいユーザーが登録されました。", actor=nickname)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -3511,7 +3521,7 @@ def complete_task():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    log_event("task", "課題を達成にしました。")
+    log_event("task", "課題を達成にしました。", actor=nickname)
     return jsonify({"ok": True, "total": pts[student_id]})
 
 
@@ -3560,7 +3570,8 @@ def uncomplete_task():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    log_event("task", "課題の達成を取り消しました。")
+    user = find_user(guild_id, student_id)
+    log_event("task", "課題の達成を取り消しました。", actor=user["nickname"] if user else None)
     return jsonify({"ok": True, "total": pts[student_id]})
 
 # ================================
@@ -3827,7 +3838,7 @@ def save_cards():
             print(f"[WARN] save_cards notify failed: {e}")
 
     is_actual_update = is_update and not bool(first_publish)
-    log_event("card", f"カードデッキを{'更新' if is_actual_update else '公開'}しました（{len(cards)}問）。")
+    log_event("card", f"カードデッキを{'更新' if is_actual_update else '公開'}しました（{len(cards)}問）。", actor=publisher_nickname)
     return jsonify({"ok": True, "filename": filename, "is_update": is_update})
 
 @app.route("/delete_cards", methods=["POST"])
@@ -3857,7 +3868,7 @@ def delete_cards():
     # ★ 並び順（list_order.json）からも、このデッキのキーを取り除いておく
     cleanup_list_order(remove_keys={f"deck:{filename}"})
 
-    log_event("card", "カードデッキを削除しました。")
+    log_event("card", "カードデッキを削除しました。", actor=data.get("nickname"))
     return jsonify({"ok": True})
 
 # ================================
@@ -4292,7 +4303,7 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
         }
         put_card_file(filename, card_payload)
         upsert_cards_index_entry(filename, card_payload)
-        log_event("card", f"みんなでクイズの結果を「クイズ過去問」に保存しました（{len(cards)}問）。")
+        log_event("card", f"みんなでクイズの結果を「クイズ過去問」に保存しました（{len(cards)}問）。", actor=nickname)
     except Exception as e:
         print(f"[WARN] クイズ過去問の保存に失敗しました（クイズの進行自体は続行）: {e}")
 
@@ -5036,7 +5047,7 @@ def upload_notice():
         except Exception as e:
             print(f"[WARN] upload_notice notify failed: {e}")
 
-    log_event("notice", f"お知らせを{'更新' if is_update else '追加'}しました。")
+    log_event("notice", f"お知らせを{'更新' if is_update else '追加'}しました。", actor=uploader)
     return jsonify({"ok": True, "filename": filename, "is_update": is_update, "uploader": uploader})
 
 
@@ -5068,7 +5079,7 @@ def delete_notice():
     except DataWriteError as e:
         print(f"[WARN] notices_meta からの削除に失敗しました: {e}")
 
-    log_event("notice", "お知らせを削除しました。")
+    log_event("notice", "お知らせを削除しました。", actor=data.get("nickname"))
     return jsonify({"ok": True})
 
 
@@ -5097,7 +5108,7 @@ def set_notice_done():
             meta[filename] = entry
             try:
                 save_notices_meta(meta, sha)
-                log_event("notice", f"お知らせを{'実行済み' if done else '未実行'}にしました。")
+                log_event("notice", f"お知らせを{'実行済み' if done else '未実行'}にしました。", actor=data.get("nickname"))
                 return jsonify({"ok": True})
             except DataWriteError as e:
                 last_err = e
@@ -5240,7 +5251,7 @@ def save_folder():
             folders.append({"id": folder_id, "name": name, "parent_id": parent_id})
 
         save_card_folders(folders, sha)
-        log_event("card", "フォルダを保存しました。")
+        log_event("card", "フォルダを保存しました。", actor=data.get("nickname"))
         return jsonify({"ok": True, "id": folder_id})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -5270,7 +5281,7 @@ def delete_folder():
             remove_scopes=remove_ids,
         )
 
-        log_event("card", "フォルダを削除しました。")
+        log_event("card", "フォルダを削除しました。", actor=data.get("nickname"))
         return jsonify({"ok": True, "deleted_ids": list(remove_ids)})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
