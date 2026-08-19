@@ -366,13 +366,18 @@ def log_event(category, summary, level="info", actor=None, detail=None):
     ★ 2026/08/19、「GitHubのコミットの『変更されたファイル』表示にほぼ
     そのまま近い見た目にしたい（ファイル名込みで、ファイルごとに折り畳める
     ように）」という要望を受けて、単なる1本の文字列ではなく
-    `[{"file": "実際のファイルパス or None", "diff": "+/-形式のテキスト"}, ...]`
-    という「ファイルごとの差分」のリスト形式にした。file はこのBotの
-    データディレクトリ内の実パス（例: "words/set_20260819_...json"）を
-    そのまま見せる（隠さない）。file が無い項目（対象がファイル1つに
+    `[{"file": "実際のファイルパス or None", "diff": "+/-形式のテキスト",
+    "status": "added"/"deleted"/"modified"/None}, ...]` という
+    「ファイルごとの差分」のリスト形式にした（file_diff()参照）。file は
+    このBotのデータディレクトリ内の実パス（例: "words/set_20260819_...json"）
+    をそのまま見せる（隠さない）。file が無い項目（対象がファイル1つに
     対応しない場合）は None のままでよく、Web側はファイル名見出し無しの
-    差分ブロックとして表示する。後方互換のため、旧形式（プレーン文字列）
-    が渡された場合も自動的に1件のfile:Noneエントリとして扱う。"""
+    差分ブロックとして表示する。status は、ファイル自体を新規作成/削除した
+    のか、既存ファイルの中身を書き換えただけなのかの区別（カードデッキ・
+    お知らせは保存/削除のたびに実ファイルが作成/削除されるが、予定・時間割等は
+    既存の共有ファイルの1エントリを書き換えるだけなので、ほぼ常にmodified）。
+    後方互換のため、旧形式（プレーン文字列）が渡された場合も自動的に
+    1件のfile:None・status:Noneエントリとして扱う。"""
     try:
         with _system_log_lock:
             entries, sha = local_get(SYSTEM_LOG_FILE)
@@ -394,6 +399,7 @@ def log_event(category, summary, level="info", actor=None, detail=None):
                 safe_files.append({
                     "file": (f or {}).get("file"),
                     "diff": diff_text[:4000],  # ★ ファイル単位の上限（全体はさらに下でも切り詰める）
+                    "status": (f or {}).get("status"),  # ★ "added"/"deleted"/"modified"（無ければNone）
                 })
                 if len(safe_files) >= 12:  # ★ 1回の操作で変更されるファイル数は通常1〜2件なので十分な上限
                     break
@@ -408,11 +414,25 @@ def log_event(category, summary, level="info", actor=None, detail=None):
 def file_diff(file, old_text, new_text, max_lines=60):
     """指定したファイル1つ分の変更を、+/- 形式の行テキストにまとめて
     返す（GitHubのファイル差分と同じ考え方）。差分が無ければ None。
-    log_event の detail に渡すリストの1要素を作るための共通ヘルパー。"""
+    log_event の detail に渡すリストの1要素を作るための共通ヘルパー。
+
+    ★ 追加（2026/08/19）：statusに"added"（旧内容が空＝ファイル自体を
+    新規作成）/"deleted"（新内容が空＝ファイル自体を削除）/"modified"
+    （既存ファイルの中身を書き換えただけ）を入れる。カードデッキ・お知らせは
+    保存/削除のたびに実際にファイルが作成/削除されるが、予定・時間割等は
+    既存の共有ファイル（plans_<guild_id>.json等）の中の1エントリを
+    書き換えるだけなので、ほぼ常にmodifiedになる。Web側はaddedを
+    「新規作成」、deletedを「削除」のバッジとしてファイル名の横に表示する。"""
     diff = _text_diff_lines(old_text, new_text, max_lines=max_lines)
     if not diff:
         return None
-    return {"file": file, "diff": diff}
+    if not (old_text or "").strip():
+        status = "added"
+    elif not (new_text or "").strip():
+        status = "deleted"
+    else:
+        status = "modified"
+    return {"file": file, "diff": diff, "status": status}
 
 @app.route("/system_log", methods=["GET"])
 def system_log():
@@ -6161,7 +6181,8 @@ def _backup_status_files(porcelain_output, max_files=30):
         label = _backup_category(rel)
         action = "削除" if code.upper() == "D" else ("新規追加" if code in ("??", "A") else "更新")
         sign = "-" if action == "削除" else "+"
-        files.append({"file": label, "diff": f"{sign} {action}"})
+        status = {"削除": "deleted", "新規追加": "added", "更新": "modified"}[action]
+        files.append({"file": label, "diff": f"{sign} {action}", "status": status})
     if len(files) > max_files:
         files = files[:max_files] + [{"file": None, "diff": f"…ほか{len(files) - max_files}件"}]
     return files
