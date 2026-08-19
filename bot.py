@@ -3528,29 +3528,6 @@ def send_discord_dm(guild_id: int, student_id: str, title: str, message: str):
     future.result(timeout=10)
 
 
-def _is_owner_linked(guild_id: int, owner_id) -> bool:
-    """
-    ★ 2026/08/20 追加：削除の作成者確認フローで使う。
-    owner_id（デッキ／お知らせに記録された作成者の学籍番号）が、現在も
-    discord_links（DM通知先）に紐づいているかどうかを返す。
-    ─────────────────────────────
-    背景：生徒が学籍番号を登録し直す（再登録）と、過去に作成した
-    デッキ／お知らせの published_by.id は古い学籍番号のまま残り続ける。
-    discord_links は新しい学籍番号のほうに更新されるため、古いowner_idは
-    「記録はあるが、誰の現在のアカウントとも一致しない・DMも送れない」
-    孤立した状態になり得る。この状態のまま作成者確認フローに乗せると、
-    DMも届かずWeb確認（PendingDeleteCheck.js）も本人の目に触れず、
-    本人による直接削除もowner_idが記録済みという理由でブロックされ続け、
-    誰にも気づかれないまま永久に削除できなくなってしまう。
-    ★ そのため、呼び出し側では「owner_idはあるが孤立している」場合を
-    「作成者不明」と同じ扱い（誰でも直接削除できる）にフォールバックする。
-    """
-    if not owner_id:
-        return False
-    links = load_discord_links(guild_id)
-    return bool(links.get(str(owner_id).strip().upper()))
-
-
 @app.route("/notify_dm", methods=["POST"])
 def notify_dm():
     """
@@ -4939,10 +4916,15 @@ def delete_cards():
     #   このAPIを叩くため、ここを守るだけで「削除」「非公開に戻す」両方に効く）。
     #   作成者以外が削除したい場合は /request_delete で本人にDiscord確認を送る。
     owner_id, owner_nickname = _deck_owner(filename)
-    # ★ owner_idが記録されていても、再登録等でdiscord_linksと孤立している
-    #   （＝本人に確認する手段が無い）場合は「作成者不明」と同じ扱いにする
-    #   （_is_owner_linked参照）。
-    if owner_id and str(owner_id) != str(_student_id) and _is_owner_linked(_guild_id, owner_id):
+    # ★ 2026/08/20 一旦revert：discord_linksに紐づいていない＝孤立、として
+    #   確認フローを自動でスキップする判定を入れていたが、これだと「まだ
+    #   /id連携していないだけの、現役の本人」まで巻き込んでしまい、
+    #   誰でもDiscord未連携の人のデッキ／お知らせを無確認で消せてしまう
+    #   セキュリティ上の後退になっていた（discord_linksが無い＝本人が
+    #   今後二度とそのIDでログインしない、とは言い切れないため）。
+    #   再登録で孤立した記録（本当に誰も確認できない）への対応は、
+    #   自動判定ではなく別の安全な手段（管理者による個別対応等）で行う。
+    if owner_id and str(owner_id) != str(_student_id):
         return jsonify({
             "ok": False,
             "error": "creator_approval_required",
@@ -6262,10 +6244,10 @@ def delete_notice():
     # ★ 追加：投稿者本人以外は直接削除できない。それ以外の人が削除したい
     #   場合は /request_delete で本人にDiscord確認を送る。
     owner_id, owner_nickname = _notice_owner(filename)
-    # ★ owner_idが記録されていても、再登録等でdiscord_linksと孤立している
-    #   （＝本人に確認する手段が無い）場合は「作成者不明」と同じ扱いにする
-    #   （_is_owner_linked参照）。
-    if owner_id and str(owner_id) != str(_student_id) and _is_owner_linked(_guild_id, owner_id):
+    # ★ 2026/08/20 一旦revert：delete_cards側と同じ理由で、discord_links
+    #   未紐づけを「孤立」とみなして自動で確認フローをスキップする判定は
+    #   セキュリティ上の後退になるため外した（詳細はdelete_cards参照）。
+    if owner_id and str(owner_id) != str(_student_id):
         return jsonify({
             "ok": False,
             "error": "creator_approval_required",
