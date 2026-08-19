@@ -1070,6 +1070,37 @@ def resolve_session(token, guild_id: int):
         return None
 
 # ================================
+#  ★ 追加（2026/08/19）：「変更」系API共通のログイン必須チェック
+#  ─────────────────────────────
+#  以前は予定・時間割・カードデッキ・フォルダ・お知らせの追加/編集/削除系
+#  APIが、ログイン確認をせずクライアント自己申告の nickname をそのまま
+#  信用していた（＝ログインしていなくても、APIを直接叩けば変更できて
+#  しまっていた）。timer_*・add_study_log・complete_task等と同じ考え方で、
+#  「変更」は必ずログイン済み（有効なsession_token）を要求するように統一する。
+#  ・閲覧（GET系）は従来通りログイン不要のまま変えない
+#    （予定・時間割ページは「見るだけなら誰でもOK」という仕様を維持）。
+#  ・nicknameはクライアントの自己申告を使わず、サーバー側のユーザーデータから
+#    引き直す（表示名の詐称防止。/add_study_logなどと同じ）。
+# ================================
+def require_login_json(data):
+    """POST系「変更」API共通：JSONボディのguild_id・session_tokenを検証する。
+    戻り値 (guild_id, student_id, nickname, err)。err が None でなければ、
+    呼び出し側はそのまま `return err` してよい。"""
+    guild_id = data.get("guild_id")
+    if not guild_id:
+        return None, None, None, jsonify({"ok": False, "error": "missing guild_id"})
+    try:
+        guild_id = int(guild_id)
+    except (TypeError, ValueError):
+        return None, None, None, jsonify({"ok": False, "error": "invalid guild_id"})
+    student_id = resolve_session(data.get("session_token"), guild_id)
+    if not student_id:
+        return None, None, None, jsonify({"ok": False, "error": "not_logged_in"})
+    user = find_user(guild_id, student_id)
+    nickname = user["nickname"] if user else None
+    return guild_id, student_id, nickname, None
+
+# ================================
 #  Discordアカウント連携（生徒ID ⇔ Discordユーザー）
 #  ★ 個別DM通知のために、StudyLogの生徒IDとDiscordアカウントを
 #     紐付けて保存しておく。{ "1I001": 123456789012345678, ... }
@@ -1985,15 +2016,16 @@ def get_channels():
 @app.route("/add_schedule", methods=["POST"])
 def add_schedule():
     data     = request.json
-    guild_id = data.get("guild_id")
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     date     = data.get("date")
     subject  = data.get("subject")
     category = data.get("category")
     content  = data.get("content")
     points   = data.get("points")  # ★ 追加（提出・宿題のみ有効。省略時は5pt）
-    nickname = data.get("nickname")  # ★ 追加：運用ログの実行者表示用（クライアント自己申告）
 
-    if not all([guild_id, date, subject, category, content]):
+    if not all([date, subject, category, content]):
         return jsonify({"ok": False, "error": "missing fields"})
 
     err = reject_if_bug_chars({"科目": subject, "カテゴリ": category, "内容": content})
@@ -2245,23 +2277,23 @@ def list_schedule():
 @app.route("/edit_schedule", methods=["POST"])
 def edit_schedule():
     data         = request.json
-    guild_id     = data.get("guild_id")
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     target       = data.get("target")
     new_date     = data.get("date")
     new_subject  = data.get("subject")
     new_category = data.get("category")
     new_content  = data.get("content")
     new_points   = data.get("points")  # ★ 追加
-    nickname     = data.get("nickname")  # ★ 追加：運用ログの実行者表示用（クライアント自己申告）
 
-    if not all([guild_id, target]):
+    if not target:
         return jsonify({"ok": False, "error": "missing fields"})
 
     err = reject_if_bug_chars({"科目": new_subject, "カテゴリ": new_category, "内容": new_content})
     if err:
         return err
 
-    guild_id = int(guild_id)
     guild    = bot.get_guild(guild_id)
     plans    = load_plans(guild_id)
     found = None
@@ -2329,12 +2361,12 @@ def edit_schedule():
 @app.route("/delete_schedule", methods=["POST"])
 def delete_schedule():
     data     = request.json
-    guild_id = data.get("guild_id")
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     target   = data.get("target")
-    nickname = data.get("nickname")  # ★ 追加：運用ログの実行者表示用（クライアント自己申告）
-    if not all([guild_id, target]):
+    if not target:
         return jsonify({"ok": False, "error": "missing fields"})
-    guild_id  = int(guild_id)
     guild     = bot.get_guild(guild_id)
     plans     = load_plans(guild_id)
     deleted   = None
@@ -2422,16 +2454,18 @@ def list_timetable():
 @app.route("/update_timetable", methods=["POST"])
 def update_timetable():
     data     = request.json
-    guild_id = data.get("guild_id")
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     key      = data.get("key")
-    if not all([guild_id, key]):
+    if not key:
         return jsonify({"ok": False, "error": "missing fields"})
 
     err = reject_if_bug_chars({"科目": data.get("subject"), "備考": data.get("note")})
     if err:
         return err
 
-    tt = load_timetable(int(guild_id))
+    tt = load_timetable(guild_id)
     old_entry = tt.get(key)  # ★ 運用ログで変更前後を見せるため、上書き前に控えておく
     tt[key] = {
         "key":     key,
@@ -2443,11 +2477,11 @@ def update_timetable():
         "note":    data.get("note", ""),
     }
     try:
-        save_timetable(int(guild_id), tt)
+        save_timetable(guild_id, tt)
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     tt_detail = f"時間割変更: {key} → {data.get('subject')}"
-    write_log(int(guild_id), "edit", detail=tt_detail)
+    write_log(guild_id, "edit", detail=tt_detail)
     lines = []
     if old_entry:
         lines.append(f"- {old_entry.get('date')} {old_entry.get('period')}限 {old_entry.get('subject')}")
@@ -2455,7 +2489,7 @@ def update_timetable():
     log_event(
         "timetable",
         f"時間割「{data.get('subject')}」を更新しました（{data.get('date')}）。",
-        actor=data.get("nickname"),
+        actor=nickname,
         detail="\n".join(lines),
     )
     return jsonify({"ok": True})
@@ -2463,11 +2497,13 @@ def update_timetable():
 @app.route("/set_holiday", methods=["POST"])
 def set_holiday():
     data     = request.json
-    guild_id = data.get("guild_id")
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     key      = data.get("key")
-    if not all([guild_id, key]):
+    if not key:
         return jsonify({"ok": False, "error": "missing fields"})
-    tt = load_timetable(int(guild_id))
+    tt = load_timetable(guild_id)
     tt[key] = {
         "key":    key,
         "type":   "holiday",
@@ -2476,15 +2512,15 @@ def set_holiday():
         "note":   data.get("note", ""),
     }
     try:
-        save_timetable(int(guild_id), tt)
+        save_timetable(guild_id, tt)
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     holiday_detail = f"休校設定: {data.get('date')} {data.get('reason')}"
-    write_log(int(guild_id), "edit", detail=holiday_detail)
+    write_log(guild_id, "edit", detail=holiday_detail)
     log_event(
         "timetable",
         f"休校設定「{data.get('date')}」を更新しました。",
-        actor=data.get("nickname"),
+        actor=nickname,
         detail=f"+ {holiday_detail}",
     )
     return jsonify({"ok": True})
@@ -2500,12 +2536,14 @@ def set_period_holiday():
        （timetable_{guild_id}.json）に保存する。
     """
     data     = request.json
-    guild_id = data.get("guild_id")
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     key      = data.get("key")
     period   = data.get("period")
-    if not all([guild_id, key]) or period is None:
+    if not key or period is None:
         return jsonify({"ok": False, "error": "missing fields"})
-    tt = load_timetable(int(guild_id))
+    tt = load_timetable(guild_id)
     tt[key] = {
         "key":    key,
         "type":   "period_holiday",
@@ -2515,15 +2553,15 @@ def set_period_holiday():
         "note":   data.get("note", ""),
     }
     try:
-        save_timetable(int(guild_id), tt)
+        save_timetable(guild_id, tt)
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     period_holiday_detail = f"1コマ休み設定: {data.get('date')} {period}限 {data.get('reason')}"
-    write_log(int(guild_id), "edit", detail=period_holiday_detail)
+    write_log(guild_id, "edit", detail=period_holiday_detail)
     log_event(
         "timetable",
         f"休み設定「{data.get('date')} {period}限」を更新しました。",
-        actor=data.get("nickname"),
+        actor=nickname,
         detail=f"+ {period_holiday_detail}",
     )
     return jsonify({"ok": True})
@@ -2531,24 +2569,26 @@ def set_period_holiday():
 @app.route("/delete_timetable", methods=["POST"])
 def delete_timetable():
     data     = request.json
-    guild_id = data.get("guild_id")
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     key      = data.get("key")
-    if not all([guild_id, key]):
+    if not key:
         return jsonify({"ok": False, "error": "missing fields"})
-    tt = load_timetable(int(guild_id))
+    tt = load_timetable(guild_id)
     if key in tt:
         old_entry = tt[key]
         del tt[key]
         try:
-            save_timetable(int(guild_id), tt)
+            save_timetable(guild_id, tt)
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
-        write_log(int(guild_id), "edit", detail=f"時間割変更削除: {key}")
+        write_log(guild_id, "edit", detail=f"時間割変更削除: {key}")
         label = f"{old_entry.get('date')} {old_entry.get('period', '')}限 {old_entry.get('subject') or old_entry.get('reason') or ''}".strip()
         log_event(
             "timetable",
             f"時間割の変更「{old_entry.get('date')}」を削除しました。",
-            actor=data.get("nickname"),
+            actor=nickname,
             detail=f"- {label}",
         )
     return jsonify({"ok": True})
@@ -2584,12 +2624,14 @@ def list_terms():
 @app.route("/save_term", methods=["POST"])
 def save_term():
     data       = request.json or {}
-    guild_id   = data.get("guild_id")
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     name       = data.get("name")
     start_date = data.get("start_date")
     end_date   = data.get("end_date")
     timetable  = data.get("timetable")
-    if not all([guild_id, name, start_date, end_date]) or not isinstance(timetable, dict):
+    if not all([name, start_date, end_date]) or not isinstance(timetable, dict):
         return jsonify({"ok": False, "error": "missing fields"})
     if end_date < start_date:
         return jsonify({"ok": False, "error": "終了日は開始日以降にしてください"})
@@ -2598,7 +2640,7 @@ def save_term():
     if err:
         return err
 
-    terms = load_terms(int(guild_id))
+    terms = load_terms(guild_id)
     term_id = data.get("id") or f"term_{time.time_ns()}"
 
     # ★ 期間の重複チェック（自分自身は除く）。前期・後期が重なると
@@ -2618,11 +2660,11 @@ def save_term():
         "timetable":  timetable,
     }
     try:
-        save_terms(int(guild_id), terms)
+        save_terms(guild_id, terms)
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     term_detail = f"学期時間割保存: {name}（{start_date}〜{end_date}）"
-    write_log(int(guild_id), "edit", detail=term_detail)
+    write_log(guild_id, "edit", detail=term_detail)
     lines = []
     if old_term:
         lines.append(f"- {old_term.get('name')}（{old_term.get('start_date')}〜{old_term.get('end_date')}）")
@@ -2630,7 +2672,7 @@ def save_term():
     log_event(
         "timetable",
         f"学期時間割「{name}」を保存しました。",
-        actor=data.get("nickname"),
+        actor=nickname,
         detail="\n".join(lines),
     )
     return jsonify({"ok": True, "id": term_id})
@@ -2638,23 +2680,25 @@ def save_term():
 @app.route("/delete_term", methods=["POST"])
 def delete_term():
     data     = request.json or {}
-    guild_id = data.get("guild_id")
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     term_id  = data.get("id")
-    if not all([guild_id, term_id]):
+    if not term_id:
         return jsonify({"ok": False, "error": "missing fields"})
-    terms = load_terms(int(guild_id))
+    terms = load_terms(guild_id)
     if term_id in terms:
         name = terms[term_id].get("name", term_id)
         del terms[term_id]
         try:
-            save_terms(int(guild_id), terms)
+            save_terms(guild_id, terms)
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
-        write_log(int(guild_id), "edit", detail=f"学期時間割削除: {name}")
+        write_log(guild_id, "edit", detail=f"学期時間割削除: {name}")
         log_event(
             "timetable",
             f"学期時間割「{name}」を削除しました。",
-            actor=data.get("nickname"),
+            actor=nickname,
             detail=f"- {name}",
         )
     return jsonify({"ok": True})
@@ -3889,12 +3933,21 @@ def get_card_set():
 @app.route("/save_cards", methods=["POST"])
 def save_cards():
     data     = request.json
+    guild_id, _student_id, _nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     name     = data.get("name")
     cards    = data.get("cards")
     filename = data.get("filename")
-    guild_id = data.get("guild_id")
     subject  = data.get("subject")
     folder_id = data.get("folder_id")
+    # ★ 注意：publisher_id/publisher_nicknameはあえてクライアント自己申告のまま
+    #   信用している（ここをログインセッションの値で強制的に上書きすると、
+    #   「他の人が公開したデッキに自分がカードを追加/編集しても、公開者表示は
+    #   元の公開者のまま変わらない」という共同編集の仕様（syncDeckToServer側で
+    #   deck.published_byを維持する実装）が壊れてしまうため）。この関数の
+    #   呼び出し自体にログインを必須にしたことで「誰もログインしていないのに
+    #   保存できる」問題は解消されている。
     publisher_id       = data.get("publisher_id")
     publisher_nickname = data.get("publisher_nickname") or "匿名"
     silent   = data.get("silent", False)  # ★ 追加：trueなら通知しない
@@ -4023,6 +4076,9 @@ def save_cards():
 @app.route("/delete_cards", methods=["POST"])
 def delete_cards():
     data     = request.json
+    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     filename = data.get("filename")
     if not filename:
         return jsonify({"ok": False, "error": "filename は必須です"})
@@ -4055,7 +4111,7 @@ def delete_cards():
     log_event(
         "card",
         f"カードデッキ「{deleted_name}」を削除しました。" if deleted_name else "カードデッキを削除しました。",
-        actor=data.get("nickname"),
+        actor=nickname,
         detail=diff_cards((deleted_data or {}).get("cards") or [], []),
     )
     return jsonify({"ok": True})
@@ -5177,10 +5233,12 @@ def get_notice():
 def upload_notice():
     """お知らせファイル（.md / .txt）をアップロード（新規 or 上書き）する"""
     data = request.json or {}
+    guild_id, _student_id, resolved_nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     filename = (data.get("filename") or "").strip()
     content = data.get("content")
-    uploader = (data.get("uploader") or "匿名").strip() or "匿名"
-    guild_id = data.get("guild_id")
+    uploader = resolved_nickname or "匿名"  # ★ クライアント自己申告ではなく、ログインセッションから引く
 
     if not _is_safe_notice_filename(filename):
         return jsonify({"ok": False, "error": ".md または .txt ファイルのみアップロードできます"})
@@ -5263,6 +5321,9 @@ def upload_notice():
 def delete_notice():
     """お知らせファイルを削除する（メタ情報も合わせて削除）"""
     data = request.json or {}
+    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     filename = data.get("filename", "")
     if not _is_safe_notice_filename(filename):
         return jsonify({"ok": False, "error": "invalid filename"})
@@ -5296,7 +5357,7 @@ def delete_notice():
     log_event(
         "notice",
         f"お知らせ「{filename}」を削除しました。",
-        actor=data.get("nickname"),
+        actor=nickname,
         detail=_text_diff_lines(deleted_content, None),
     )
     return jsonify({"ok": True})
@@ -5314,6 +5375,9 @@ def delete_notice():
 def set_notice_done():
     """指定したお知らせの「実行済み」状態（true/false）を、全員共有で設定する。"""
     data = request.json or {}
+    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     filename = data.get("filename")
     done = bool(data.get("done"))
     if not _is_safe_notice_filename(filename):
@@ -5327,7 +5391,7 @@ def set_notice_done():
             meta[filename] = entry
             try:
                 save_notices_meta(meta, sha)
-                log_event("notice", f"お知らせ「{filename}」を{'実行済み' if done else '未実行'}にしました。", actor=data.get("nickname"))
+                log_event("notice", f"お知らせ「{filename}」を{'実行済み' if done else '未実行'}にしました。", actor=nickname)
                 return jsonify({"ok": True})
             except DataWriteError as e:
                 last_err = e
@@ -5434,6 +5498,9 @@ def save_folder():
     改名／移動: { id, name, parent_id }
     """
     data      = request.json or {}
+    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     folder_id = data.get("id")
     name      = (data.get("name") or "").strip()
     parent_id = data.get("parent_id")
@@ -5470,7 +5537,7 @@ def save_folder():
             folders.append({"id": folder_id, "name": name, "parent_id": parent_id})
 
         save_card_folders(folders, sha)
-        log_event("card", f"フォルダ「{name}」を保存しました。", actor=data.get("nickname"))
+        log_event("card", f"フォルダ「{name}」を保存しました。", actor=nickname)
         return jsonify({"ok": True, "id": folder_id})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -5480,6 +5547,9 @@ def save_folder():
 @app.route("/delete_folder", methods=["POST"])
 def delete_folder():
     data      = request.json or {}
+    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    if err:
+        return err
     folder_id = data.get("id")
     if not folder_id:
         return jsonify({"ok": False, "error": "id は必須です"})
@@ -5507,7 +5577,7 @@ def delete_folder():
         log_event(
             "card",
             f"フォルダ「{deleted_folder_name}」を削除しました。" if deleted_folder_name else "フォルダを削除しました。",
-            actor=data.get("nickname"),
+            actor=nickname,
         )
         return jsonify({"ok": True, "deleted_ids": list(remove_ids)})
     except DataWriteError as e:
@@ -5694,7 +5764,9 @@ def get_study_data():
 
 @app.route("/save_unsure", methods=["POST"])
 def save_unsure():
-    """指定したデッキの「わからない」マーク（カードキーの配列）を丸ごと置き換える。"""
+    """指定したデッキの「わからない」マーク（カードキーの配列）を丸ごと置き換える。
+    ★ タイマーや下書き自動保存と同じ高頻度なUI状態なので、意図的に運用ログ
+    （log_event）には出していない（カードをめくるたびに呼ばれるため）。"""
     guild_id, student_id, err = _timer_auth_from_json()
     if err:
         return err
