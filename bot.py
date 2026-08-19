@@ -349,6 +349,12 @@ async def async_local_put(filename, content_obj, sha=None):
 #    いるため、実行者として記録してよいことになっている（2026/08/19、
 #    ユーザーの要望により追加。バックアップ等サーバー主導の処理は
 #    実行者が存在しないため actor=None のまま記録する）。
+#  ・「本人にのみ表示される情報」は運用ログに残さない（2026/08/19、
+#    ユーザーの要望により追加。運用ログ自体はログインなしでも閲覧できる
+#    ＝実質公開の場なので、Web上のどこかで他の生徒にも見えている情報
+#    だけを載せてよい、という基準）。この基準により課題の達成/取り消し
+#    （StudyLog.js上「自分のみ」表示）は log_event を呼ばない。学習ログは
+#    「みんなの記録」で全員に見えているためこの基準に反せず対象のまま。
 # ================================
 SYSTEM_LOG_FILE = "system_log.json"
 SYSTEM_LOG_MAX_ENTRIES = 300
@@ -969,17 +975,6 @@ def save_completed_tasks(guild_id: int, tasks: dict, sha=None):
 def _task_id_of_plan(plan: dict) -> str:
     """フロント（StudyLog.js）の `${p.date}_${p.subject}_${p.content}` と全く同じ規則でIDを作る"""
     return f"{plan.get('date')}_{plan.get('subject')}_{plan.get('content')}"
-
-def find_task_label(guild_id: int, task_id: str):
-    """task_id に対応する予定（課題）を探し、運用ログの詳細表示用に
-    「日付 / 科目 / 内容」の読みやすい形にして返す。見つからなければ None。
-    （★ 追加：達成/取り消しのログをタップしたときに、どの課題だったか
-    分かるようにするため）"""
-    plans = load_plans(guild_id)
-    for p in plans:
-        if _task_id_of_plan(p) == task_id:
-            return f"{p.get('date')} / {p.get('subject')} / {p.get('content')}"
-    return None
 
 def find_task_points(guild_id: int, task_id: str):
     """
@@ -3806,12 +3801,9 @@ def complete_task():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    task_label = find_task_label(guild_id, task_id)
-    log_event(
-        "task",
-        f"課題「{task_label}」を達成にしました。" if task_label else "課題を達成にしました。",
-        actor=nickname,
-    )
+    # ★ 2026/08/19：課題の達成状況はStudyLog.js上「自分のみ」にしか表示され
+    #   ない個人的な記録（他の生徒には見えない）なので、運用ログには残さない
+    #   （運用ログはログインなしでも閲覧できる＝実質公開の場のため）。
     return jsonify({"ok": True, "total": pts[student_id]})
 
 
@@ -3860,13 +3852,8 @@ def uncomplete_task():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    user = find_user(guild_id, student_id)
-    task_label = find_task_label(guild_id, task_id)
-    log_event(
-        "task",
-        f"課題「{task_label}」の達成を取り消しました。" if task_label else "課題の達成を取り消しました。",
-        actor=user["nickname"] if user else None,
-    )
+    # ★ 2026/08/19：課題の達成状況は「自分のみ」にしか表示されない個人的な
+    #   記録なので、運用ログには残さない（complete_task側と同じ理由）。
     return jsonify({"ok": True, "total": pts[student_id]})
 
 # ================================
