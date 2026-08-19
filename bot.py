@@ -1323,7 +1323,10 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
     msg = f"登録しました！\n{date_str} / {subject} / {tagged_content}"
     if "points" in plan:
         msg += f"\n⭐ {plan['points']}pt"
-    return True, msg, detail
+    # ★ 運用ログ（system_log）向けは「+ 行」形式（GitHubのコミット差分のような
+    #   見た目に揃えるため）。write_log側のdetail（Plan.js等が別途表示するもの）
+    #   は従来の形式のまま変えない。
+    return True, msg, f"+ {detail}"
 
 # ================================
 #  /add
@@ -2010,7 +2013,7 @@ def add_schedule():
     )
     ok, msg, detail = future.result(timeout=30)
     if ok:
-        log_event("schedule", "予定を追加しました。", actor=nickname, detail=detail)
+        log_event("schedule", f"予定「{subject}」を追加しました（{date}）。", actor=nickname, detail=detail)
     if ok and guild:
         target_channel = get_subject_channel_by_name(guild, subject)
         if target_channel:
@@ -2183,10 +2186,12 @@ def add_study_log():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    study_detail = f"{subject} ({entry['minutes']}分・{earned}pt)"
-    if memo:
-        study_detail += f"\nメモ: {memo}"
-    log_event("study", f"学習ログを記録しました（{entry['minutes']}分・{earned}pt加算）。", actor=nickname, detail=study_detail)
+    log_event(
+        "study",
+        f"学習ログ「{subject}」を記録しました（{entry['minutes']}分・{earned}pt加算）。",
+        actor=nickname,
+        detail=f"+ {memo}" if memo else None,  # ★ メモが無ければ何も出さない（summaryで十分なため）
+    )
     return jsonify({"ok": True, "earned": earned, "total": pts[entry["student_id"]]})
 
 
@@ -2304,7 +2309,12 @@ def edit_schedule():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
     write_log(guild_id, "edit", detail=f"{before_str} → {after_str}")
-    log_event("schedule", "予定を編集しました。", actor=nickname, detail=f"{before_str}\n→ {after_str}")
+    log_event(
+        "schedule",
+        f"予定「{found['subject']}」を編集しました（{found['date']}）。",
+        actor=nickname,
+        detail=f"- {before_str}\n+ {after_str}",
+    )
     if guild:
         target_channel = get_subject_channel_by_name(guild, found["subject"])
         if target_channel:
@@ -2343,7 +2353,12 @@ def delete_schedule():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     detail = f"{deleted['date']} / {deleted['subject']} / {deleted['content']}"
     write_log(guild_id, "delete", detail=detail)
-    log_event("schedule", "予定を削除しました。", actor=nickname, detail=detail)
+    log_event(
+        "schedule",
+        f"予定「{deleted['subject']}」を削除しました（{deleted['date']}）。",
+        actor=nickname,
+        detail=f"- {detail}",
+    )
     if guild:
         target_channel = get_subject_channel_by_name(guild, deleted["subject"])
         if target_channel:
@@ -2417,6 +2432,7 @@ def update_timetable():
         return err
 
     tt = load_timetable(int(guild_id))
+    old_entry = tt.get(key)  # ★ 運用ログで変更前後を見せるため、上書き前に控えておく
     tt[key] = {
         "key":     key,
         "type":    "change",
@@ -2432,7 +2448,16 @@ def update_timetable():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     tt_detail = f"時間割変更: {key} → {data.get('subject')}"
     write_log(int(guild_id), "edit", detail=tt_detail)
-    log_event("timetable", "時間割を更新しました。", actor=data.get("nickname"), detail=tt_detail)
+    lines = []
+    if old_entry:
+        lines.append(f"- {old_entry.get('date')} {old_entry.get('period')}限 {old_entry.get('subject')}")
+    lines.append(f"+ {data.get('date')} {data.get('period')}限 {data.get('subject')}")
+    log_event(
+        "timetable",
+        f"時間割「{data.get('subject')}」を更新しました（{data.get('date')}）。",
+        actor=data.get("nickname"),
+        detail="\n".join(lines),
+    )
     return jsonify({"ok": True})
 
 @app.route("/set_holiday", methods=["POST"])
@@ -2456,7 +2481,12 @@ def set_holiday():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     holiday_detail = f"休校設定: {data.get('date')} {data.get('reason')}"
     write_log(int(guild_id), "edit", detail=holiday_detail)
-    log_event("timetable", "休校設定を更新しました。", actor=data.get("nickname"), detail=holiday_detail)
+    log_event(
+        "timetable",
+        f"休校設定「{data.get('date')}」を更新しました。",
+        actor=data.get("nickname"),
+        detail=f"+ {holiday_detail}",
+    )
     return jsonify({"ok": True})
 
 @app.route("/set_period_holiday", methods=["POST"])
@@ -2490,7 +2520,12 @@ def set_period_holiday():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     period_holiday_detail = f"1コマ休み設定: {data.get('date')} {period}限 {data.get('reason')}"
     write_log(int(guild_id), "edit", detail=period_holiday_detail)
-    log_event("timetable", "休校設定を更新しました。", actor=data.get("nickname"), detail=period_holiday_detail)
+    log_event(
+        "timetable",
+        f"休み設定「{data.get('date')} {period}限」を更新しました。",
+        actor=data.get("nickname"),
+        detail=f"+ {period_holiday_detail}",
+    )
     return jsonify({"ok": True})
 
 @app.route("/delete_timetable", methods=["POST"])
@@ -2502,13 +2537,20 @@ def delete_timetable():
         return jsonify({"ok": False, "error": "missing fields"})
     tt = load_timetable(int(guild_id))
     if key in tt:
+        old_entry = tt[key]
         del tt[key]
         try:
             save_timetable(int(guild_id), tt)
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         write_log(int(guild_id), "edit", detail=f"時間割変更削除: {key}")
-        log_event("timetable", "時間割の変更を削除しました。", actor=data.get("nickname"), detail=f"時間割変更削除: {key}")
+        label = f"{old_entry.get('date')} {old_entry.get('period', '')}限 {old_entry.get('subject') or old_entry.get('reason') or ''}".strip()
+        log_event(
+            "timetable",
+            f"時間割の変更「{old_entry.get('date')}」を削除しました。",
+            actor=data.get("nickname"),
+            detail=f"- {label}",
+        )
     return jsonify({"ok": True})
 
 # ================================
@@ -2567,6 +2609,7 @@ def save_term():
         if start_date <= t.get("end_date", "") and t.get("start_date", "") <= end_date:
             return jsonify({"ok": False, "error": f"「{t.get('name')}」（{t.get('start_date')}〜{t.get('end_date')}）と期間が重なっています"})
 
+    old_term = terms.get(term_id)  # ★ 運用ログで変更前後を見せるため、上書き前に控えておく
     terms[term_id] = {
         "id":         term_id,
         "name":       name,
@@ -2580,7 +2623,16 @@ def save_term():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     term_detail = f"学期時間割保存: {name}（{start_date}〜{end_date}）"
     write_log(int(guild_id), "edit", detail=term_detail)
-    log_event("timetable", "学期の基本時間割を保存しました。", actor=data.get("nickname"), detail=term_detail)
+    lines = []
+    if old_term:
+        lines.append(f"- {old_term.get('name')}（{old_term.get('start_date')}〜{old_term.get('end_date')}）")
+    lines.append(f"+ {name}（{start_date}〜{end_date}）")
+    log_event(
+        "timetable",
+        f"学期時間割「{name}」を保存しました。",
+        actor=data.get("nickname"),
+        detail="\n".join(lines),
+    )
     return jsonify({"ok": True, "id": term_id})
 
 @app.route("/delete_term", methods=["POST"])
@@ -2599,7 +2651,12 @@ def delete_term():
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         write_log(int(guild_id), "edit", detail=f"学期時間割削除: {name}")
-        log_event("timetable", "学期の基本時間割を削除しました。", actor=data.get("nickname"), detail=f"学期時間割削除: {name}")
+        log_event(
+            "timetable",
+            f"学期時間割「{name}」を削除しました。",
+            actor=data.get("nickname"),
+            detail=f"- {name}",
+        )
     return jsonify({"ok": True})
 
 # ================================
@@ -3548,7 +3605,12 @@ def complete_task():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    log_event("task", "課題を達成にしました。", actor=nickname, detail=find_task_label(guild_id, task_id))
+    task_label = find_task_label(guild_id, task_id)
+    log_event(
+        "task",
+        f"課題「{task_label}」を達成にしました。" if task_label else "課題を達成にしました。",
+        actor=nickname,
+    )
     return jsonify({"ok": True, "total": pts[student_id]})
 
 
@@ -3598,7 +3660,12 @@ def uncomplete_task():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
     user = find_user(guild_id, student_id)
-    log_event("task", "課題の達成を取り消しました。", actor=user["nickname"] if user else None, detail=find_task_label(guild_id, task_id))
+    task_label = find_task_label(guild_id, task_id)
+    log_event(
+        "task",
+        f"課題「{task_label}」の達成を取り消しました。" if task_label else "課題の達成を取り消しました。",
+        actor=user["nickname"] if user else None,
+    )
     return jsonify({"ok": True, "total": pts[student_id]})
 
 # ================================
@@ -3626,6 +3693,85 @@ def get_card_file(filename):
 
 def put_card_file(filename, content_obj, sha=None):
     local_put(f"{CARDS_DIR}/{filename}", content_obj, sha)
+
+# ================================
+#  運用ログ用：カードの差分（GitHubのコミット画面のような +/- 表示）
+#  ─────────────────────────────
+#  ★ 追加（2026/08/19）：デッキ保存/削除のログをタップしたときに、
+#    「デッキの何問目を直した」ではなく「実際に何が増減・変化したか」を
+#    見せたいという要望から追加。カードのid（Cardmaker.js側で発行される
+#    安定id）で新旧を突き合わせ、増えたカードは「+」、消えたカードは「-」、
+#    内容が変わったカードは旧→新を「-」「+」の2行で表示する。
+#    idが無い旧データ等は内容そのものをキーにする（それでも一致すれば
+#    「変化なし」として扱われるので実害は小さい）。
+# ================================
+def _card_signature(c):
+    """カードの中身（画像は除く）を比較するためのタプル。画像はBase64等の
+    大きなデータでログ表示に向かないため、変更検知の対象からは外す。"""
+    if not isinstance(c, dict):
+        return (str(c),)
+    parts = [c.get("question") or "", c.get("answer") or "", c.get("explanation") or ""]
+    if c.get("choices"):
+        parts.append("|".join(c.get("choices") or []))
+        parts.append(",".join(str(i) for i in (c.get("correct_indices") or [])))
+    return tuple(parts)
+
+def _card_label(c, max_len=40):
+    """ログ表示用に「問題文 / 解答」の形へ短く整形する。"""
+    def _clip(s):
+        s = (s or "").strip().replace("\n", " ")
+        return s if len(s) <= max_len else s[:max_len] + "…"
+    q, a = _clip(c.get("question")), _clip(c.get("answer"))
+    return f"{q} / {a}" if a else (q or "(内容なし)")
+
+def diff_cards(old_cards, new_cards, max_lines=30):
+    """2つのカード配列を比較し、GitHubのコミット差分のような
+    「+ 追加されたカード」「- 削除されたカード」のテキストを返す。
+    差分が無ければ None（＝呼び出し側は detail を付けない＝ログには
+    何も出さない。分からない/変化していないものを無理に表示しない）。"""
+    old_cards = old_cards or []
+    new_cards = new_cards or []
+
+    def key_of(c):
+        return c.get("id") if isinstance(c, dict) and c.get("id") else f"__sig_{_card_signature(c)}"
+
+    old_by_key = {key_of(c): c for c in old_cards}
+    new_by_key = {key_of(c): c for c in new_cards}
+
+    lines = []
+    for key, c in new_by_key.items():
+        if key not in old_by_key:
+            lines.append(f"+ {_card_label(c)}")
+    for key, c in old_by_key.items():
+        if key not in new_by_key:
+            lines.append(f"- {_card_label(c)}")
+    for key, c in new_by_key.items():
+        old_c = old_by_key.get(key)
+        if old_c is not None and _card_signature(old_c) != _card_signature(c):
+            lines.append(f"- {_card_label(old_c)}")
+            lines.append(f"+ {_card_label(c)}")
+
+    if not lines:
+        return None
+    if len(lines) > max_lines:
+        lines = lines[:max_lines] + [f"…ほか{len(lines) - max_lines}件"]
+    return "\n".join(lines)
+
+def _text_diff_lines(old_text, new_text, max_lines=40):
+    """お知らせ本文（.md/.txt）の変更を、行単位で +/- 形式にして返す。
+    変更が無ければ None。（★ 追加：diff_cards と同じ考え方をお知らせにも
+    適用したもの。difflib.ndiff の出力から追加/削除された行だけを拾う）"""
+    old_lines = (old_text or "").splitlines()
+    new_lines = (new_text or "").splitlines()
+    out = [
+        l for l in difflib.ndiff(old_lines, new_lines)
+        if l.startswith("+ ") or l.startswith("- ")
+    ]
+    if not out:
+        return None
+    if len(out) > max_lines:
+        out = out[:max_lines] + [f"…ほか{len(out) - max_lines}行"]
+    return "\n".join(out)
 
 def generate_card_filename():
     import string
@@ -3865,11 +4011,12 @@ def save_cards():
             print(f"[WARN] save_cards notify failed: {e}")
 
     is_actual_update = is_update and not bool(first_publish)
+    old_cards_for_diff = (existing_data.get("cards") or []) if (is_update and existing_data) else []
     log_event(
         "card",
-        f"カードデッキを{'更新' if is_actual_update else '公開'}しました（{len(cards)}問）。",
+        f"カードデッキ「{name}」を{'更新' if is_actual_update else '公開'}しました（{len(cards)}問）。",
         actor=publisher_nickname,
-        detail=f"{name}（{subject or '科目未設定'}・{len(cards)}問）",
+        detail=diff_cards(old_cards_for_diff, cards),
     )
     return jsonify({"ok": True, "filename": filename, "is_update": is_update})
 
@@ -3886,10 +4033,11 @@ def delete_cards():
     path = _data_path(f"{CARDS_DIR}/{filename}")
     if not os.path.isfile(path):
         return jsonify({"ok": False, "error": "ファイルが見つかりません"})
-    # ★ 削除前にデッキ名を読んでおく（運用ログの詳細表示用。ファイル名だけだと
-    #   何のデッキだったか分からないため）。読めなくても削除自体は続行する。
-    deleted_name, _ = get_card_file(filename)
-    deleted_name = (deleted_name or {}).get("name") or filename
+    # ★ 削除前にデッキの中身を読んでおく（運用ログの表示用）。読めなかった
+    #   場合はデッキ名・カードの内容が分からないので、無理に内部ファイル名
+    #   （ハッシュ）などを代わりに出さず、それらの表示自体を省く。
+    deleted_data, _ = get_card_file(filename)
+    deleted_name = (deleted_data or {}).get("name")
     try:
         os.remove(path)
     except OSError as e:
@@ -3904,7 +4052,12 @@ def delete_cards():
     # ★ 並び順（list_order.json）からも、このデッキのキーを取り除いておく
     cleanup_list_order(remove_keys={f"deck:{filename}"})
 
-    log_event("card", "カードデッキを削除しました。", actor=data.get("nickname"), detail=deleted_name)
+    log_event(
+        "card",
+        f"カードデッキ「{deleted_name}」を削除しました。" if deleted_name else "カードデッキを削除しました。",
+        actor=data.get("nickname"),
+        detail=diff_cards((deleted_data or {}).get("cards") or [], []),
+    )
     return jsonify({"ok": True})
 
 # ================================
@@ -4339,7 +4492,12 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
         }
         put_card_file(filename, card_payload)
         upsert_cards_index_entry(filename, card_payload)
-        log_event("card", f"みんなでクイズの結果を「クイズ過去問」に保存しました（{len(cards)}問）。", actor=nickname, detail=f"{title}（{len(cards)}問）")
+        log_event(
+            "card",
+            f"みんなでクイズの結果を「{title}」として「クイズ過去問」に保存しました（{len(cards)}問）。",
+            actor=nickname,
+            detail=diff_cards([], cards),
+        )
     except Exception as e:
         print(f"[WARN] クイズ過去問の保存に失敗しました（クイズの進行自体は続行）: {e}")
 
@@ -5040,6 +5198,15 @@ def upload_notice():
 
     # 既存ファイルなら上書き
     is_update = os.path.isfile(path)
+    # ★ 運用ログで内容の差分を見せるため、上書き前に旧内容を読んでおく。
+    #   読めなくても（＝新規作成、または読み取り失敗）アップロード自体は続行する。
+    old_content = None
+    if is_update:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                old_content = f.read()
+        except OSError:
+            old_content = None
     try:
         tmp_path = f"{path}.tmp"
         with open(tmp_path, "w", encoding="utf-8") as f:
@@ -5083,7 +5250,12 @@ def upload_notice():
         except Exception as e:
             print(f"[WARN] upload_notice notify failed: {e}")
 
-    log_event("notice", f"お知らせを{'更新' if is_update else '追加'}しました。", actor=uploader, detail=filename)
+    log_event(
+        "notice",
+        f"お知らせ「{filename}」を{'更新' if is_update else '追加'}しました。",
+        actor=uploader,
+        detail=_text_diff_lines(old_content, content),
+    )
     return jsonify({"ok": True, "filename": filename, "is_update": is_update, "uploader": uploader})
 
 
@@ -5098,6 +5270,12 @@ def delete_notice():
     path = _data_path(f"{NOTICES_DIR}/{filename}")
     if not os.path.isfile(path):
         return jsonify({"ok": False, "error": "ファイルが見つかりません"})
+    # ★ 削除前に内容を読んでおく（運用ログの詳細表示用）。読めなくても削除は続行する。
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            deleted_content = f.read()
+    except OSError:
+        deleted_content = None
     try:
         os.remove(path)
     except OSError as e:
@@ -5115,7 +5293,12 @@ def delete_notice():
     except DataWriteError as e:
         print(f"[WARN] notices_meta からの削除に失敗しました: {e}")
 
-    log_event("notice", "お知らせを削除しました。", actor=data.get("nickname"), detail=filename)
+    log_event(
+        "notice",
+        f"お知らせ「{filename}」を削除しました。",
+        actor=data.get("nickname"),
+        detail=_text_diff_lines(deleted_content, None),
+    )
     return jsonify({"ok": True})
 
 
@@ -5144,7 +5327,7 @@ def set_notice_done():
             meta[filename] = entry
             try:
                 save_notices_meta(meta, sha)
-                log_event("notice", f"お知らせを{'実行済み' if done else '未実行'}にしました。", actor=data.get("nickname"), detail=filename)
+                log_event("notice", f"お知らせ「{filename}」を{'実行済み' if done else '未実行'}にしました。", actor=data.get("nickname"))
                 return jsonify({"ok": True})
             except DataWriteError as e:
                 last_err = e
@@ -5287,7 +5470,7 @@ def save_folder():
             folders.append({"id": folder_id, "name": name, "parent_id": parent_id})
 
         save_card_folders(folders, sha)
-        log_event("card", "フォルダを保存しました。", actor=data.get("nickname"), detail=name)
+        log_event("card", f"フォルダ「{name}」を保存しました。", actor=data.get("nickname"))
         return jsonify({"ok": True, "id": folder_id})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -5320,9 +5503,11 @@ def delete_folder():
             remove_scopes=remove_ids,
         )
 
+        deleted_folder_name = (deleted_folder or {}).get("name")
         log_event(
-            "card", "フォルダを削除しました。", actor=data.get("nickname"),
-            detail=(deleted_folder or {}).get("name") or folder_id,
+            "card",
+            f"フォルダ「{deleted_folder_name}」を削除しました。" if deleted_folder_name else "フォルダを削除しました。",
+            actor=data.get("nickname"),
         )
         return jsonify({"ok": True, "deleted_ids": list(remove_ids)})
     except DataWriteError as e:
