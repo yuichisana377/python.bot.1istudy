@@ -360,11 +360,19 @@ def log_event(category, summary, level="info", actor=None, detail=None):
     Noneのままでよい。Discord IDなどより強く個人を特定できる情報は渡さない
     こと）。level は "info" または "error"（失敗をWeb側で視覚的に区別する
     ため）。失敗してもBot本体は止めない。
-    detail は「具体的に何が変更されたか」を表す任意の追加テキスト（例：
-    編集前後の値、対象の名前など）。Web側では一覧には出さず、該当行を
-    タップしたときだけ展開表示する（2026/08/19追加）。長すぎるとログ
-    ファイルが肥大化するため上限を設けて切り詰める。省略した場合は
-    従来通り詳細なしの1行だけの表示になる。"""
+
+    detail は「具体的に何が変更されたか」を表す情報（2026/08/19追加）。
+    Web側では一覧には出さず、該当行をタップしたときだけ展開表示する。
+    ★ 2026/08/19、「GitHubのコミットの『変更されたファイル』表示にほぼ
+    そのまま近い見た目にしたい（ファイル名込みで、ファイルごとに折り畳める
+    ように）」という要望を受けて、単なる1本の文字列ではなく
+    `[{"file": "実際のファイルパス or None", "diff": "+/-形式のテキスト"}, ...]`
+    という「ファイルごとの差分」のリスト形式にした。file はこのBotの
+    データディレクトリ内の実パス（例: "words/set_20260819_...json"）を
+    そのまま見せる（隠さない）。file が無い項目（対象がファイル1つに
+    対応しない場合）は None のままでよく、Web側はファイル名見出し無しの
+    差分ブロックとして表示する。後方互換のため、旧形式（プレーン文字列）
+    が渡された場合も自動的に1件のfile:Noneエントリとして扱う。"""
     try:
         with _system_log_lock:
             entries, sha = local_get(SYSTEM_LOG_FILE)
@@ -377,13 +385,34 @@ def log_event(category, summary, level="info", actor=None, detail=None):
                 "level": level,
                 "actor": actor,
             }
-            if detail:
-                entry["detail"] = str(detail).strip()[:2000]
+            files = detail if isinstance(detail, list) else ([{"file": None, "diff": str(detail)}] if detail else [])
+            safe_files = []
+            for f in files:
+                diff_text = str((f or {}).get("diff") or "").strip()
+                if not diff_text:
+                    continue
+                safe_files.append({
+                    "file": (f or {}).get("file"),
+                    "diff": diff_text[:4000],  # ★ ファイル単位の上限（全体はさらに下でも切り詰める）
+                })
+                if len(safe_files) >= 12:  # ★ 1回の操作で変更されるファイル数は通常1〜2件なので十分な上限
+                    break
+            if safe_files:
+                entry["detail"] = safe_files
             entries.append(entry)
             entries = entries[-SYSTEM_LOG_MAX_ENTRIES:]
             local_put(SYSTEM_LOG_FILE, entries, sha)
     except Exception as e:
         print(f"[WARN] システムログの記録に失敗しました: {e}")
+
+def file_diff(file, old_text, new_text, max_lines=60):
+    """指定したファイル1つ分の変更を、+/- 形式の行テキストにまとめて
+    返す（GitHubのファイル差分と同じ考え方）。差分が無ければ None。
+    log_event の detail に渡すリストの1要素を作るための共通ヘルパー。"""
+    diff = _text_diff_lines(old_text, new_text, max_lines=max_lines)
+    if not diff:
+        return None
+    return {"file": file, "diff": diff}
 
 @app.route("/system_log", methods=["GET"])
 def system_log():
@@ -522,6 +551,18 @@ def save_plans(guild_id: int, plans: list):
 async def async_load_plans(guild_id: int):
     data, _ = await async_local_get(f"plans_{guild_id}.json")
     return data or []
+
+def _plan_line(p):
+    """運用ログ用：予定1件を1行のテキストにする（GitHubのコミット差分に
+    使うfile_diff()と組み合わせて、plans_{guild_id}.jsonの変更点だけを
+    +/- で浮かび上がらせるために使う）。"""
+    line = f"{p.get('date')} / {p.get('subject')} / {p.get('content')}"
+    if p.get("points") is not None:
+        line += f"（{p['points']}pt）"
+    return line
+
+def _plans_text(plans):
+    return "\n".join(_plan_line(p) for p in (plans or []))
 
 async def async_save_plans(guild_id: int, plans: list):
     _, sha = await async_local_get(f"plans_{guild_id}.json")
@@ -1340,6 +1381,7 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
         plan["points"] = points if points is not None else DEFAULT_TASK_POINTS
 
     plans = load_plans(guild_id)
+    old_plans_text = _plans_text(plans)  # ★ 運用ログでファイル全体の差分を見せるため、追加前に控えておく
     plans.append(plan)
     try:
         save_plans(guild_id, plans)
@@ -1354,10 +1396,10 @@ async def add_plan_internal(guild_id: int, subject: str, date: str, category: st
     msg = f"登録しました！\n{date_str} / {subject} / {tagged_content}"
     if "points" in plan:
         msg += f"\n⭐ {plan['points']}pt"
-    # ★ 運用ログ（system_log）向けは「+ 行」形式（GitHubのコミット差分のような
-    #   見た目に揃えるため）。write_log側のdetail（Plan.js等が別途表示するもの）
-    #   は従来の形式のまま変えない。
-    return True, msg, f"+ {detail}"
+    # ★ 運用ログ（system_log）向けは plans_{guild_id}.json 全体をファイル差分として渡す
+    #   （write_log側のdetail＝Plan.js等が別途表示するものとは別。形式は変えていない）。
+    change = file_diff(f"plans_{guild_id}.json", old_plans_text, _plans_text(plans))
+    return True, msg, [change] if change else None
 
 # ================================
 #  /add
@@ -2296,6 +2338,7 @@ def edit_schedule():
 
     guild    = bot.get_guild(guild_id)
     plans    = load_plans(guild_id)
+    old_plans_text = _plans_text(plans)  # ★ 運用ログでファイル全体の差分を見せるため、変更前に控えておく
     found = None
     for p in plans:
         label = f"{p['date']}/{p['subject']}{p['content']}"
@@ -2341,11 +2384,12 @@ def edit_schedule():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     after_str = f"{found['date']} / {found['subject']} / {found['content']}"
     write_log(guild_id, "edit", detail=f"{before_str} → {after_str}")
+    change = file_diff(f"plans_{guild_id}.json", old_plans_text, _plans_text(plans))
     log_event(
         "schedule",
         f"予定「{found['subject']}」を編集しました（{found['date']}）。",
         actor=nickname,
-        detail=f"- {before_str}\n+ {after_str}",
+        detail=[change] if change else None,
     )
     if guild:
         target_channel = get_subject_channel_by_name(guild, found["subject"])
@@ -2385,11 +2429,12 @@ def delete_schedule():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     detail = f"{deleted['date']} / {deleted['subject']} / {deleted['content']}"
     write_log(guild_id, "delete", detail=detail)
+    change = file_diff(f"plans_{guild_id}.json", _plans_text(plans), _plans_text(new_plans))
     log_event(
         "schedule",
         f"予定「{deleted['subject']}」を削除しました（{deleted['date']}）。",
         actor=nickname,
-        detail=f"- {detail}",
+        detail=[change] if change else None,
     )
     if guild:
         target_channel = get_subject_channel_by_name(guild, deleted["subject"])
@@ -2442,6 +2487,22 @@ def save_timetable(guild_id: int, data: dict):
     local_put(f"timetable_{guild_id}.json", data, sha)
     notify_change(guild_id)
 
+def _timetable_entry_line(e):
+    """運用ログ用：時間割の変更1件を1行のテキストにする。"""
+    t = e.get("type")
+    note = f" 備考: {e['note']}" if e.get("note") else ""
+    if t == "change":
+        items = f"（持ち物: {', '.join(e.get('items') or [])}）" if e.get("items") else ""
+        return f"{e.get('date')} {e.get('period')}限: {e.get('subject')}{items}{note}"
+    if t == "holiday":
+        return f"{e.get('date')}: 休校（{e.get('reason')}）{note}"
+    if t == "period_holiday":
+        return f"{e.get('date')} {e.get('period')}限: 休み（{e.get('reason')}）{note}"
+    return f"{e.get('date')}: {e}"
+
+def _timetable_text(tt):
+    return "\n".join(_timetable_entry_line(e) for e in (tt or {}).values())
+
 @app.route("/list_timetable", methods=["GET"])
 def list_timetable():
     guild_id = request.args.get("guild_id")
@@ -2466,7 +2527,7 @@ def update_timetable():
         return err
 
     tt = load_timetable(guild_id)
-    old_entry = tt.get(key)  # ★ 運用ログで変更前後を見せるため、上書き前に控えておく
+    old_tt_text = _timetable_text(tt)  # ★ 運用ログでファイル全体の差分を見せるため、上書き前に控えておく
     tt[key] = {
         "key":     key,
         "type":    "change",
@@ -2482,15 +2543,12 @@ def update_timetable():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     tt_detail = f"時間割変更: {key} → {data.get('subject')}"
     write_log(guild_id, "edit", detail=tt_detail)
-    lines = []
-    if old_entry:
-        lines.append(f"- {old_entry.get('date')} {old_entry.get('period')}限 {old_entry.get('subject')}")
-    lines.append(f"+ {data.get('date')} {data.get('period')}限 {data.get('subject')}")
+    change = file_diff(f"timetable_{guild_id}.json", old_tt_text, _timetable_text(tt))
     log_event(
         "timetable",
         f"時間割「{data.get('subject')}」を更新しました（{data.get('date')}）。",
         actor=nickname,
-        detail="\n".join(lines),
+        detail=[change] if change else None,
     )
     return jsonify({"ok": True})
 
@@ -2504,6 +2562,7 @@ def set_holiday():
     if not key:
         return jsonify({"ok": False, "error": "missing fields"})
     tt = load_timetable(guild_id)
+    old_tt_text = _timetable_text(tt)
     tt[key] = {
         "key":    key,
         "type":   "holiday",
@@ -2517,11 +2576,12 @@ def set_holiday():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     holiday_detail = f"休校設定: {data.get('date')} {data.get('reason')}"
     write_log(guild_id, "edit", detail=holiday_detail)
+    change = file_diff(f"timetable_{guild_id}.json", old_tt_text, _timetable_text(tt))
     log_event(
         "timetable",
         f"休校設定「{data.get('date')}」を更新しました。",
         actor=nickname,
-        detail=f"+ {holiday_detail}",
+        detail=[change] if change else None,
     )
     return jsonify({"ok": True})
 
@@ -2544,6 +2604,7 @@ def set_period_holiday():
     if not key or period is None:
         return jsonify({"ok": False, "error": "missing fields"})
     tt = load_timetable(guild_id)
+    old_tt_text = _timetable_text(tt)
     tt[key] = {
         "key":    key,
         "type":   "period_holiday",
@@ -2558,11 +2619,12 @@ def set_period_holiday():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     period_holiday_detail = f"1コマ休み設定: {data.get('date')} {period}限 {data.get('reason')}"
     write_log(guild_id, "edit", detail=period_holiday_detail)
+    change = file_diff(f"timetable_{guild_id}.json", old_tt_text, _timetable_text(tt))
     log_event(
         "timetable",
         f"休み設定「{data.get('date')} {period}限」を更新しました。",
         actor=nickname,
-        detail=f"+ {period_holiday_detail}",
+        detail=[change] if change else None,
     )
     return jsonify({"ok": True})
 
@@ -2578,18 +2640,19 @@ def delete_timetable():
     tt = load_timetable(guild_id)
     if key in tt:
         old_entry = tt[key]
+        old_tt_text = _timetable_text(tt)
         del tt[key]
         try:
             save_timetable(guild_id, tt)
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         write_log(guild_id, "edit", detail=f"時間割変更削除: {key}")
-        label = f"{old_entry.get('date')} {old_entry.get('period', '')}限 {old_entry.get('subject') or old_entry.get('reason') or ''}".strip()
+        change = file_diff(f"timetable_{guild_id}.json", old_tt_text, _timetable_text(tt))
         log_event(
             "timetable",
             f"時間割の変更「{old_entry.get('date')}」を削除しました。",
             actor=nickname,
-            detail=f"- {label}",
+            detail=[change] if change else None,
         )
     return jsonify({"ok": True})
 
@@ -2612,6 +2675,16 @@ def save_terms(guild_id: int, terms: dict):
     _, sha = local_get(f"terms_{guild_id}.json")
     local_put(f"terms_{guild_id}.json", terms, sha)
     notify_change(guild_id)
+
+def _term_line(t):
+    """運用ログ用：学期の基本時間割1件を1行のテキストにする（曜日ごとの
+    コマ数だけを添えて、時間割そのもの全部は出さない＝長すぎるため）。"""
+    tt = t.get("timetable") or {}
+    total_periods = sum(len(v) for v in tt.values() if isinstance(v, list))
+    return f"{t.get('name')}: {t.get('start_date')}〜{t.get('end_date')}（時間割 計{total_periods}コマ）"
+
+def _terms_text(terms):
+    return "\n".join(_term_line(t) for t in (terms or {}).values())
 
 @app.route("/list_terms", methods=["GET"])
 def list_terms():
@@ -2651,7 +2724,7 @@ def save_term():
         if start_date <= t.get("end_date", "") and t.get("start_date", "") <= end_date:
             return jsonify({"ok": False, "error": f"「{t.get('name')}」（{t.get('start_date')}〜{t.get('end_date')}）と期間が重なっています"})
 
-    old_term = terms.get(term_id)  # ★ 運用ログで変更前後を見せるため、上書き前に控えておく
+    old_terms_text = _terms_text(terms)  # ★ 運用ログでファイル全体の差分を見せるため、上書き前に控えておく
     terms[term_id] = {
         "id":         term_id,
         "name":       name,
@@ -2665,15 +2738,12 @@ def save_term():
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     term_detail = f"学期時間割保存: {name}（{start_date}〜{end_date}）"
     write_log(guild_id, "edit", detail=term_detail)
-    lines = []
-    if old_term:
-        lines.append(f"- {old_term.get('name')}（{old_term.get('start_date')}〜{old_term.get('end_date')}）")
-    lines.append(f"+ {name}（{start_date}〜{end_date}）")
+    change = file_diff(f"terms_{guild_id}.json", old_terms_text, _terms_text(terms))
     log_event(
         "timetable",
         f"学期時間割「{name}」を保存しました。",
         actor=nickname,
-        detail="\n".join(lines),
+        detail=[change] if change else None,
     )
     return jsonify({"ok": True, "id": term_id})
 
@@ -2689,17 +2759,19 @@ def delete_term():
     terms = load_terms(guild_id)
     if term_id in terms:
         name = terms[term_id].get("name", term_id)
+        old_terms_text = _terms_text(terms)
         del terms[term_id]
         try:
             save_terms(guild_id, terms)
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
         write_log(guild_id, "edit", detail=f"学期時間割削除: {name}")
+        change = file_diff(f"terms_{guild_id}.json", old_terms_text, _terms_text(terms))
         log_event(
             "timetable",
             f"学期時間割「{name}」を削除しました。",
             actor=nickname,
-            detail=f"- {name}",
+            detail=[change] if change else None,
         )
     return jsonify({"ok": True})
 
@@ -3739,28 +3811,20 @@ def put_card_file(filename, content_obj, sha=None):
     local_put(f"{CARDS_DIR}/{filename}", content_obj, sha)
 
 # ================================
-#  運用ログ用：カードの差分（GitHubのコミット画面のような +/- 表示）
+#  運用ログ用：ファイルの中身を「行単位のテキスト」に変換して差分を取る
 #  ─────────────────────────────
-#  ★ 追加（2026/08/19）：デッキ保存/削除のログをタップしたときに、
-#    「デッキの何問目を直した」ではなく「実際に何が増減・変化したか」を
-#    見せたいという要望から追加。カードのid（Cardmaker.js側で発行される
-#    安定id）で新旧を突き合わせ、増えたカードは「+」、消えたカードは「-」、
-#    内容が変わったカードは旧→新を「-」「+」の2行で表示する。
-#    idが無い旧データ等は内容そのものをキーにする（それでも一致すれば
-#    「変化なし」として扱われるので実害は小さい）。
+#  ★ 追加（2026/08/19）：運用ログの詳細表示を、実際のGitHubのコミット
+#    画面（変更されたファイル名 → +/- の行差分）にできるだけ近づけたい
+#    という要望から、JSONファイルの中身をそのまま出すのではなく、
+#    人が読んで分かる1行テキストに変換してから difflib で行差分を取る
+#    方式にした。true/false・null・内部IDのような分かりにくい値は、
+#    ここで日本語の言葉に置き換えてから比較する（例：
+#    incomplete=true → "未完成（作成中）"、choice_mode=null → "暗記カード"）。
+#    こうすることで、「その項目が変わった行だけ」が - と + の2行で
+#    浮かび上がる（変化していない行は表示されない＝diff_cardsの考え方を
+#    ファイル全体に拡張したもの）。
 # ================================
-def _card_signature(c):
-    """カードの中身（画像は除く）を比較するためのタプル。画像はBase64等の
-    大きなデータでログ表示に向かないため、変更検知の対象からは外す。"""
-    if not isinstance(c, dict):
-        return (str(c),)
-    parts = [c.get("question") or "", c.get("answer") or "", c.get("explanation") or ""]
-    if c.get("choices"):
-        parts.append("|".join(c.get("choices") or []))
-        parts.append(",".join(str(i) for i in (c.get("correct_indices") or [])))
-    return tuple(parts)
-
-def _card_label(c, max_len=40):
+def _card_label(c, max_len=60):
     """ログ表示用に「問題文 / 解答」の形へ短く整形する。"""
     def _clip(s):
         s = (s or "").strip().replace("\n", " ")
@@ -3768,43 +3832,39 @@ def _card_label(c, max_len=40):
     q, a = _clip(c.get("question")), _clip(c.get("answer"))
     return f"{q} / {a}" if a else (q or "(内容なし)")
 
-def diff_cards(old_cards, new_cards, max_lines=30):
-    """2つのカード配列を比較し、GitHubのコミット差分のような
-    「+ 追加されたカード」「- 削除されたカード」のテキストを返す。
-    差分が無ければ None（＝呼び出し側は detail を付けない＝ログには
-    何も出さない。分からない/変化していないものを無理に表示しない）。"""
-    old_cards = old_cards or []
-    new_cards = new_cards or []
+def _card_folder_name_map():
+    """folder_id → フォルダ名 の対応表（ログ表示で内部IDを出さないため）。"""
+    try:
+        folders, _ = load_card_folders()
+        return {f.get("id"): f.get("name") for f in (folders or [])}
+    except Exception:
+        return {}
 
-    def key_of(c):
-        return c.get("id") if isinstance(c, dict) and c.get("id") else f"__sig_{_card_signature(c)}"
-
-    old_by_key = {key_of(c): c for c in old_cards}
-    new_by_key = {key_of(c): c for c in new_cards}
-
+def _deck_text(data, folder_names=None):
+    """カードデッキ（1ファイル分）の中身を、人が読める行テキストに変換する。
+    デッキ名・科目・状態・形式・フォルダ・各カードを1行ずつに並べ、
+    difflib で前後を比較すると「変わった行だけ」が浮かび上がる。"""
+    if not data:
+        return ""
+    folder_names = folder_names or {}
     lines = []
-    for key, c in new_by_key.items():
-        if key not in old_by_key:
-            lines.append(f"+ {_card_label(c)}")
-    for key, c in old_by_key.items():
-        if key not in new_by_key:
-            lines.append(f"- {_card_label(c)}")
-    for key, c in new_by_key.items():
-        old_c = old_by_key.get(key)
-        if old_c is not None and _card_signature(old_c) != _card_signature(c):
-            lines.append(f"- {_card_label(old_c)}")
-            lines.append(f"+ {_card_label(c)}")
-
-    if not lines:
-        return None
-    if len(lines) > max_lines:
-        lines = lines[:max_lines] + [f"…ほか{len(lines) - max_lines}件"]
+    lines.append(f"デッキ名: {data.get('name') or ''}")
+    lines.append(f"科目: {data.get('subject') or '(未設定)'}")
+    lines.append(f"状態: {'未完成（作成中）' if data.get('incomplete') else '完成'}")
+    lines.append(f"形式: {'選択式デッキ' if data.get('choice_mode') else '暗記カード（通常デッキ）'}")
+    folder_id = data.get('folder_id')
+    lines.append(f"フォルダ: {folder_names.get(folder_id, folder_id) if folder_id else '(フォルダなし)'}")
+    cards = data.get('cards') or []
+    for i, c in enumerate(cards, 1):
+        if isinstance(c, dict):
+            lines.append(f"カード{i}: {_card_label(c)}")
     return "\n".join(lines)
 
-def _text_diff_lines(old_text, new_text, max_lines=40):
-    """お知らせ本文（.md/.txt）の変更を、行単位で +/- 形式にして返す。
-    変更が無ければ None。（★ 追加：diff_cards と同じ考え方をお知らせにも
-    適用したもの。difflib.ndiff の出力から追加/削除された行だけを拾う）"""
+def _text_diff_lines(old_text, new_text, max_lines=60):
+    """2つのテキストを行単位で比較し、GitHubのコミット差分のような
+    「+ 追加された行」「- 削除された行」だけを抜き出して返す。
+    変化が無ければ None（＝呼び出し側は detail を付けない＝ログには
+    何も出さない。分からない/変化していないものを無理に表示しない）。"""
     old_lines = (old_text or "").splitlines()
     new_lines = (new_text or "").splitlines()
     out = [
@@ -4064,12 +4124,18 @@ def save_cards():
             print(f"[WARN] save_cards notify failed: {e}")
 
     is_actual_update = is_update and not bool(first_publish)
-    old_cards_for_diff = (existing_data.get("cards") or []) if (is_update and existing_data) else []
+    old_deck_for_diff = existing_data if (is_update and existing_data) else None
+    folder_names = _card_folder_name_map()
+    change = file_diff(
+        f"{CARDS_DIR}/{filename}",
+        _deck_text(old_deck_for_diff, folder_names),
+        _deck_text(card_payload, folder_names),
+    )
     log_event(
         "card",
         f"カードデッキ「{name}」を{'更新' if is_actual_update else '公開'}しました（{len(cards)}問）。",
         actor=publisher_nickname,
-        detail=diff_cards(old_cards_for_diff, cards),
+        detail=[change] if change else None,
     )
     return jsonify({"ok": True, "filename": filename, "is_update": is_update})
 
@@ -4108,11 +4174,12 @@ def delete_cards():
     # ★ 並び順（list_order.json）からも、このデッキのキーを取り除いておく
     cleanup_list_order(remove_keys={f"deck:{filename}"})
 
+    change = file_diff(f"{CARDS_DIR}/{filename}", _deck_text(deleted_data, _card_folder_name_map()), "")
     log_event(
         "card",
         f"カードデッキ「{deleted_name}」を削除しました。" if deleted_name else "カードデッキを削除しました。",
         actor=nickname,
-        detail=diff_cards((deleted_data or {}).get("cards") or [], []),
+        detail=[change] if change else None,
     )
     return jsonify({"ok": True})
 
@@ -4548,11 +4615,12 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
         }
         put_card_file(filename, card_payload)
         upsert_cards_index_entry(filename, card_payload)
+        change = file_diff(f"{CARDS_DIR}/{filename}", "", _deck_text(card_payload, _card_folder_name_map()))
         log_event(
             "card",
             f"みんなでクイズの結果を「{title}」として「クイズ過去問」に保存しました（{len(cards)}問）。",
             actor=nickname,
-            detail=diff_cards([], cards),
+            detail=[change] if change else None,
         )
     except Exception as e:
         print(f"[WARN] クイズ過去問の保存に失敗しました（クイズの進行自体は続行）: {e}")
@@ -5308,11 +5376,12 @@ def upload_notice():
         except Exception as e:
             print(f"[WARN] upload_notice notify failed: {e}")
 
+    change = file_diff(f"{NOTICES_DIR}/{filename}", old_content, content)
     log_event(
         "notice",
         f"お知らせ「{filename}」を{'更新' if is_update else '追加'}しました。",
         actor=uploader,
-        detail=_text_diff_lines(old_content, content),
+        detail=[change] if change else None,
     )
     return jsonify({"ok": True, "filename": filename, "is_update": is_update, "uploader": uploader})
 
@@ -5354,11 +5423,12 @@ def delete_notice():
     except DataWriteError as e:
         print(f"[WARN] notices_meta からの削除に失敗しました: {e}")
 
+    change = file_diff(f"{NOTICES_DIR}/{filename}", deleted_content, None)
     log_event(
         "notice",
         f"お知らせ「{filename}」を削除しました。",
         actor=nickname,
-        detail=_text_diff_lines(deleted_content, None),
+        detail=[change] if change else None,
     )
     return jsonify({"ok": True})
 
@@ -5416,6 +5486,17 @@ def save_card_folders(folders, sha=None):
         _, sha = local_get(FOLDERS_FILE)
     local_put(FOLDERS_FILE, folders, sha)
     notify_change()  # ★ フォルダもguildをまたいで共有されるため全体に通知
+
+def _folders_text(folders):
+    """運用ログ用：folders.json（全フォルダ一覧）を1行1フォルダのテキストにする。"""
+    folders = folders or []
+    by_id = {f.get("id"): f.get("name") for f in folders}
+    lines = []
+    for f in folders:
+        parent_id = f.get("parent_id")
+        loc = f"（{by_id.get(parent_id, parent_id)}の中）" if parent_id else ""
+        lines.append(f"{f.get('name')}{loc}")
+    return "\n".join(lines)
 
 def _folder_level(folders, folder_id):
     lvl = 0
@@ -5514,6 +5595,7 @@ def save_folder():
 
     try:
         folders, sha = load_card_folders()
+        old_folders_text = _folders_text(folders)  # ★ 運用ログでファイル全体の差分を見せるため、変更前に控えておく
 
         if folder_id:
             target = next((f for f in folders if f["id"] == folder_id), None)
@@ -5537,7 +5619,8 @@ def save_folder():
             folders.append({"id": folder_id, "name": name, "parent_id": parent_id})
 
         save_card_folders(folders, sha)
-        log_event("card", f"フォルダ「{name}」を保存しました。", actor=nickname)
+        change = file_diff(FOLDERS_FILE, old_folders_text, _folders_text(folders))
+        log_event("card", f"フォルダ「{name}」を保存しました。", actor=nickname, detail=[change] if change else None)
         return jsonify({"ok": True, "id": folder_id})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -5574,10 +5657,12 @@ def delete_folder():
         )
 
         deleted_folder_name = (deleted_folder or {}).get("name")
+        change = file_diff(FOLDERS_FILE, _folders_text(folders), _folders_text(new_folders))
         log_event(
             "card",
             f"フォルダ「{deleted_folder_name}」を削除しました。" if deleted_folder_name else "フォルダを削除しました。",
             actor=nickname,
+            detail=[change] if change else None,
         )
         return jsonify({"ok": True, "deleted_ids": list(remove_ids)})
     except DataWriteError as e:
@@ -5991,6 +6076,31 @@ def _backup_category(rel_path):
             return label
     return "その他データ"
 
+def _backup_status_files(porcelain_output, max_files=30):
+    """`git status --porcelain`の出力を、運用ログ用の「ファイルごと」の
+    変更リストに変換する。
+    ★ 注意：他のカテゴリ（カードデッキ・お知らせ等）とは異なり、ここでは
+    実際のファイル名の代わりに `_backup_category()` の大まかな種別ラベルを
+    使う。バックアップ対象には生徒ごとの学習データファイル
+    （例: study_data_<guild_id>_<学籍番号>_*.json）が含まれており、実ファイル名を
+    そのままログに出すと生徒個人が特定できてしまうため（_summarize_backup_changes
+    と同じ配慮）。"""
+    files = []
+    for line in (porcelain_output or "").splitlines():
+        if len(line) < 4:
+            continue
+        code = line[:2].strip()
+        rel = line[3:].strip().split(" -> ")[-1]
+        if rel.startswith("data/"):
+            rel = rel[len("data/"):]
+        label = _backup_category(rel)
+        action = "削除" if code.upper() == "D" else ("新規追加" if code in ("??", "A") else "更新")
+        sign = "-" if action == "削除" else "+"
+        files.append({"file": label, "diff": f"{sign} {action}"})
+    if len(files) > max_files:
+        files = files[:max_files] + [{"file": None, "diff": f"…ほか{len(files) - max_files}件"}]
+    return files
+
 def _summarize_backup_changes(porcelain_output):
     """`git status --porcelain`の出力から、種別ごとの変更件数を
     「学習データ2件、ポイント1件」のような短い日本語にまとめる。"""
@@ -6070,7 +6180,7 @@ def backup_data_to_github():
         log_event(
             "backup",
             f"データをバックアップしました（{change_summary}）" if change_summary else "データをバックアップしました。",
-            detail=status.stdout.strip(),  # ★ git status --porcelain の全行＝変更されたファイル一覧
+            detail=_backup_status_files(status.stdout),
         )
     except subprocess.CalledProcessError as e:
         # ★ 修正：e.cmd には use_auth=True 時の -c http.extraheader=...（トークン本体）
