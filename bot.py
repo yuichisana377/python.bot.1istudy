@@ -466,6 +466,23 @@ def file_diff(file, old_text, new_text, max_lines=60):
 
 @app.route("/system_log", methods=["GET"])
 def system_log():
+    # ★ 追加（2026/08/20）：このAPI自体は元々ログイン不要（11人の小規模運用の
+    #   ため誰でも閲覧可）だが、制限付きアカウント（対象サーバーに参加していない
+    #   ログイン済みDiscordアカウント）には見せない方針にした。session_token
+    #   （＋guild_id）が送られてきた場合だけメンバーシップを確認し、
+    #   何も送られてこない場合（未ログインの匿名アクセス）は従来通り誰でも見られる。
+    guild_id = request.args.get("guild_id")
+    token = session_token_from_request()
+    if guild_id and token:
+        try:
+            guild_id_int = int(guild_id)
+        except (TypeError, ValueError):
+            guild_id_int = None
+        if guild_id_int is not None:
+            student_id = resolve_session(token, guild_id_int)
+            if student_id and not _session_is_member(guild_id_int, student_id):
+                return jsonify({"ok": False, "error": "guild_membership_required"})
+
     entries, _ = local_get(SYSTEM_LOG_FILE)
     if not isinstance(entries, list):
         entries = []
@@ -867,15 +884,17 @@ def _timer_entry_json(entry, now_ms=None):
     }
 
 def _timer_auth_from_json():
-    """POST系タイマーAPI共通：JSONボディからguild_id・session_tokenを検証する。"""
+    """POST系タイマーAPI共通：JSONボディからguild_id・session_tokenを検証する。
+    ★ タイマー操作・学習進捗の記録も編集の一種なので、対象サーバーの
+      メンバーであることまで require_member_session() で確認する。"""
     data = request.json or {}
     guild_id = data.get("guild_id")
     if not guild_id:
         return None, None, jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return None, None, jsonify({"ok": False, "error": "not_logged_in"})
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return None, None, err
     return guild_id, student_id, None
 
 @app.route("/timer_state", methods=["GET"])
@@ -885,9 +904,9 @@ def timer_state():
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(session_token_from_request(), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    student_id, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return err
 
     _, entry = _sync_timer_entry(guild_id, student_id)
     resp = {"ok": True, "server_now": int(time.time() * 1000)}
@@ -1091,8 +1110,7 @@ def save_users(guild_id: int, users: list):
 
 def _users_text(users):
     """運用ログ用：users_{guild_id}.json を { ... } のブロックの並びにする。
-    ★ password_hash/password_saltは絶対に含めない（他の項目とは違い、
-    これは公開してよい情報ではないため）。"""
+    ★ 学籍番号・ニックネーム以外（Discord ID等）は含めない。"""
     lines = []
     for u in (users or []):
         lines.extend(_json_block([("学籍番号", u.get('id')), ("ニックネーム", u.get('nickname'))]))
@@ -1101,53 +1119,6 @@ def _users_text(users):
 def find_user(guild_id: int, student_id: str):
     users = load_users(guild_id)
     return next((u for u in users if u.get("id") == student_id), None)
-
-# ================================
-#  ★ パスワード関連ユーティリティ
-#  ─────────────────────────────
-#  パスワードは絶対に平文のまま保存しない。
-#  users_{guild_id}.json はサーバーのローカルディスクに保存されているが、
-#  ファイルが何らかの理由で漏洩・閲覧された場合に備えて、
-#  平文で置かないようにする。
-#  そのため PBKDF2-HMAC-SHA256（ソルト付き・十分な反復回数）で
-#  ハッシュ化した値だけを保存し、元のパスワードはサーバーのメモリ上
-#  ですら検証の一瞬しか扱わない。
-# ================================
-PBKDF2_ITERATIONS = 210_000
-
-# ★ 変更（2026/08/20）：以前は4文字以上であればよかったが短すぎるため、
-#   最低8文字に引き上げた。あわせて「見るからに弱い」パスワード
-#   （同じ文字の繰り返し・数字のみ等、文字種が1種類しかないもの）だけを
-#   弾く簡易的な強度チェックも追加する（複雑な組み合わせ規則までは求めない）。
-MIN_PASSWORD_LENGTH = 8
-
-def is_weak_password(password: str) -> bool:
-    """同一文字の繰り返し、または文字種（小文字/大文字/数字/記号）が1種類しか
-    無いパスワードを「弱い」と判定する。"""
-    if len(set(password)) <= 1:
-        return True
-    classes = 0
-    if re.search(r"[a-z]", password): classes += 1
-    if re.search(r"[A-Z]", password): classes += 1
-    if re.search(r"[0-9]", password): classes += 1
-    if re.search(r"[^a-zA-Z0-9]", password): classes += 1
-    return classes < 2
-
-def hash_password(password: str, salt_hex: str = None):
-    """(hash_hex, salt_hex) を返す。salt_hex を渡さなければ新規のソルトを生成する。"""
-    if salt_hex is None:
-        salt_hex = secrets.token_hex(16)
-    dk = hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), PBKDF2_ITERATIONS
-    )
-    return dk.hex(), salt_hex
-
-def verify_password(password: str, salt_hex: str, expected_hash_hex: str) -> bool:
-    if not salt_hex or not expected_hash_hex:
-        return False
-    actual_hash_hex, _ = hash_password(password, salt_hex)
-    # ★ タイミング攻撃対策のため、単純な == ではなく定数時間比較を使う
-    return hmac.compare_digest(actual_hash_hex, expected_hash_hex)
 
 # ================================
 #  ★ 追加：簡易レート制限（総当たり攻撃対策）
@@ -1252,6 +1223,40 @@ def session_token_from_request():
     return request.args.get("session_token")
 
 # ================================
+#  ★ 追加（2026/08/20）：サーバー参加者限定の権限チェック
+#  ─────────────────────────────
+#  ログインをDiscordのみに一本化したのに合わせ、「対象Discordサーバーの
+#  メンバーではないログイン済みアカウント」を、完全ブロックではなく
+#  “閲覧はできるが編集は一切できない・見られる範囲も予定一覧のみ”という
+#  制限付きアカウントとして扱うことにした（ユーザーの明示的な指定）。
+#  ・_session_is_member() … そのセッション（student_id）の持ち主が今も
+#    対象サーバーのメンバーかどうかを、discord_login_links経由で判定する。
+#    Discord連携が無い（＝Discordでログインしたことが無い）場合や、
+#    Bot未準備で判定できない場合は、安全側に倒して「メンバーではない」扱い。
+#  ・require_member_session() … resolve_session() に加えてこの判定まで行う。
+#    ログインしていない場合は従来通り "not_logged_in"、ログインはしているが
+#    メンバーではない場合は "guild_membership_required" を返す（フロント側が
+#    誤って forceReLogin() しないよう、意図的に別のエラーコードにしてある）。
+#  ・/list_schedule（予定一覧の閲覧）だけは、この関数を使わず従来通り
+#    resolve_session() のみで判定する＝制限付きアカウントでも見られる唯一の機能。
+# ================================
+def _session_is_member(guild_id: int, student_id: str) -> bool:
+    login_links = load_discord_login_links(guild_id)
+    discord_user_id = login_links.get(student_id)
+    if not discord_user_id:
+        return False
+    return _guild_membership_status(guild_id, int(discord_user_id)) == "member"
+
+def require_member_session(token, guild_id: int):
+    """戻り値 (student_id, err)。err が None でなければ呼び出し側はそのまま `return err` してよい。"""
+    student_id = resolve_session(token, guild_id)
+    if not student_id:
+        return None, jsonify({"ok": False, "error": "not_logged_in"})
+    if not _session_is_member(guild_id, student_id):
+        return None, jsonify({"ok": False, "error": "guild_membership_required"})
+    return student_id, None
+
+# ================================
 #  ★ 追加（2026/08/19）：「変更」系API共通のログイン必須チェック
 #  ─────────────────────────────
 #  以前は予定・時間割・カードデッキ・フォルダ・お知らせの追加/編集/削除系
@@ -1263,6 +1268,8 @@ def session_token_from_request():
 #    （予定・時間割ページは「見るだけなら誰でもOK」という仕様を維持）。
 #  ・nicknameはクライアントの自己申告を使わず、サーバー側のユーザーデータから
 #    引き直す（表示名の詐称防止。/add_study_logなどと同じ）。
+#  ★ 追加（2026/08/20）：「変更」は編集そのものなので、ログイン済みだけでなく
+#    対象サーバーのメンバーであることも必須にした（require_member_session）。
 # ================================
 def require_login_json(data):
     """POST系「変更」API共通：JSONボディのguild_id・session_tokenを検証する。
@@ -1275,9 +1282,9 @@ def require_login_json(data):
         guild_id = int(guild_id)
     except (TypeError, ValueError):
         return None, None, None, jsonify({"ok": False, "error": "invalid guild_id"})
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return None, None, None, jsonify({"ok": False, "error": "not_logged_in"})
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return None, None, None, err
     user = find_user(guild_id, student_id)
     nickname = user["nickname"] if user else None
     return guild_id, student_id, nickname, None
@@ -2267,10 +2274,11 @@ def add_study_log():
 
     # --- ★ 本人確認：クライアントが自己申告する student_id は一切信用せず、
     #     ログイン（Discord OAuth）時に発行済みのセッショントークンから
-    #     本人の student_id を特定する（なりすまし防止）。 ---
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    #     本人の student_id を特定する（なりすまし防止）。あわせて、
+    #     記録の追加も編集の一種なので対象サーバーのメンバーであることも必須。 ---
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return err
 
     # --- ★ nickname もクライアントの自己申告ではなく、サーバー側のユーザー
     #     データから引き直す（表示名の詐称防止） ---
@@ -3013,50 +3021,12 @@ def get_users():
         return jsonify({"ok": False, "error": "missing guild_id"})
     try:
         users = load_users(int(guild_id))
-        # ★ password_hash / password_salt は絶対に外部に出さない。
-        #   このAPIは認証なしで誰でも呼べるので、公開してよい項目だけに絞る。
+        # ★ このAPIは認証なしで誰でも呼べるので、公開してよい項目だけに絞る。
         public_users = [
-            {"id": u.get("id"), "nickname": u.get("nickname"), "created_at": u.get("created_at"),
-             "has_password": bool(u.get("password_hash"))}
+            {"id": u.get("id"), "nickname": u.get("nickname"), "created_at": u.get("created_at")}
             for u in users
         ]
         return jsonify({"ok": True, "users": public_users})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
-
-@app.route("/change_password", methods=["POST"])
-def change_password():
-    """
-    ログイン済み（session_tokenを持っている）本人が、現在のパスワードを
-    確認した上で新しいパスワードに変更する。
-    """
-    if rate_limited("change_password"):  # ★ 追加：現在のパスワードの総当たり対策
-        return rate_limit_response()
-    data         = request.json or {}
-    guild_id     = data.get("guild_id")
-    token        = data.get("session_token")
-    old_password = data.get("old_password") or ""
-    new_password = data.get("new_password") or ""
-    if not guild_id or len(new_password) < MIN_PASSWORD_LENGTH:
-        return jsonify({"ok": False, "error": "invalid_input"})
-    if is_weak_password(new_password):
-        return jsonify({"ok": False, "error": "password too weak"})
-    try:
-        guild_id = int(guild_id)
-        student_id = resolve_session(token, guild_id)
-        if not student_id:
-            return jsonify({"ok": False, "error": "not_logged_in"})
-        users = load_users(guild_id)
-        target = next((u for u in users if u.get("id") == student_id), None)
-        if not target:
-            return jsonify({"ok": False, "error": "user_not_found"})
-        if not verify_password(old_password, target.get("password_salt"), target.get("password_hash")):
-            return jsonify({"ok": False, "error": "wrong_password"})
-        pw_hash, pw_salt = hash_password(new_password)
-        target["password_hash"] = pw_hash
-        target["password_salt"] = pw_salt
-        save_users(guild_id, users)
-        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -3077,9 +3047,10 @@ def generate_link_code():
         return jsonify({"ok": False, "error": "missing fields"})
 
     guild_id   = int(guild_id)
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    # ★ DM通知の連携も、対象サーバーのメンバーでなければ行わせない。
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return err
 
     try:
         result = issue_link_code(guild_id, student_id)
@@ -3138,9 +3109,10 @@ def discord_oauth_start():
         return jsonify({"ok": False, "error": "missing fields"})
 
     guild_id   = int(guild_id)
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    # ★ DM通知の連携も、対象サーバーのメンバーでなければ行わせない。
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return err
 
     state = issue_oauth_state(guild_id, student_id, purpose="link")
     authorize_url = "https://discord.com/oauth2/authorize?" + urlencode({
@@ -3267,7 +3239,8 @@ def _guild_membership_status(guild_id: int, discord_user_id: int) -> str:
     指定したDiscordユーザーが guild_id のサーバーに参加しているかどうかを、
     Bot自身のメンバーキャッシュ（intents.members=True で取得済み）で判定する。
     戻り値: "member" / "not_member" / "unknown"（Bot未準備・サーバー未取得等で
-    判定できない場合。ここは安全側に倒し、ログインをブロックする扱いにする）。
+    判定できない場合）。呼び出し側（_session_is_member等）は "unknown" も
+    安全側に倒して「メンバーではない」扱いにする。
     """
     if not bot.is_ready():
         return "unknown"
@@ -3292,16 +3265,12 @@ def _handle_discord_login_callback(guild_id: int, discord_user_id: int, discord_
       クエリパラメータとしてフロントエンドへ渡し、フロントエンド自身の
       JS（Login.js）がそちらのドメイン上でlocalStorageに保存する。
 
-    ★ Discordログイン専用化に伴い、guild_id のサーバーに参加している
-      Discordアカウントでなければログイン・新規登録のどちらもさせない
-      （既存の discord_login_links に登録済みでも、サーバーを抜けていれば通さない）。
+    ★ Discordログイン自体は、guild_id のサーバーに参加していないアカウント
+      でも成功させる（完全ブロックはしない）。ただし参加していない場合は
+      「制限付きアカウント」として、編集操作や予定一覧以外の閲覧・DM機能が
+      require_member_session()／_session_is_member() 経由で拒否される
+      （ユーザーの明示的な指定。2026/08/20）。
     """
-    membership = _guild_membership_status(guild_id, discord_user_id)
-    if membership == "not_member":
-        return _oauth_result_page(False, "このサーバーのメンバーではないため、ログインできません。")
-    if membership == "unknown":
-        return _oauth_result_page(False, "サーバーの参加状況を確認できませんでした。時間をおいてもう一度お試しください。")
-
     login_links = load_discord_login_links(guild_id)
     student_id = next((sid for sid, did in login_links.items() if int(did) == discord_user_id), None)
 
@@ -3310,6 +3279,10 @@ def _handle_discord_login_callback(guild_id: int, discord_user_id: int, discord_
         if user:
             token = create_session(guild_id, student_id)
             nickname = user.get("nickname", student_id)
+            # ★ 不正防止：新たなログインが検出されるたび、対象サーバーのメンバー
+            #   本人にだけDMで通知する（制限付きアカウントにはDM機能自体を
+            #   使わせない方針のため、send_discord_dm側で自動的にスキップされる）。
+            _notify_new_login(guild_id, student_id, nickname)
             qs = urlencode({
                 "discord_session_token": token,
                 "student_id": student_id,
@@ -3416,6 +3389,9 @@ def discord_complete_registration():
         discard_discord_reg_token(dtoken)  # ★ 成功時のみ破棄
 
         token = create_session(guild_id, student_id)
+        # ★ 不正防止：新たなログイン（＝ここでの登録／再連携）が検出されるたび、
+        #   対象サーバーのメンバー本人にだけDMで通知する（ベストエフォート）。
+        _notify_new_login(guild_id, student_id, final_nickname)
         return jsonify({
             "ok": True,
             "session_token": token,
@@ -3432,11 +3408,17 @@ def send_discord_dm(guild_id: int, student_id: str, title: str, message: str):
     """
     指定した生徒（Discord連携済み）に、botからDMを送る共通処理。
     ・連携していない場合は ValueError("not_linked") を送出する。
+    ・★ 追加（2026/08/20）：対象サーバーのメンバーではない場合も同じ
+      ValueError("not_linked") を送出する（＝制限付きアカウントには
+      DM機能を一切使わせない方針。呼び出し側は元々「連携していない」
+      場合のフォールバック処理を持っているため、そのまま流用できる）。
     ・送信自体に失敗した場合はその例外をそのまま送出する。
     """
     links = load_discord_links(guild_id)
     discord_user_id = links.get(str(student_id).strip().upper())
     if not discord_user_id:
+        raise ValueError("not_linked")
+    if _guild_membership_status(guild_id, int(discord_user_id)) != "member":
         raise ValueError("not_linked")
 
     async def _send():
@@ -3447,6 +3429,29 @@ def send_discord_dm(guild_id: int, student_id: str, title: str, message: str):
 
     future = asyncio.run_coroutine_threadsafe(_send(), bot.loop)
     future.result(timeout=10)
+
+
+def _notify_new_login(guild_id: int, student_id: str, nickname: str):
+    """
+    ★ 追加（2026/08/20）：不正防止のため、Discordログインで新しいセッションが
+      発行されるたびに、本人のDiscord DMに通知を送る（ベストエフォート・
+      失敗してもログイン自体は成功のまま）。
+    ・「新たなログイン」とは、この関数の呼び出し＝create_session()の呼び出し
+      そのものを指す。サイト内のページ遷移や再読み込みでは呼ばれない
+      （ブラウザ側はlocalStorageの既存session_tokenを使い回すだけで、
+      サーバーに新しいセッションを要求しないため）。
+    ・対象サーバーのメンバーでなければ send_discord_dm() 側で自動的に
+      スキップされる（制限付きアカウントにはDM機能自体を使わせない方針）。
+    """
+    try:
+        send_discord_dm(
+            guild_id, student_id,
+            "新しいログインを検出しました",
+            f"{nickname}（{student_id}）としてログインが行われました。\n"
+            "心当たりが無い場合は、すぐに管理者に連絡してください。",
+        )
+    except Exception:
+        pass
 
 
 @app.route("/notify_dm", methods=["POST"])
@@ -3467,11 +3472,12 @@ def notify_dm():
         return jsonify({"ok": False, "error": "missing fields"})
 
     # --- ★ 本人確認：他人の student_id を指定して勝手にDMを送りつけられない
-    #     ようにする（session_token から本人の student_id を特定する） ---
+    #     ようにする（session_token から本人の student_id を特定する）。
+    #     あわせて、対象サーバーのメンバーでなければDM機能自体を使わせない。 ---
     guild_id   = int(guild_id)
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return err
 
     try:
         send_discord_dm(guild_id, student_id, title, message)
@@ -3751,9 +3757,9 @@ def pending_delete_requests():
         guild_id = int(guild_id)
     except (TypeError, ValueError):
         return jsonify({"ok": False, "error": "invalid guild_id"})
-    student_id = resolve_session(session_token_from_request(), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    student_id, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return err
 
     items, _ = load_pending_delete_requests(guild_id)
     now = time.time()
@@ -3867,25 +3873,12 @@ def respond_delete_request():
 
 
 # ================================
-#  ★ アカウント設定（ニックネーム変更・パスワード変更）
+#  ★ アカウント設定（ニックネーム変更）
 #  ─────────────────────────────
-#  ・ニックネーム変更はログイン済み（session_token）であれば即座に可能。
-#  ・パスワード変更は、それより一段重要な操作なので、
-#    「今この端末を触っている人が、本当にそのアカウントの持ち主の
-#      Discordも操作できるか」を追加で確認する。
-#    6桁の確認コードをDiscord DMで送り、それを入力させてから
-#    初めて変更を反映する（Discord連携＝/id連携 が済んでいる生徒のみ使える）。
-#  ・コードは短時間（10分）だけ有効なメモリ上の値。プロセス再起動で
-#    消えても「もう一度コードを送ってもらう」だけで済むため、
-#    ログインセッションと違って永続化の必要はないと判断した。
+#  ログインはDiscordのみに一本化したため、パスワード関連の機能
+#  （変更・確認コード送付）は廃止した。ニックネーム変更のみ、
+#  ログイン済み（session_token）かつ対象サーバーのメンバーであれば可能。
 # ================================
-PASSWORD_CHANGE_CODES = {}      # f"{guild_id}:{student_id}" -> {"code","expires","requested_at"}
-PASSWORD_CHANGE_CODE_TTL_SEC = 10 * 60   # コードの有効期限：10分
-PASSWORD_CHANGE_CODE_COOLDOWN_SEC = 60   # 連続でコードを要求できないようにする（DM連打防止）
-
-def _pw_code_key(guild_id: int, student_id: str) -> str:
-    return f"{guild_id}:{student_id}"
-
 @app.route("/change_nickname", methods=["POST"])
 def change_nickname():
     data     = request.json or {}
@@ -3899,10 +3892,10 @@ def change_nickname():
     if err:
         return err
 
-    guild_id   = int(guild_id)
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    guild_id = int(guild_id)
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return err
 
     try:
         users  = load_users(guild_id)
@@ -3914,96 +3907,6 @@ def change_nickname():
         return jsonify({"ok": True, "nickname": nickname})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
-
-@app.route("/request_password_change_code", methods=["POST"])
-def request_password_change_code():
-    """ログイン済み本人が、パスワード変更用の確認コードをDiscord DMで受け取る。"""
-    if rate_limited("request_password_change_code"):  # ★ 追加：DM連打対策（本人ごとのクールダウンとは別に、IP単位でも制限）
-        return rate_limit_response()
-    data     = request.json or {}
-    guild_id = data.get("guild_id")
-    if not guild_id:
-        return jsonify({"ok": False, "error": "missing fields"})
-
-    guild_id   = int(guild_id)
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
-
-    key = _pw_code_key(guild_id, student_id)
-    now = time.time()
-    existing = PASSWORD_CHANGE_CODES.get(key)
-    if existing and (now - existing["requested_at"] < PASSWORD_CHANGE_CODE_COOLDOWN_SEC):
-        remain = int(PASSWORD_CHANGE_CODE_COOLDOWN_SEC - (now - existing["requested_at"])) + 1
-        return jsonify({"ok": False, "error": "too_soon", "retry_after_sec": remain})
-
-    code = f"{secrets.randbelow(1_000_000):06d}"
-    PASSWORD_CHANGE_CODES[key] = {
-        "code": code,
-        "expires": now + PASSWORD_CHANGE_CODE_TTL_SEC,
-        "requested_at": now,
-    }
-
-    try:
-        send_discord_dm(
-            guild_id, student_id,
-            "パスワード変更の確認コード",
-            f"確認コード: {code}\n（10分間有効です。心当たりが無ければこのメッセージは無視してください）",
-        )
-    except ValueError:
-        del PASSWORD_CHANGE_CODES[key]
-        return jsonify({"ok": False, "error": "not_linked"})
-    except Exception as e:
-        del PASSWORD_CHANGE_CODES[key]
-        return jsonify({"ok": False, "error": f"dm_failed: {e}"})
-
-    return jsonify({"ok": True})
-
-@app.route("/confirm_password_change", methods=["POST"])
-def confirm_password_change():
-    """確認コード＋新しいパスワードを受け取り、一致していればパスワードを更新する。"""
-    if rate_limited("confirm_password_change"):  # ★ 追加：6桁コード（100万通り）の総当たり対策
-        return rate_limit_response()
-    data         = request.json or {}
-    guild_id     = data.get("guild_id")
-    code         = (data.get("code") or "").strip()
-    new_password = data.get("new_password") or ""
-    if not guild_id or not code:
-        return jsonify({"ok": False, "error": "missing fields"})
-    if len(new_password) < MIN_PASSWORD_LENGTH:
-        return jsonify({"ok": False, "error": f"password must be at least {MIN_PASSWORD_LENGTH} characters"})
-    if is_weak_password(new_password):
-        return jsonify({"ok": False, "error": "password too weak"})
-
-    guild_id   = int(guild_id)
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
-
-    key   = _pw_code_key(guild_id, student_id)
-    entry = PASSWORD_CHANGE_CODES.get(key)
-    if not entry:
-        return jsonify({"ok": False, "error": "code_not_requested"})
-    if time.time() > entry["expires"]:
-        del PASSWORD_CHANGE_CODES[key]
-        return jsonify({"ok": False, "error": "code_expired"})
-    if not hmac.compare_digest(code, entry["code"]):
-        return jsonify({"ok": False, "error": "wrong_code"})
-
-    try:
-        users  = load_users(guild_id)
-        target = next((u for u in users if u.get("id") == student_id), None)
-        if not target:
-            return jsonify({"ok": False, "error": "user_not_found"})
-        pw_hash, pw_salt = hash_password(new_password)
-        target["password_hash"] = pw_hash
-        target["password_salt"] = pw_salt
-        save_users(guild_id, users)
-    except DataWriteError as e:
-        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
-
-    del PASSWORD_CHANGE_CODES[key]  # ★ 使い切ったコードは即座に無効化（使い回し防止）
-    return jsonify({"ok": True})
 
 @app.route("/list_study_logs", methods=["GET"])
 def list_study_logs():
@@ -4060,10 +3963,11 @@ def complete_task():
     data     = request.json or {}
     guild_id = int(data.get("guild_id"))
 
-    # --- ★ 本人確認：session_token から student_id を特定する（なりすまし防止） ---
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    # --- ★ 本人確認：session_token から student_id を特定する（なりすまし防止）。
+    #     課題の達成/取り消しも編集の一種なので、対象サーバーのメンバーであることも必須。 ---
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return err
 
     task_id = data.get("task_id")
     if not task_id:
@@ -4127,10 +4031,11 @@ def uncomplete_task():
     data     = request.json or {}
     guild_id = int(data.get("guild_id"))
 
-    # --- ★ 本人確認：session_token から student_id を特定する（なりすまし防止） ---
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    # --- ★ 本人確認：session_token から student_id を特定する（なりすまし防止）。
+    #     課題の達成/取り消しも編集の一種なので、対象サーバーのメンバーであることも必須。 ---
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return err
 
     task_id = data.get("task_id")
     if not task_id:
@@ -4930,15 +4835,17 @@ def _quiz_auth_from_json():
     """POST系クイズAPI共通：JSONボディからguild_id・session_tokenを検証し、
     (data, guild_id, student_id, nickname, error_response) を返す。
     ★ nickname はクライアントの自己申告ではなく、サーバー側のユーザーデータから
-    引き直す（他の参加者への表示名の詐称防止）。"""
+    引き直す（他の参加者への表示名の詐称防止）。
+    ★ クイズの作成・参加・回答も編集の一種なので、対象サーバーのメンバーで
+      あることまで require_member_session() で確認する。"""
     data = request.json or {}
     guild_id = data.get("guild_id")
     if not guild_id:
         return None, None, None, None, jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return None, None, None, None, jsonify({"ok": False, "error": "not_logged_in"})
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return None, None, None, None, err
     user = find_user(guild_id, student_id)
     nickname = (user or {}).get("nickname") or str(student_id)
     return data, guild_id, student_id, nickname, None
@@ -5327,9 +5234,9 @@ def quiz_archive_submit_score():
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(data.get("session_token"), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    student_id, err = require_member_session(data.get("session_token"), guild_id)
+    if err:
+        return err
 
     filename = data.get("filename") or ""
     if not _is_safe_deck_filename(filename):
@@ -5413,9 +5320,9 @@ def quiz_list_rooms():
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(session_token_from_request(), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    student_id, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return err
 
     now = time.time()
     with QUIZ_ROOMS_LOCK:
@@ -5489,9 +5396,9 @@ def quiz_state():
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(session_token_from_request(), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    student_id, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return err
     code = (request.args.get("code") or "").strip().upper()
 
     now = time.time()
@@ -6486,9 +6393,9 @@ def get_study_data():
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(session_token_from_request(), guild_id)
-    if not student_id:
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    student_id, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return err
 
     my_data, _ = load_student_study_data(guild_id, student_id)
     return jsonify({"ok": True, "data": my_data})
@@ -6560,8 +6467,9 @@ def deck_understanding():
     if not guild_id or not filenames:
         return jsonify({"ok": False, "error": "missing guild_id or filenames"})
     guild_id = int(guild_id)
-    if not resolve_session(session_token_from_request(), guild_id):
-        return jsonify({"ok": False, "error": "not_logged_in"})
+    _, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return err
     target_filenames = [f for f in filenames.split(",") if f]
     if not target_filenames:
         return jsonify({"ok": False, "error": "missing filenames"})
