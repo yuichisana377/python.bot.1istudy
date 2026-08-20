@@ -2266,8 +2266,8 @@ def add_study_log():
     guild_id = int(data.get("guild_id"))
 
     # --- ★ 本人確認：クライアントが自己申告する student_id は一切信用せず、
-    #     /login で発行済みのセッショントークンから本人の student_id を
-    #     特定する（なりすまし防止）。 ---
+    #     ログイン（Discord OAuth）時に発行済みのセッショントークンから
+    #     本人の student_id を特定する（なりすまし防止）。 ---
     student_id = resolve_session(data.get("session_token"), guild_id)
     if not student_id:
         return jsonify({"ok": False, "error": "not_logged_in"})
@@ -3024,155 +3024,6 @@ def get_users():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
-@app.route("/check_student", methods=["GET"])
-def check_student():
-    """
-    ログイン画面（Login.js）が「この学籍番号は登録済みか」だけを確認するための
-    最小限API。
-    ★ 以前は同じ目的でも /get_users を呼んでおり、学籍番号を1文字でも入力する
-      （またはパスワード未入力でログインボタンを押す）たびに、認証なしで
-      全生徒の学籍番号・ニックネーム一覧が丸ごとブラウザに返ってしまっていた。
-      問い合わせた1件についてだけ最小限の情報を返すことで、全生徒名簿が
-      漏れるのを防ぐ。
-    """
-    guild_id   = request.args.get("guild_id")
-    student_id = (request.args.get("id") or "").strip().upper()
-    if not guild_id or not student_id:
-        return jsonify({"ok": False, "error": "missing fields"})
-    try:
-        guild_id = int(guild_id)
-    except ValueError:
-        return jsonify({"ok": False, "error": "invalid guild_id"})
-    try:
-        user = find_user(guild_id, student_id)
-        if not user:
-            return jsonify({"ok": True, "exists": False})
-        return jsonify({
-            "ok": True,
-            "exists": True,
-            "nickname": user.get("nickname"),
-            "has_password": bool(user.get("password_hash")),
-        })
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
-
-@app.route("/add_user", methods=["POST"])
-def add_user():
-    data     = request.json
-    guild_id = data.get("guild_id")
-    user_id  = data.get("id", "").strip().upper()
-    nickname = data.get("nickname", "").strip()
-    password = data.get("password") or ""
-    created  = data.get("created_at") or datetime.now(JST).strftime("%Y-%m-%d")
-    if not all([guild_id, user_id, nickname]):
-        return jsonify({"ok": False, "error": "missing fields"})
-    if len(nickname) > 16:
-        return jsonify({"ok": False, "error": "nickname too long"})
-    # ★ ログインにパスワードを必須化。新規登録時に必ず設定させる。
-    if len(password) < MIN_PASSWORD_LENGTH:
-        return jsonify({"ok": False, "error": f"password must be at least {MIN_PASSWORD_LENGTH} characters"})
-    if is_weak_password(password):
-        return jsonify({"ok": False, "error": "password too weak"})
-    err = reject_if_bug_chars({"ニックネーム": nickname})
-    if err:
-        return err
-    try:
-        guild_id = int(guild_id)
-        users = load_users(guild_id)
-        if any(u["id"] == user_id for u in users):
-            return jsonify({"ok": False, "error": "already_exists"})
-        old_users_text = _users_text(users)  # ★ 追加前に控えておく（password関連は含まない）
-        # ★ パスワードは平文で保存せず、ソルト付きハッシュのみ保存する
-        #   （users_{guild_id}.json はサーバーのローカルディスクに保存されるが、
-        #     万一ファイルが閲覧されても影響を抑えるため）
-        pw_hash, pw_salt = hash_password(password)
-        users.append({
-            "id":            user_id,
-            "nickname":      nickname,
-            "created_at":    created,
-            "password_hash": pw_hash,
-            "password_salt": pw_salt,
-        })
-        save_users(guild_id, users)
-        change = file_diff(f"users_{guild_id}.json", old_users_text, _users_text(users))
-        log_event("user", "新しいユーザーが登録されました。", actor=nickname, detail=[change] if change else None)
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
-
-@app.route("/login", methods=["POST"])
-def login():
-    """
-    body: { guild_id, id, password }
-    成功時: { ok: true, session_token, student: {id, nickname} }
-    ★ ここで発行する session_token が「本人確認の唯一の証明」になる。
-      以後、勉強ログ追加や課題達成などポイントに関わる操作は、この
-      トークンから student_id を特定する（クライアントが送ってくる
-      student_id は信用しない）。
-    """
-    if rate_limited("login"):  # ★ 追加：パスワード総当たり対策
-        return rate_limit_response()
-    data       = request.json or {}
-    guild_id   = data.get("guild_id")
-    student_id = (data.get("id") or "").strip().upper()
-    password   = data.get("password") or ""
-    if not guild_id or not student_id or not password:
-        return jsonify({"ok": False, "error": "missing fields"})
-    try:
-        guild_id = int(guild_id)
-        user = find_user(guild_id, student_id)
-        if not user:
-            return jsonify({"ok": False, "error": "user_not_found"})
-        if not user.get("password_hash"):
-            # ★ このパスワード必須化より前に作られた既存アカウント。
-            #   まだパスワードが設定されていないので、初回設定フローに誘導する。
-            return jsonify({"ok": False, "error": "password_not_set"})
-        if not verify_password(password, user.get("password_salt"), user.get("password_hash")):
-            return jsonify({"ok": False, "error": "wrong_password"})
-        token = create_session(guild_id, student_id)
-        return jsonify({
-            "ok": True,
-            "session_token": token,
-            "student": {"id": user["id"], "nickname": user["nickname"]},
-        })
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
-
-@app.route("/set_password", methods=["POST"])
-def set_password():
-    """
-    既存ユーザー（パスワード必須化より前に登録され、まだパスワードが
-    設定されていない生徒）が、初めてパスワードを設定するための専用エンドポイント。
-    ★ 既にパスワードが設定済みのアカウントには使えない
-      （他人のIDを知っているだけで勝手にパスワードを上書き＝乗っ取り
-        されるのを防ぐため。パスワードの変更は /change_password を使う）。
-    """
-    data       = request.json or {}
-    guild_id   = data.get("guild_id")
-    student_id = (data.get("id") or "").strip().upper()
-    password   = data.get("password") or ""
-    if not guild_id or not student_id:
-        return jsonify({"ok": False, "error": "missing fields"})
-    if len(password) < MIN_PASSWORD_LENGTH:
-        return jsonify({"ok": False, "error": f"password must be at least {MIN_PASSWORD_LENGTH} characters"})
-    if is_weak_password(password):
-        return jsonify({"ok": False, "error": "password too weak"})
-    try:
-        guild_id = int(guild_id)
-        users = load_users(guild_id)
-        target = next((u for u in users if u.get("id") == student_id), None)
-        if not target:
-            return jsonify({"ok": False, "error": "user_not_found"})
-        if target.get("password_hash"):
-            return jsonify({"ok": False, "error": "already_set"})
-        pw_hash, pw_salt = hash_password(password)
-        target["password_hash"] = pw_hash
-        target["password_salt"] = pw_salt
-        save_users(guild_id, users)
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
-
 @app.route("/change_password", methods=["POST"])
 def change_password():
     """
@@ -3250,7 +3101,7 @@ def discord_login_start():
       Discordの認可が終わって初めて分かる）。
     """
     if not DISCORD_CLIENT_SECRET:
-        return _oauth_result_page(False, "現在Discordログインは準備中です。学籍番号でログインしてください。")
+        return _oauth_result_page(False, "現在Discordログインは準備中です。時間をおいてもう一度お試しください。")
 
     guild_id = request.args.get("guild_id")
     if not guild_id:
@@ -3411,6 +3262,21 @@ def _handle_discord_link_callback(guild_id: int, student_id: str, discord_user_i
     return _oauth_result_page(True, "Discordとの連携が完了しました！")
 
 
+def _guild_membership_status(guild_id: int, discord_user_id: int) -> str:
+    """
+    指定したDiscordユーザーが guild_id のサーバーに参加しているかどうかを、
+    Bot自身のメンバーキャッシュ（intents.members=True で取得済み）で判定する。
+    戻り値: "member" / "not_member" / "unknown"（Bot未準備・サーバー未取得等で
+    判定できない場合。ここは安全側に倒し、ログインをブロックする扱いにする）。
+    """
+    if not bot.is_ready():
+        return "unknown"
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        return "unknown"
+    return "member" if guild.get_member(discord_user_id) is not None else "not_member"
+
+
 def _handle_discord_login_callback(guild_id: int, discord_user_id: int, discord_username: str) -> str:
     """
     Discordそのものでログインしようとしている（まだ未ログイン）。
@@ -3425,7 +3291,17 @@ def _handle_discord_login_callback(guild_id: int, discord_user_id: int, discord_
       localStorageは共有されない）。そのため、セッション情報はURLの
       クエリパラメータとしてフロントエンドへ渡し、フロントエンド自身の
       JS（Login.js）がそちらのドメイン上でlocalStorageに保存する。
+
+    ★ Discordログイン専用化に伴い、guild_id のサーバーに参加している
+      Discordアカウントでなければログイン・新規登録のどちらもさせない
+      （既存の discord_login_links に登録済みでも、サーバーを抜けていれば通さない）。
     """
+    membership = _guild_membership_status(guild_id, discord_user_id)
+    if membership == "not_member":
+        return _oauth_result_page(False, "このサーバーのメンバーではないため、ログインできません。")
+    if membership == "unknown":
+        return _oauth_result_page(False, "サーバーの参加状況を確認できませんでした。時間をおいてもう一度お試しください。")
+
     login_links = load_discord_login_links(guild_id)
     student_id = next((sid for sid, did in login_links.items() if int(did) == discord_user_id), None)
 
@@ -3511,14 +3387,17 @@ def discord_complete_registration():
             err = reject_if_bug_chars({"ニックネーム": nickname})
             if err:
                 return err
+            old_users_text = _users_text(users)  # ★ 追加前に控えておく（password関連は含まない）
             users.append({
                 "id":         student_id,
                 "nickname":   nickname,
                 "created_at": datetime.now(JST).strftime("%Y-%m-%d"),
-                # ★ Discordログイン専用アカウント。パスワードは未設定のまま保存する
-                #   （後から使いたくなった場合は /set_password で追加設定できる）。
+                # ★ Discordログイン専用アカウント。ログイン自体はDiscordのみに
+                #   一本化したため、パスワードは設定しない（password_hash無し）。
             })
             save_users(guild_id, users)
+            change = file_diff(f"users_{guild_id}.json", old_users_text, _users_text(users))
+            log_event("user", "新しいユーザーが登録されました。", actor=nickname, detail=[change] if change else None)
             final_nickname = nickname
 
         # --- ログイン用の紐付けを保存 ---
@@ -4125,118 +4004,6 @@ def confirm_password_change():
 
     del PASSWORD_CHANGE_CODES[key]  # ★ 使い切ったコードは即座に無効化（使い回し防止）
     return jsonify({"ok": True})
-
-# ================================
-#  ★ パスワードの再設定（パスワードを忘れた場合／未ログイン）
-#  ─────────────────────────────
-#  上の request_password_change_code / confirm_password_change は
-#  「ログイン済み本人」が使う想定（session_tokenで本人確認）。
-#  こちらはログインする手段（＝パスワード）自体を忘れた人向けなので、
-#  session_token を要求できない。代わりに学籍番号(id)を渡してもらい、
-#  同じくDiscord DMの確認コードで本人確認する（/id連携が必須）。
-#  確認コードの保存先・有効期限・連打防止クールダウンは change 用と共有する
-#  （どちらの経路でも「そのstudent_id宛にDMを送った」という事実は同じであり、
-#    未使用のコードを両エンドポイントのどちらからでも消費できて問題ないため）。
-# ================================
-@app.route("/request_password_reset_code", methods=["POST"])
-def request_password_reset_code():
-    """
-    body: { guild_id, id }
-    未ログイン状態で、学籍番号だけを頼りに確認コードをDiscord DMで受け取る。
-    """
-    if rate_limited("request_password_reset_code"):  # ★ 追加：DM連打・学籍番号総当たり対策
-        return rate_limit_response()
-    data       = request.json or {}
-    guild_id   = data.get("guild_id")
-    student_id = (data.get("id") or "").strip().upper()
-    if not guild_id or not student_id:
-        return jsonify({"ok": False, "error": "missing fields"})
-
-    guild_id = int(guild_id)
-    user = find_user(guild_id, student_id)
-    if not user:
-        return jsonify({"ok": False, "error": "user_not_found"})
-
-    key = _pw_code_key(guild_id, student_id)
-    now = time.time()
-    existing = PASSWORD_CHANGE_CODES.get(key)
-    if existing and (now - existing["requested_at"] < PASSWORD_CHANGE_CODE_COOLDOWN_SEC):
-        remain = int(PASSWORD_CHANGE_CODE_COOLDOWN_SEC - (now - existing["requested_at"])) + 1
-        return jsonify({"ok": False, "error": "too_soon", "retry_after_sec": remain})
-
-    code = f"{secrets.randbelow(1_000_000):06d}"
-    PASSWORD_CHANGE_CODES[key] = {
-        "code": code,
-        "expires": now + PASSWORD_CHANGE_CODE_TTL_SEC,
-        "requested_at": now,
-    }
-
-    try:
-        send_discord_dm(
-            guild_id, student_id,
-            "パスワード再設定の確認コード",
-            f"確認コード: {code}\n（10分間有効です。心当たりが無ければこのメッセージは無視してください）",
-        )
-    except ValueError:
-        del PASSWORD_CHANGE_CODES[key]
-        return jsonify({"ok": False, "error": "not_linked"})
-    except Exception as e:
-        del PASSWORD_CHANGE_CODES[key]
-        return jsonify({"ok": False, "error": f"dm_failed: {e}"})
-
-    return jsonify({"ok": True})
-
-@app.route("/confirm_password_reset", methods=["POST"])
-def confirm_password_reset():
-    """
-    body: { guild_id, id, code, new_password }
-    確認コード＋新しいパスワードを受け取り、一致していればパスワードを更新する。
-    ★ session_token は使わない（そもそも持っていないから困っている）ので、
-      本人確認はこの確認コードだけが担う。
-    """
-    # ★ 追加：6桁コード（100万通り）の総当たり対策。session_tokenによる
-    #   本人確認が無い分、ここが最も重要（成功すればアカウント乗っ取りになる）。
-    if rate_limited("confirm_password_reset"):
-        return rate_limit_response()
-    data         = request.json or {}
-    guild_id     = data.get("guild_id")
-    student_id   = (data.get("id") or "").strip().upper()
-    code         = (data.get("code") or "").strip()
-    new_password = data.get("new_password") or ""
-    if not guild_id or not student_id or not code:
-        return jsonify({"ok": False, "error": "missing fields"})
-    if len(new_password) < MIN_PASSWORD_LENGTH:
-        return jsonify({"ok": False, "error": f"password must be at least {MIN_PASSWORD_LENGTH} characters"})
-    if is_weak_password(new_password):
-        return jsonify({"ok": False, "error": "password too weak"})
-
-    guild_id = int(guild_id)
-
-    key   = _pw_code_key(guild_id, student_id)
-    entry = PASSWORD_CHANGE_CODES.get(key)
-    if not entry:
-        return jsonify({"ok": False, "error": "code_not_requested"})
-    if time.time() > entry["expires"]:
-        del PASSWORD_CHANGE_CODES[key]
-        return jsonify({"ok": False, "error": "code_expired"})
-    if not hmac.compare_digest(code, entry["code"]):
-        return jsonify({"ok": False, "error": "wrong_code"})
-
-    try:
-        users  = load_users(guild_id)
-        target = next((u for u in users if u.get("id") == student_id), None)
-        if not target:
-            return jsonify({"ok": False, "error": "user_not_found"})
-        pw_hash, pw_salt = hash_password(new_password)
-        target["password_hash"] = pw_hash
-        target["password_salt"] = pw_salt
-        save_users(guild_id, users)
-    except DataWriteError as e:
-        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
-
-    del PASSWORD_CHANGE_CODES[key]  # ★ 使い切ったコードは即座に無効化（使い回し防止）
-    return jsonify({"ok": True})
-
 
 @app.route("/list_study_logs", methods=["GET"])
 def list_study_logs():
