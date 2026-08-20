@@ -885,7 +885,7 @@ def timer_state():
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(request.args.get("session_token"), guild_id)
+    student_id = resolve_session(session_token_from_request(), guild_id)
     if not student_id:
         return jsonify({"ok": False, "error": "not_logged_in"})
 
@@ -1115,6 +1115,24 @@ def find_user(guild_id: int, student_id: str):
 # ================================
 PBKDF2_ITERATIONS = 210_000
 
+# ★ 変更（2026/08/20）：以前は4文字以上であればよかったが短すぎるため、
+#   最低8文字に引き上げた。あわせて「見るからに弱い」パスワード
+#   （同じ文字の繰り返し・数字のみ等、文字種が1種類しかないもの）だけを
+#   弾く簡易的な強度チェックも追加する（複雑な組み合わせ規則までは求めない）。
+MIN_PASSWORD_LENGTH = 8
+
+def is_weak_password(password: str) -> bool:
+    """同一文字の繰り返し、または文字種（小文字/大文字/数字/記号）が1種類しか
+    無いパスワードを「弱い」と判定する。"""
+    if len(set(password)) <= 1:
+        return True
+    classes = 0
+    if re.search(r"[a-z]", password): classes += 1
+    if re.search(r"[A-Z]", password): classes += 1
+    if re.search(r"[0-9]", password): classes += 1
+    if re.search(r"[^a-zA-Z0-9]", password): classes += 1
+    return classes < 2
+
 def hash_password(password: str, salt_hex: str = None):
     """(hash_hex, salt_hex) を返す。salt_hex を渡さなければ新規のソルトを生成する。"""
     if salt_hex is None:
@@ -1219,6 +1237,19 @@ def resolve_session(token, guild_id: int):
         return payload.get("s")
     except Exception:
         return None
+
+# ★ 追加：GET系APIのsession_tokenをURLクエリではなく Authorization ヘッダ
+#   （`Authorization: Bearer <token>`）から受け取るためのヘルパー。
+#   以前はクエリ文字列に載せていたため、ブラウザ履歴・サーバーのアクセスログ・
+#   Referer経由でトークンが残ってしまうリスクがあった。
+#   フロント（bot.1istudy.web）を先に切り替えても動くよう、後方互換として
+#   ヘッダが無い場合のみクエリの `session_token` にフォールバックする
+#   （フロント側は既にヘッダ送信へ移行済みなら、実運用でクエリが使われることはない）。
+def session_token_from_request():
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[len("Bearer "):]
+    return request.args.get("session_token")
 
 # ================================
 #  ★ 追加（2026/08/19）：「変更」系API共通のログイン必須チェック
@@ -2448,7 +2479,12 @@ def list_schedule():
     guild_id = request.args.get("guild_id")
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
-    plans = sorted(load_plans(int(guild_id)), key=lambda p: p["date"])
+    guild_id = int(guild_id)
+    # ★ 追加（2026/08/20）：以前は閲覧（GET）は誰でもOKだったが、ユーザーの要望で
+    #   予定の閲覧にもログイン（session_token）を必須にした。
+    if not resolve_session(session_token_from_request(), guild_id):
+        return jsonify({"ok": False, "error": "not_logged_in"})
+    plans = sorted(load_plans(guild_id), key=lambda p: p["date"])
 
     scope = request.args.get("scope")
     if not scope:
@@ -3033,8 +3069,10 @@ def add_user():
     if len(nickname) > 16:
         return jsonify({"ok": False, "error": "nickname too long"})
     # ★ ログインにパスワードを必須化。新規登録時に必ず設定させる。
-    if len(password) < 4:
-        return jsonify({"ok": False, "error": "password must be at least 4 characters"})
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"ok": False, "error": f"password must be at least {MIN_PASSWORD_LENGTH} characters"})
+    if is_weak_password(password):
+        return jsonify({"ok": False, "error": "password too weak"})
     err = reject_if_bug_chars({"ニックネーム": nickname})
     if err:
         return err
@@ -3115,8 +3153,10 @@ def set_password():
     password   = data.get("password") or ""
     if not guild_id or not student_id:
         return jsonify({"ok": False, "error": "missing fields"})
-    if len(password) < 4:
-        return jsonify({"ok": False, "error": "password must be at least 4 characters"})
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"ok": False, "error": f"password must be at least {MIN_PASSWORD_LENGTH} characters"})
+    if is_weak_password(password):
+        return jsonify({"ok": False, "error": "password too weak"})
     try:
         guild_id = int(guild_id)
         users = load_users(guild_id)
@@ -3146,8 +3186,10 @@ def change_password():
     token        = data.get("session_token")
     old_password = data.get("old_password") or ""
     new_password = data.get("new_password") or ""
-    if not guild_id or len(new_password) < 4:
+    if not guild_id or len(new_password) < MIN_PASSWORD_LENGTH:
         return jsonify({"ok": False, "error": "invalid_input"})
+    if is_weak_password(new_password):
+        return jsonify({"ok": False, "error": "password too weak"})
     try:
         guild_id = int(guild_id)
         student_id = resolve_session(token, guild_id)
@@ -3830,7 +3872,7 @@ def pending_delete_requests():
         guild_id = int(guild_id)
     except (TypeError, ValueError):
         return jsonify({"ok": False, "error": "invalid guild_id"})
-    student_id = resolve_session(request.args.get("session_token"), guild_id)
+    student_id = resolve_session(session_token_from_request(), guild_id)
     if not student_id:
         return jsonify({"ok": False, "error": "not_logged_in"})
 
@@ -4049,8 +4091,10 @@ def confirm_password_change():
     new_password = data.get("new_password") or ""
     if not guild_id or not code:
         return jsonify({"ok": False, "error": "missing fields"})
-    if len(new_password) < 4:
-        return jsonify({"ok": False, "error": "password must be at least 4 characters"})
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"ok": False, "error": f"password must be at least {MIN_PASSWORD_LENGTH} characters"})
+    if is_weak_password(new_password):
+        return jsonify({"ok": False, "error": "password too weak"})
 
     guild_id   = int(guild_id)
     student_id = resolve_session(data.get("session_token"), guild_id)
@@ -4161,8 +4205,10 @@ def confirm_password_reset():
     new_password = data.get("new_password") or ""
     if not guild_id or not student_id or not code:
         return jsonify({"ok": False, "error": "missing fields"})
-    if len(new_password) < 4:
-        return jsonify({"ok": False, "error": "password must be at least 4 characters"})
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"ok": False, "error": f"password must be at least {MIN_PASSWORD_LENGTH} characters"})
+    if is_weak_password(new_password):
+        return jsonify({"ok": False, "error": "password too weak"})
 
     guild_id = int(guild_id)
 
@@ -5600,7 +5646,7 @@ def quiz_list_rooms():
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(request.args.get("session_token"), guild_id)
+    student_id = resolve_session(session_token_from_request(), guild_id)
     if not student_id:
         return jsonify({"ok": False, "error": "not_logged_in"})
 
@@ -5676,7 +5722,7 @@ def quiz_state():
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(request.args.get("session_token"), guild_id)
+    student_id = resolve_session(session_token_from_request(), guild_id)
     if not student_id:
         return jsonify({"ok": False, "error": "not_logged_in"})
     code = (request.args.get("code") or "").strip().upper()
@@ -6673,7 +6719,7 @@ def get_study_data():
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id = resolve_session(request.args.get("session_token"), guild_id)
+    student_id = resolve_session(session_token_from_request(), guild_id)
     if not student_id:
         return jsonify({"ok": False, "error": "not_logged_in"})
 
@@ -6747,7 +6793,7 @@ def deck_understanding():
     if not guild_id or not filenames:
         return jsonify({"ok": False, "error": "missing guild_id or filenames"})
     guild_id = int(guild_id)
-    if not resolve_session(request.args.get("session_token"), guild_id):
+    if not resolve_session(session_token_from_request(), guild_id):
         return jsonify({"ok": False, "error": "not_logged_in"})
     target_filenames = [f for f in filenames.split(",") if f]
     if not target_filenames:
