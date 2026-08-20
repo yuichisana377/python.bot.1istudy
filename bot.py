@@ -1185,6 +1185,22 @@ if not SESSION_SECRET:
 
 SESSION_TTL_SEC = 60 * 60 * 24 * 30  # 30日間ログイン状態を維持
 
+# ★ 追加（2026/08/20）：ログインをDiscordのみに一本化したのに合わせ、
+#   この時刻より前に発行された session_token は無条件で無効にする
+#   （＝学籍番号+パスワードでの旧ログインを経由していた可能性がある
+#     トークンを含め、既存の全セッションを1回だけ強制的に失効させる。
+#     /login自体は既に廃止済みなので、再ログインは必然的にDiscord
+#     ログインを経由することになる）。ユーザーの明示的な指定
+#     （「全員強制的にログインさせてください」）による一度きりの移行措置。
+#   ★ 注意：この日の「今日の0時」より前を切り捨てる（＝当日中に発行された
+#     セッションも含めて一律無効化）。「翌日0時」等の未来の時刻にすると、
+#     このデプロイ後に新しくDiscordログインし直したユーザーのセッションまで
+#     即座に無効判定されてしまう（tがその時刻を下回るため）という事故に
+#     なるので、必ず「今日または過去」の時刻にすること。
+#   固定の日時にしてあるのは、time.time()を直接使うとプロセス再起動のたびに
+#   全員ログアウトされてしまうため。
+SESSION_MIN_ISSUED_AT = datetime(2026, 8, 20, 0, 0, 0, tzinfo=JST).timestamp()
+
 def create_session(guild_id: int, student_id: str) -> str:
     payload = json.dumps({"g": guild_id, "s": student_id, "t": int(time.time())}, separators=(",", ":"))
     payload_b64 = base64.urlsafe_b64encode(payload.encode()).decode()
@@ -1204,6 +1220,8 @@ def resolve_session(token, guild_id: int):
         if payload.get("g") != guild_id:
             return None
         if time.time() - payload.get("t", 0) > SESSION_TTL_SEC:
+            return None
+        if payload.get("t", 0) < SESSION_MIN_ISSUED_AT:
             return None
         return payload.get("s")
     except Exception:
