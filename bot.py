@@ -4346,6 +4346,7 @@ def _deck_meta_text(data, folder_names=None):
     lines.append(f"科目: {data.get('subject') or '(未設定)'}")
     lines.append(f"状態: {'未完成（作成中）' if data.get('incomplete') else '完成'}")
     lines.append(f"形式: {'選択式デッキ' if data.get('choice_mode') else '暗記カード（通常デッキ）'}")
+    lines.append(f"由来: {'クイズ過去問（問題の編集不可）' if data.get('quiz_archive') else '通常'}")
     folder_id = data.get('folder_id')
     lines.append(f"フォルダ: {folder_names.get(folder_id, folder_id) if folder_id else '(フォルダなし)'}")
     return "\n".join(lines)
@@ -4407,6 +4408,7 @@ def _meta_from_card_data(filename, data):
         "published_by": (data.get("published_by") or {}).get("nickname"),
         "incomplete": bool(data.get("incomplete", False)),
         "choice_mode": data.get("choice_mode"),  # ★ null/false=通常デッキ / true=選択式デッキ（単一/複数は問題ごとに決まる。旧形式の"single"/"multi"文字列もtruthyとして扱う）
+        "quiz_archive": bool(data.get("quiz_archive", False)),  # ★ 追加：クイズ過去問デッキかどうか（問題編集不可の対象）
     }
 
 def _card_index_entry_lines(entry, folder_names=None):
@@ -4428,6 +4430,7 @@ def _card_index_entry_lines(entry, folder_names=None):
         ("公開者", entry.get("published_by") or "(不明)"),
         ("状態", "未完成（作成中）" if entry.get("incomplete") else "完成"),
         ("形式", "選択式デッキ" if entry.get("choice_mode") else "暗記カード（通常デッキ）"),
+        ("由来", "クイズ過去問（問題の編集不可）" if entry.get("quiz_archive") else "通常"),
     ]
     return _json_block(fields)
 
@@ -4600,17 +4603,28 @@ def save_cards():
         filename = generate_card_filename()
 
     sha = None
+    existing_data = None
     existing_published_by = None
+    is_quiz_archive = False
     if is_update:
         existing_data, sha = get_card_file(filename)
-        # ★「クイズ過去問」フォルダの中身は、その外へ移動できない
-        #   （フォルダ移動UIのガードと同じ考え方。ここが唯一のデッキfolder_id書き込み
-        #   経路なので、サーバー側の実効的な強制はここで行う）。
+        # ★「クイズ過去問」デッキ（みんなでクイズの結果を自動保存したもの、
+        #   _archive_manual_quiz参照）は、フォルダ移動・デッキ名の変更・
+        #   非公開に戻す・削除はできるが、問題の中身（cards）は編集できない
+        #   ようにする（2026/08/21、ユーザーの要望）。
+        #   ★ 以前は逆に「クイズ過去問フォルダの外へは移動できない」という
+        #   制限だったが、「外のフォルダにも移動できるように。ただし編集は
+        #   不可にしたい」という要望を受けてこちらに置き換えた。
+        #   ここが唯一のデッキ書き込み経路なので、Web側UIが「カードを編集する」
+        #   メニューを表示しない対策とは別に、直接APIを叩かれた場合に備えて
+        #   サーバー側でも強制する。
         if existing_data is not None:
-            old_folder_id = existing_data.get("folder_id")
-            folders_for_check, _ = load_card_folders()
-            if _is_in_archive_scope(folders_for_check, old_folder_id) and not _is_in_archive_scope(folders_for_check, folder_id):
-                return jsonify({"ok": False, "error": "クイズ過去問フォルダの外には移動できません"})
+            is_quiz_archive = bool(existing_data.get("quiz_archive"))
+            if is_quiz_archive and existing_data.get("cards") != cards:
+                return jsonify({
+                    "ok": False,
+                    "error": "クイズ過去問のデッキは問題を編集できません（フォルダの移動・デッキ名の変更・非公開に戻す・削除は可能です）",
+                })
             existing_published_by = existing_data.get("published_by")
 
     # ★ 追加：published_by.id は「デッキの作成者」を表す唯一の場所（削除の
@@ -4634,7 +4648,10 @@ def save_cards():
             "nickname": publisher_nickname,
         },
         "incomplete": incomplete,  # ★ 未完成フラグを保存（他人の端末にも同じ表示をするため）
-        "choice_mode": choice_mode,  # ★ 選択式デッキかどうか（null/false=通常デッキ / true=選択式デッキ）
+        # ★ クイズ過去問デッキは choice_mode もクライアント値ではなく既存データを
+        #   維持する（cardsと同じく、改ざん・取りこぼしで中身の形式が変わらないように）。
+        "choice_mode": existing_data.get("choice_mode") if is_quiz_archive else choice_mode,
+        "quiz_archive": is_quiz_archive,  # ★ 追加：クイズ過去問デッキかどうか（一度trueになったら維持され続ける）
     }
 
     try:
@@ -5216,6 +5233,10 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
             "published_by": {"id": student_id, "nickname": nickname},
             "incomplete": False,
             "choice_mode": True,  # ★ 選択式デッキであることのマーカー（単一/複数は問題ごとにcorrect_indicesの個数で決まる）
+            "quiz_archive": True,  # ★ 追加（2026/08/21）：クイズ過去問デッキであることのマーカー。
+            # フォルダ位置に依存させると、フォルダの外へ移動できるようにした際に
+            # 判定できなくなる（save_cardsが問題編集を禁止する対象の特定にも使う）ため、
+            # デッキ自身に持たせる。
         }
         put_card_file(filename, card_payload)
         index_change = upsert_cards_index_entry(filename, card_payload)
@@ -6229,12 +6250,19 @@ def generate_folder_id():
 #  CardMakerのこの固定フォルダの中にデッキとして自動保存する。
 #  ・IDを固定にすることで、二重作成を防ぎ、どのルートからでも同じフォルダを指せる。
 #  ・このフォルダ自体は名前変更・削除・移動を禁止する（save_folder/delete_folder側で
-#    ガードする）。中身（サブフォルダ作成・デッキの移動・並び替え・編集）は
-#    フォルダの中でなら自由だが、フォルダの外へ出すことは禁止する。
-#  ・「このデッキが4択アーカイブかどうか」は専用フラグを持たせず、
-#    folder_id がこのフォルダのスコープ内かどうかだけで判定する
-#    （save_cardsのcard_payloadは固定6キーのため、任意のトップレベルフラグを
-#    追加すると通常デッキの保存経路にも影響が及んでしまうのを避けるため）。
+#    ガードする）。
+#  ・★ 修正（2026/08/21）：以前は「デッキがこのフォルダの中にあるかどうか」だけで
+#    「クイズ過去問デッキかどうか」を判定し、そのデッキ自体をこのフォルダの外へは
+#    一切移動できないようにしていた（『card_payloadは固定6キーで、任意のフラグを
+#    増やすと通常デッキの保存経路にも影響するため避ける』という方針だった）。
+#    ユーザーから「外のフォルダにも移動できるようにしたいが、問題の編集は
+#    できないままにしたい」という要望を受け、判定方法をデッキ自身が持つ
+#    quiz_archive フラグ（save_cardsのcard_payload参照）に切り替えた。
+#    これにより、デッキがどのフォルダへ移動しても「クイズ過去問由来
+#    （問題の編集不可）」という性質を保ち続けられる
+#    （移動・デッキ名の変更・非公開に戻す・削除はできる）。
+#  ・このフラグが導入される前に保存された既存デッキは
+#    _migrate_legacy_quiz_archive_decks() で起動時に一度だけ移行する。
 # ================================
 QUIZ_ARCHIVE_FOLDER_ID   = "quiz_archive_root"
 QUIZ_ARCHIVE_FOLDER_NAME = "クイズ過去問"
@@ -6251,6 +6279,40 @@ def _is_in_archive_scope(folders, folder_id):
     if folder_id == QUIZ_ARCHIVE_FOLDER_ID:
         return True
     return any(f["id"] == folder_id for f in _folder_descendants(folders, QUIZ_ARCHIVE_FOLDER_ID))
+
+def _migrate_legacy_quiz_archive_decks():
+    """★ 追加（2026/08/21）：quiz_archiveフラグが導入される前に保存された
+    クイズ過去問デッキへ、起動時に一度だけこのフラグを補って書き込む。
+    ・以前は「クイズ過去問フォルダの外へは絶対に移動できない」という制限で
+      完全に封じ込めていたため、この移行が走る時点で「クイズ過去問フォルダの
+      スコープ内にある選択式デッキ（choice_mode有り）」は、ほぼ間違いなく
+      _archive_manual_quiz が自動保存したもの（この条件を手動で満たすには、
+      わざわざシステムフォルダの中へ自分の選択式デッキを移動する必要があり、
+      現実的にはまず起きない）。
+    ・既にフラグが付いているデッキ（移行済み・このフラグ導入後に新規作成された
+      デッキ）はスキップする。1回移行してしまえば、以降このフラグだけで
+      判定できるので、次回起動時はほぼ何もせず即座に終わる。
+    """
+    try:
+        folders, _ = load_card_folders()
+        for f in list_card_files():
+            filename = f["name"]
+            data, sha = get_card_file(filename)
+            if not data or data.get("quiz_archive"):
+                continue
+            if not data.get("choice_mode"):
+                continue
+            if not _is_in_archive_scope(folders, data.get("folder_id")):
+                continue
+            data["quiz_archive"] = True
+            try:
+                put_card_file(filename, data, sha)
+                upsert_cards_index_entry(filename, data)
+                print(f"[INFO] 「{data.get('name')}」に quiz_archive フラグを補いました（{filename}、既存データの移行）")
+            except DataWriteError as e:
+                print(f"[WARN] {filename} への quiz_archive フラグ移行に失敗しました: {e}")
+    except Exception as e:
+        print(f"[WARN] クイズ過去問デッキの移行処理に失敗しました: {e}")
 
 @app.route("/list_folders", methods=["GET"])
 def list_folders():
@@ -6926,6 +6988,8 @@ async def on_ready():
         scheduler.start()
         started = True
         print("Scheduler started!")
+        # ★ 追加（2026/08/21）：quiz_archiveフラグ導入に伴う既存データの一度きりの移行。
+        _migrate_legacy_quiz_archive_decks()
 
 
 @bot.event
