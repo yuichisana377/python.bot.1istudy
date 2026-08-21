@@ -3546,15 +3546,42 @@ def _sanitize_return_url(raw: str) -> str:
     return raw[:200]
 
 
+# ★ 追加：/report_problem の結果ページから他ページへ移動するための固定リンク一覧。
+#   index.htmlのドロワーナビ（drawer-nav）と同じ7ページ・同じ表示名。
+#   JSが壊れているのは基本的に「今開いていた1ページ」だけで、サイト全体が
+#   一斉に壊れることは通常考えにくい（各ページは別々のJSファイルを読み込むため）。
+#   そのため、報告送信後は元のページに戻るだけでなく、他のページへも
+#   直接移動できるようにしておくと、その場で作業を続けられる可能性が上がる。
+_REPORT_PROBLEM_NAV_PAGES = [
+    ("/index.html", "予定管理"),
+    ("/Timetable.html", "時間割"),
+    ("/Cardmaker.html", "CardMaker"),
+    ("/StudyLog.html", "勉強ログ"),
+    ("/TanCheck.html", "単位チェッカー"),
+    ("/Notice.html", "お知らせ"),
+    ("/ServiceInfo.html", "サービス情報"),
+]
+
+
 def _report_problem_result_page(success: bool, message: str, return_url: str = "/") -> str:
     """/report_problem 送信後にブラウザへ表示する簡易HTML。
     ★ 追加：以前はこのページに「戻る」導線が無く、JSが完全に死んだ状態で
       報告を送信した生徒が、送信後にどこへも進めなくなる（実際に報告された
       不具合）問題があったため、必ず元のページへの戻りリンクを付ける。
-      JS無しでも機能する必要があるため、生の<a href>のみで実装する。"""
+      JS無しでも機能する必要があるため、生の<a href>のみで実装する。
+    ★ 追加：元のページ自体のJSが壊れている場合、そこへ戻っても同じ問題に
+      またぶつかるだけなので、他ページへの移動先も合わせて提示する
+      （サイト全体が一斉に壊れることは考えにくいため）。"""
     color = "#16a34a" if success else "#dc2626"
     icon  = "✓" if success else "✕"
-    safe_return_url = html.escape(_sanitize_return_url(return_url))
+    safe_return_url = _sanitize_return_url(return_url)
+    nav_links = "".join(
+        f'<a href="{html.escape(path)}" style="display:inline-block;background:#fff;color:#334155;'
+        f'text-decoration:none;border:1px solid #cbd5e1;border-radius:999px;padding:6px 12px;'
+        f'font-size:12.5px;">{html.escape(label)}</a>'
+        for path, label in _REPORT_PROBLEM_NAV_PAGES
+        if path != safe_return_url
+    )
     return f"""<!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -3565,8 +3592,12 @@ def _report_problem_result_page(success: bool, message: str, return_url: str = "
               text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.15);">
     <div style="font-size:40px;color:{color};margin-bottom:12px;">{icon}</div>
     <div style="font-size:15px;color:#334155;line-height:1.6;margin-bottom:20px;">{html.escape(message)}</div>
-    <a href="{safe_return_url}" style="display:block;background:#2563eb;color:#fff;text-decoration:none;
+    <a href="{html.escape(safe_return_url)}" style="display:block;background:#2563eb;color:#fff;text-decoration:none;
        border-radius:8px;padding:10px;font-size:14px;font-weight:700;">サイトに戻る</a>
+    <div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0;">
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;">このページが開けない場合は、他のページもお試しください</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;">{nav_links}</div>
+    </div>
   </div>
 </body></html>"""
 
