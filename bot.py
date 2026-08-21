@@ -3535,10 +3535,26 @@ def notify_dm():
         return jsonify({"ok": False, "error": f"dm_failed: {e}"})
 
 
-def _report_problem_result_page(success: bool, message: str) -> str:
-    """/report_problem 送信後にブラウザへ表示する簡易HTML。"""
+def _sanitize_return_url(raw: str) -> str:
+    """/report_problem の戻り先として安全なパスだけを許可する。
+    フォームのhidden fieldはこちらが用意した固定値しか入らないはずだが、
+    仮に悪意ある値が送られてきても外部サイトへ誘導（オープンリダイレクト）
+    されないよう、「/」で始まり「//」や「:」を含まないものだけを通す。"""
+    raw = (raw or "").strip()
+    if not raw.startswith("/") or raw.startswith("//") or ":" in raw:
+        return "/"
+    return raw[:200]
+
+
+def _report_problem_result_page(success: bool, message: str, return_url: str = "/") -> str:
+    """/report_problem 送信後にブラウザへ表示する簡易HTML。
+    ★ 追加：以前はこのページに「戻る」導線が無く、JSが完全に死んだ状態で
+      報告を送信した生徒が、送信後にどこへも進めなくなる（実際に報告された
+      不具合）問題があったため、必ず元のページへの戻りリンクを付ける。
+      JS無しでも機能する必要があるため、生の<a href>のみで実装する。"""
     color = "#16a34a" if success else "#dc2626"
     icon  = "✓" if success else "✕"
+    safe_return_url = html.escape(_sanitize_return_url(return_url))
     return f"""<!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -3548,9 +3564,35 @@ def _report_problem_result_page(success: bool, message: str) -> str:
   <div style="background:#fff;border-radius:16px;padding:32px;max-width:360px;width:90%;
               text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.15);">
     <div style="font-size:40px;color:{color};margin-bottom:12px;">{icon}</div>
-    <div style="font-size:15px;color:#334155;line-height:1.6;">{html.escape(message)}</div>
+    <div style="font-size:15px;color:#334155;line-height:1.6;margin-bottom:20px;">{html.escape(message)}</div>
+    <a href="{safe_return_url}" style="display:block;background:#2563eb;color:#fff;text-decoration:none;
+       border-radius:8px;padding:10px;font-size:14px;font-weight:700;">サイトに戻る</a>
   </div>
 </body></html>"""
+
+
+def _load_problem_reports(guild_id):
+    data, sha = local_get(f"problem_reports_{guild_id}.json")
+    return (data or []), sha
+
+
+def _save_problem_report(guild_id, page: str, message: str):
+    """報告内容をDMとは別にサーバー上へ確実に残す。
+    ★ 追加：以前はDiscord DM（send_discord_dm）が失敗する
+      （管理者がDiscord未連携／サーバー未参加／一時的な通信エラー等）と、
+      報告内容がそのまま失われていた（記録が一切残らない）。この機能は
+      「サイトのJSが完全に壊れている」という最悪の状況からの唯一の
+      連絡手段なので、DMの成否によらずまずファイルへ保存し、
+      報告そのものが消えないようにする。300件を超えたら古い順に切り捨てる
+      （system_log.jsonと同じ考え方）。"""
+    items, sha = _load_problem_reports(guild_id)
+    items.append({
+        "time": datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S"),
+        "page": page,
+        "message": message,
+    })
+    items = items[-300:]
+    local_put(f"problem_reports_{guild_id}.json", items, sha)
 
 
 @app.route("/report_problem", methods=["POST"])
@@ -3566,24 +3608,41 @@ def report_problem():
       セッション情報を読み出せるとは限らない）＝匿名の報告として扱う。
     """
     guild_id_raw = request.form.get("guild_id")
-    page    = (request.form.get("page") or "不明なページ").strip()[:80]
-    message = (request.form.get("message") or "").strip()[:500]
+    page       = (request.form.get("page") or "不明なページ").strip()[:80]
+    message    = (request.form.get("message") or "").strip()[:500]
+    return_url = _sanitize_return_url(request.form.get("return_url"))
 
     try:
         guild_id = int(guild_id_raw)
     except (TypeError, ValueError):
-        return _report_problem_result_page(False, "不正なリクエストです。")
+        return _report_problem_result_page(False, "不正なリクエストです。", return_url)
+
+    # ★ まずファイルへの保存を試みる（DMの成否によらず報告を残すため）。
+    #   これ自体が失敗した場合（ディスク書き込みエラー等）だけは、
+    #   従来通りDMの結果だけで成功/失敗を判定する（フォールバックのそのまた
+    #   フォールバック）。
+    saved = True
+    try:
+        _save_problem_report(guild_id, page, message)
+    except DataWriteError:
+        saved = False
 
     body = f"ページ: {page}\n" + (f"内容: {message}" if message else "（内容の記入なし）")
     body += "\n※JSが動かない状態からの送信のため、送信者は匿名です。"
 
     try:
         send_discord_dm(guild_id, REPORT_PROBLEM_ADMIN_STUDENT_ID, "サイトの問題報告", body)
-        return _report_problem_result_page(True, "報告を送信しました。ありがとうございます。")
-    except ValueError:
-        return _report_problem_result_page(False, "管理者への送信に失敗しました（Discord未連携）。直接Discordで連絡してください。")
+        return _report_problem_result_page(True, "報告を送信しました。ありがとうございます。", return_url)
     except Exception:
-        return _report_problem_result_page(False, "送信に失敗しました。時間を置いてもう一度お試しください。")
+        if saved:
+            # DMが届かなくても、報告自体はサーバーに保存済みなので消えていない旨を伝える。
+            return _report_problem_result_page(
+                True,
+                "報告を記録しました。管理者への即時通知は届きませんでしたが、"
+                "内容は保存されているので後ほど確認されます。",
+                return_url,
+            )
+        return _report_problem_result_page(False, "送信に失敗しました。時間を置いてもう一度お試しください。", return_url)
 
 
 # ================================
