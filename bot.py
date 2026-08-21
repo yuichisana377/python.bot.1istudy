@@ -1805,6 +1805,27 @@ async def setchannel(interaction: discord.Interaction, type: app_commands.Choice
     await interaction.followup.send(
         f"{label} の通知チャンネルを **#{interaction.channel.name}** に設定しました！"
     )
+def _migrate_role_panels(config: dict) -> list:
+    """config内のロール振り分けパネル一覧を取得する。
+    以前は1サーバーにつき1枚分の情報（role_panel_message_id等）しか
+    保持できず、2枚目を投稿すると1枚目の設定が上書きされて動かなく
+    なっていたため、複数枚を配列（role_panels）で管理する形式に変更した。
+    旧形式のデータが残っている場合は1件だけ引き継ぐ。"""
+    panels = config.get("role_panels")
+    if isinstance(panels, list):
+        return list(panels)
+    panels = []
+    legacy_msg_id = config.get("role_panel_message_id")
+    if legacy_msg_id:
+        panels.append({
+            "message_id": legacy_msg_id,
+            "channel_id": config.get("role_panel_channel_id"),
+            "commuter_role_id": config.get("commuter_role_id"),
+            "dorm_role_id": config.get("dorm_role_id"),
+        })
+    return panels
+
+
 # ================================
 #  /setup_roles（通生/寮生 振り分けパネル）
 # ================================
@@ -1841,10 +1862,14 @@ async def setup_roles(
     await msg.add_reaction(EMOJI_DORM)
 
     config = await async_load_config(guild.id)
-    config["role_panel_message_id"] = msg.id
-    config["role_panel_channel_id"] = msg.channel.id
-    config["commuter_role_id"] = 通生ロール.id
-    config["dorm_role_id"] = 寮生ロール.id
+    panels = _migrate_role_panels(config)
+    panels.append({
+        "message_id": msg.id,
+        "channel_id": msg.channel.id,
+        "commuter_role_id": 通生ロール.id,
+        "dorm_role_id": 寮生ロール.id,
+    })
+    config["role_panels"] = panels
     try:
         await async_save_config(guild.id, config)
     except DataWriteError as e:
@@ -1872,9 +1897,11 @@ async def _handle_role_reaction(payload: discord.RawReactionActionEvent, add: bo
         return
 
     config = await async_load_config(payload.guild_id)
-    panel_message_id = config.get("role_panel_message_id")
-    if not panel_message_id or payload.message_id != panel_message_id:
+    panels = _migrate_role_panels(config)
+    panel = next((p for p in panels if p.get("message_id") == payload.message_id), None)
+    if panel is None:
         return
+    panel_message_id = panel["message_id"]
 
     emoji = str(payload.emoji)
     if emoji not in (EMOJI_COMMUTER, EMOJI_DORM):
@@ -1888,9 +1915,9 @@ async def _handle_role_reaction(payload: discord.RawReactionActionEvent, add: bo
     if member is None or member.bot:
         return
 
-    commuter_role = guild.get_role(config.get("commuter_role_id"))
-    dorm_role = guild.get_role(config.get("dorm_role_id"))
-    channel_id = config.get("role_panel_channel_id")
+    commuter_role = guild.get_role(panel.get("commuter_role_id"))
+    dorm_role = guild.get_role(panel.get("dorm_role_id"))
+    channel_id = panel.get("channel_id")
     channel = guild.get_channel(channel_id) if channel_id else None
 
     try:
