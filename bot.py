@@ -127,6 +127,18 @@ NO_CACHE_PATHS = {
     #   の隣のタブで使われる同種のAPIなので、念のため一緒に追加する。
     "/list_schedule",
     "/list_logs",
+    # ★ 追加（2026/08/24）：「予定一覧以外はサーバー参加済みログイン
+    #   ユーザー限定」の方針変更で新たにログイン必須化した閲覧系APIも、
+    #   同じ理由（キャッシュされたログイン前の失敗レスポンスが残り続ける
+    #   事故を防ぐ）でまとめて追加しておく。
+    "/get_notice",
+    "/list_timetable",
+    "/list_terms",
+    "/get_users",
+    "/list_study_logs",
+    "/get_points",
+    "/get_completed_tasks",
+    "/quiz_archive_leaderboard",
 }
 
 @app.after_request
@@ -1265,8 +1277,11 @@ def session_token_from_request():
 #    ログインしていない場合は従来通り "not_logged_in"、ログインはしているが
 #    メンバーではない場合は "guild_membership_required" を返す（フロント側が
 #    誤って forceReLogin() しないよう、意図的に別のエラーコードにしてある）。
-#  ・/list_schedule（予定一覧の閲覧）だけは、この関数を使わず従来通り
-#    resolve_session() のみで判定する＝制限付きアカウントでも見られる唯一の機能。
+#  ・/list_schedule（予定一覧の閲覧）だけは例外として、ログインすら不要で
+#    誰でも見られる（2026/08/24、ユーザーの明示的な指示。Discordアプリ内
+#    ブラウザ等でセッションが正しく機能せず予定が見られない事象があったため、
+#    予定一覧に限っては認証自体を撤廃した）。それ以外のほぼ全ての閲覧系APIは
+#    このrequire_member_session()でサーバー参加済みのログインユーザーに限定する。
 # ================================
 def _session_is_member(guild_id: int, student_id: str) -> bool:
     login_links = load_discord_login_links(guild_id)
@@ -1283,6 +1298,23 @@ def require_member_session(token, guild_id: int):
     if not _session_is_member(guild_id, student_id):
         return None, jsonify({"ok": False, "error": "guild_membership_required"})
     return student_id, None
+
+def require_member_session_get():
+    """GET系の閲覧APIで頻出する「guild_idをクエリから読み取り→
+    require_member_sessionで認証する」という定型処理をまとめたヘルパー。
+    戻り値 (guild_id:int, student_id, err)。err が None でなければ
+    呼び出し側はそのまま `return err` してよい。"""
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return None, None, jsonify({"ok": False, "error": "missing guild_id"})
+    try:
+        guild_id = int(guild_id)
+    except (TypeError, ValueError):
+        return None, None, jsonify({"ok": False, "error": "invalid guild_id"})
+    student_id, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return None, None, err
+    return guild_id, student_id, None
 
 # ================================
 #  ★ 追加（2026/08/19）：「変更」系API共通のログイン必須チェック
@@ -2538,15 +2570,16 @@ def list_schedule():
       過去分は年月とともに増え続けるため、一覧画面はこちらを使って
       「これからの予定を先に表示 → 過去分は少しずつ追加読み込み」できるようにする。
       has_more が true の間は、まだ続きがあることを示す。
+    ★ 追加（2026/08/24）：2026/08/20に一度ログイン必須化したが、Discordアプリ内
+      ブラウザ等でセッションが正しく機能しない環境があり「予定一覧だけは誰でも
+      見られるように」というユーザーの明示的な指示で再び未ログインでも閲覧可能に
+      戻した。代わりに、それ以外のほぼ全ての閲覧系APIをサーバー参加済みの
+      ログインユーザー限定にした（各APIのrequire_member_session参照）。
     """
     guild_id = request.args.get("guild_id")
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    # ★ 追加（2026/08/20）：以前は閲覧（GET）は誰でもOKだったが、ユーザーの要望で
-    #   予定の閲覧にもログイン（session_token）を必須にした。
-    if not resolve_session(session_token_from_request(), guild_id):
-        return jsonify({"ok": False, "error": "not_logged_in"})
     plans = sorted(load_plans(guild_id), key=lambda p: p["date"])
 
     scope = request.args.get("scope")
@@ -2714,10 +2747,20 @@ def list_logs():
       返す（has_more で続きの有無を伝える）。ログ画面は「最近のログから
       少しずつ読み込み、必要になったら『もっと読み込む』で追加取得する」
       使い方を想定している。
+    ★ 追加（2026/08/24）：予定一覧（/list_schedule）だけを誰でも見られる
+      ようにする一方、こちらの予定変更ログはサーバー参加済みのログイン
+      ユーザー限定にした（ユーザーの明示的な指示）。
     """
     guild_id = request.args.get("guild_id")
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
+    try:
+        guild_id_int = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid guild_id"})
+    _student_id, err = require_member_session(session_token_from_request(), guild_id_int)
+    if err:
+        return err
     logs, _ = local_get(f"logs_{guild_id}.json")
     logs = sorted(logs or [], key=lambda l: l["time"], reverse=True)
 
@@ -2776,10 +2819,13 @@ def _timetable_text(tt):
 
 @app.route("/list_timetable", methods=["GET"])
 def list_timetable():
-    guild_id = request.args.get("guild_id")
-    if not guild_id:
-        return jsonify({"ok": False, "error": "missing guild_id"})
-    data = load_timetable(int(guild_id))
+    # ★ 追加（2026/08/24）：予定一覧以外の閲覧系APIをサーバー参加済み
+    #   ログインユーザー限定にする方針により、時間割の閲覧にもログイン
+    #   （＋対象サーバーのメンバーであること）を必須にした。
+    guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
+    data = load_timetable(guild_id)
     overrides = [{"key": k, **v} for k, v in data.items()]
     return jsonify({"ok": True, "overrides": overrides})
 
@@ -2979,10 +3025,10 @@ def _terms_text(terms):
 
 @app.route("/list_terms", methods=["GET"])
 def list_terms():
-    guild_id = request.args.get("guild_id")
-    if not guild_id:
-        return jsonify({"ok": False, "error": "missing guild_id"})
-    terms = load_terms(int(guild_id))
+    guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
+    terms = load_terms(guild_id)
     return jsonify({"ok": True, "terms": list(terms.values())})
 
 @app.route("/save_term", methods=["POST"])
@@ -3071,12 +3117,14 @@ def delete_term():
 # ================================
 @app.route("/get_users", methods=["GET"])
 def get_users():
-    guild_id = request.args.get("guild_id")
-    if not guild_id:
-        return jsonify({"ok": False, "error": "missing guild_id"})
+    # ★ 追加（2026/08/24）：以前は認証なしで誰でも呼べたが、予定一覧以外の
+    #   閲覧系APIをサーバー参加済みログインユーザー限定にする方針により、
+    #   こちらも制限した。公開してよい項目だけに絞る設計自体はそのまま維持。
+    guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
     try:
-        users = load_users(int(guild_id))
-        # ★ このAPIは認証なしで誰でも呼べるので、公開してよい項目だけに絞る。
+        users = load_users(guild_id)
         public_users = [
             {"id": u.get("id"), "nickname": u.get("nickname"), "created_at": u.get("created_at")}
             for u in users
@@ -4055,10 +4103,12 @@ def change_nickname():
 
 @app.route("/list_study_logs", methods=["GET"])
 def list_study_logs():
-    guild_id = request.args.get("guild_id")
-    if not guild_id:
-        return jsonify({"ok": False, "error": "missing guild_id"})
-    logs = load_study_logs(int(guild_id))
+    # ★ 追加（2026/08/24）：予定一覧以外の閲覧系APIをサーバー参加済み
+    #   ログインユーザー限定にする方針により追加。
+    guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
+    logs = load_study_logs(guild_id)
     return jsonify({"ok": True, "logs": logs})
 
 # ================================
@@ -4067,10 +4117,10 @@ def list_study_logs():
 @app.route("/get_points", methods=["GET"])
 def get_points():
     """全ユーザーのポイント合計を返す"""
-    guild_id = request.args.get("guild_id")
-    if not guild_id:
-        return jsonify({"ok": False, "error": "missing guild_id"})
-    pts = load_points(int(guild_id))
+    guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
+    pts = load_points(guild_id)
     return jsonify({"ok": True, "points": pts})
 
 # ================================
@@ -4083,12 +4133,12 @@ def get_completed_tasks():
     student_id を省略: 全ユーザー分を { student_id: [...] } の形でまとめて返す
                         （週間ランキングで全員の課題達成ポイントを集計するために使用）
     """
-    guild_id   = request.args.get("guild_id")
-    student_id = request.args.get("student_id")  # 省略可
-    if not guild_id:
-        return jsonify({"ok": False, "error": "missing params"})
+    guild_id, _auth_student_id, err = require_member_session_get()
+    if err:
+        return err
+    student_id = request.args.get("student_id")  # 省略可（達成済み課題の対象。認証用のstudent_idとは別）
 
-    tasks = load_completed_tasks(int(guild_id))
+    tasks = load_completed_tasks(guild_id)
 
     if student_id:
         raw = tasks.get(student_id, [])
@@ -4528,6 +4578,13 @@ def remove_cards_index_entry(filename):
 
 @app.route("/list_cards", methods=["GET"])
 def list_cards():
+    # ★ 追加（2026/08/24）：予定一覧以外の閲覧系APIをサーバー参加済み
+    #   ログインユーザー限定にする方針により追加。デッキ本体はguildを
+    #   またいで共有される設計だが、認証チェックにguild_idは必要なため
+    #   フロント側で必ず付けてもらう。
+    _guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
     try:
         index, _ = load_cards_index()
         if index is None:
@@ -4538,6 +4595,9 @@ def list_cards():
 
 @app.route("/get_card_set", methods=["GET"])
 def get_card_set():
+    _guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
     filename = request.args.get("filename")
     if not filename:
         return jsonify({"ok": False, "error": "filename は必須です"})
@@ -6072,6 +6132,9 @@ def quiz_archive_submit_score():
 @app.route("/quiz_archive_leaderboard", methods=["GET"])
 def quiz_archive_leaderboard():
     """指定デッキ（クイズ過去問）のランキングをスコア降順で返す。"""
+    _guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
     filename = request.args.get("filename") or ""
     if not _is_safe_deck_filename(filename):
         return jsonify({"ok": False, "error": "invalid filename"})
@@ -6360,6 +6423,9 @@ def _prune_stale_in_progress(items):
 
 @app.route("/list_in_progress", methods=["GET"])
 def list_in_progress():
+    _guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
     try:
         items, sha = load_in_progress()
         pruned = _prune_stale_in_progress(items)
@@ -6544,6 +6610,11 @@ def _notice_meta_entry_diff(filename, old_entry, new_entry):
 @app.route("/list_notices", methods=["GET"])
 def list_notices():
     """お知らせファイルの一覧を返す（中身は含まない、投稿者名つき）"""
+    # ★ 追加（2026/08/24）：予定一覧以外の閲覧系APIをサーバー参加済み
+    #   ログインユーザー限定にする方針により追加。
+    _guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
     try:
         files = list_notice_files()
         meta, _ = load_notices_meta()
@@ -6568,6 +6639,9 @@ def list_notices():
 @app.route("/get_notice", methods=["GET"])
 def get_notice():
     """お知らせ1件の中身（テキスト本文）と投稿者名を返す"""
+    _guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
     filename = request.args.get("filename", "")
     if not _is_safe_notice_filename(filename):
         return jsonify({"ok": False, "error": "invalid filename"})
@@ -6948,6 +7022,9 @@ def _migrate_legacy_quiz_archive_decks():
 
 @app.route("/list_folders", methods=["GET"])
 def list_folders():
+    _guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
     try:
         folders, _ = load_card_folders()
         return jsonify({"ok": True, "folders": folders})
@@ -7109,6 +7186,9 @@ def cleanup_list_order(remove_keys=None, remove_scopes=None):
 
 @app.route("/list_order", methods=["GET"])
 def list_order():
+    _guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
     try:
         order_map, _ = load_list_order()
         return jsonify({"ok": True, "order": order_map})
