@@ -117,6 +117,16 @@ NO_CACHE_PATHS = {
     "/deck_understanding",
     "/list_notices",
     "/quiz_state",
+    # ★ 追加（2026/08/24）：/list_schedule（予定一覧）が2026/08/20に
+    #   ログイン必須化された際、このNO_CACHE_PATHSへの追加が漏れていた。
+    #   Discordアプリ内ブラウザ等で「予定一覧が読み込みに失敗する」と
+    #   報告された不具合の原因はこれだったと考えられる（ここに載っている
+    #   他のAPIと同じ理由＝GETレスポンスがブラウザ・中間プロキシに
+    #   キャッシュされ、ログイン後も未ログイン時の古い{"ok":false}が
+    #   返り続けていた可能性が高い）。list_logsも同じページ（予定管理）
+    #   の隣のタブで使われる同種のAPIなので、念のため一緒に追加する。
+    "/list_schedule",
+    "/list_logs",
 }
 
 @app.after_request
