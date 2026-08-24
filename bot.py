@@ -4803,6 +4803,583 @@ def delete_cards():
     return _delete_card_deck_file(filename, nickname)
 
 # ================================
+#  ★ 追加（2026/08/24）：CardMaker — 未ログインの人にも見せられる
+#    「共有リンク」（デッキ単位・閲覧専用）
+#  ─────────────────────────────
+#  背景：CardMakerのデッキは元々ログイン必須のページの中でしか見られない。
+#  「どうしても見せたい相手（サーバー未参加・未ログイン）」にだけ、特定の
+#  1デッキを閲覧専用で見せたい、という要望から追加した。
+#
+#  方針（ユーザーの明示的な指定）：
+#   ・見せるのは指定した1デッキの中身だけ。予定・時間割・他のデッキ等、
+#     サイトの他の部分は一切見せない（専用の閲覧ページ DeckShare.html を
+#     別途用意し、ドロワー等のナビゲーションを持たせない）。
+#   ・共有された側に変更権は一切与えない（閲覧専用のAPIしか用意しない）。
+#   ・共有リンクを作れるのは、サーバー参加済みのログインユーザーのみ。
+#     ただし作成できるのはそのデッキの作成者本人のみで、本人以外が
+#     共有したい場合は作成者へDiscordで確認を送り、承認されて初めて
+#     「1回分の権利（グラント）」が得られる（delete_cardsの
+#     creator_approval_required／request_delete と同じ考え方の別バージョン）。
+#     承認後にリンクそのものが自動発行されるのではなく、依頼者が改めて
+#     「共有リンクを作る」を押した時点で1件消費される（＝グラントを渡す
+#     経路にDiscord DMの到達を必須にしないための設計。DMが失敗しても、
+#     依頼者はいつでも自分でボタンを押し直せば発行できる）。
+#   ・1人が1日に作成できる共有リンクは3件まで（本人が直接作成した分・
+#     グラントを消費して作成した分の合計。JST基準の日付で判定）。
+#   ・共有リンクの有効期限は30日間（ユーザーいわく「本当に見せたい相手に
+#     渡すためのものなので、長くはいらない。長く必要ならサーバーに
+#     入ってもらう想定」）。作成者・共有した本人はいつでも取り消せる。
+#   ・deck_shares_{guild_id}.json にはページ本体には出さない秘密の
+#     token（＝合言葉そのもの）が入っているため、運用ログ（system_log、
+#     ログイン不要で閲覧可能）にはこのファイルの中身を絶対に出さない
+#     （このためだけに、他カテゴリのようなfile_diff方式を使わず、
+#     token を含まない要約テキストだけをlog_eventに渡している）。
+# ================================
+DECK_SHARE_TTL_SEC = 60 * 60 * 24 * 30      # 共有リンクの有効期限：30日間
+DECK_SHARE_DAILY_LIMIT = 3                  # 1人が1日に作成できる件数
+DECK_SHARE_KEEP_SEC = 60 * 60 * 24 * 35     # ファイル掃除までの保持期間（期限＋当日判定に余裕を持たせる）
+SHARE_GRANT_TTL_SEC = 60 * 60 * 24 * 14     # 承認後、依頼者が実際にリンクを発行できる猶予期間
+SHARE_REQUEST_TOKEN_TTL_SEC = 60 * 60 * 24 * 14  # 依頼DMのリンク自体の有効期限（削除確認依頼と同じ長さ）
+SHARE_APPROVAL_URL = "https://1istudyweb.pages.dev/ShareApproval.html"
+DECK_SHARE_VIEW_URL = "https://1istudyweb.pages.dev/DeckShare.html"
+
+def _new_share_token(guild_id):
+    """DeckShare.htmlのURLに載る合言葉。トークンだけから対象guildを
+    引けるよう、先頭に guild_id を平文で埋め込む（guild_id自体は秘密情報
+    ではない。秘密なのはランダム部分の方）。"""
+    return f"{guild_id}.{secrets.token_urlsafe(24)}"
+
+def _parse_share_token_guild(token):
+    if not token or "." not in token:
+        return None
+    guild_part, _, _rest = token.partition(".")
+    try:
+        return int(guild_part)
+    except ValueError:
+        return None
+
+def create_share_request_token(payload: dict) -> str:
+    """本人以外からの共有リクエストDM用トークン。create_delete_request_token
+    と全く同じ方式（署名付きトークンに情報を全部載せるステートレス方式）だが、
+    削除確認依頼とは独立した機能なので、TTL等の定数もあえて別に持たせている。"""
+    body = dict(payload)
+    body["_t"] = int(time.time())
+    payload_json = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode()).decode()
+    sig = hmac.new(SESSION_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{sig}"
+
+def resolve_share_request_token(token: str):
+    if not token or "." not in token:
+        return None
+    try:
+        payload_b64, sig = token.rsplit(".", 1)
+        expected_sig = hmac.new(SESSION_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()).decode())
+        if time.time() - payload.get("_t", 0) > SHARE_REQUEST_TOKEN_TTL_SEC:
+            return None
+        return payload
+    except Exception:
+        return None
+
+def load_deck_shares(guild_id):
+    data, sha = local_get(f"deck_shares_{guild_id}.json")
+    return (data or []), sha
+
+def save_deck_shares(guild_id, items, sha=None):
+    now = time.time()
+    items[:] = [it for it in items if now - it.get("created_at", 0) <= DECK_SHARE_KEEP_SEC]
+    if sha is None:
+        _, sha = local_get(f"deck_shares_{guild_id}.json")
+    local_put(f"deck_shares_{guild_id}.json", items, sha)
+
+def _deck_share_count_today(items, student_id):
+    """本日（JST）、この人が作成した（＝自分の1日3件の枠を使った）共有の件数。
+    取り消し済みでも「その日に作った」事実は変わらないため上限判定には含める
+    （でないと 作成→取り消し→作成 を繰り返して上限を回避できてしまう）。"""
+    today = datetime.now(JST).date()
+    count = 0
+    for it in items:
+        if str(it.get("created_by")) != str(student_id):
+            continue
+        created = datetime.fromtimestamp(it.get("created_at", 0), JST).date()
+        if created == today:
+            count += 1
+    return count
+
+def _create_deck_share_entry(items, guild_id, filename, deck_name, student_id, nickname, via_request, approved_by_nickname):
+    now = int(time.time())
+    entry = {
+        "token": _new_share_token(guild_id),
+        "filename": filename,
+        "deck_name": deck_name,
+        "created_by": student_id,
+        "created_by_nickname": nickname,
+        "created_at": now,
+        "expires_at": now + DECK_SHARE_TTL_SEC,
+        "via_request": via_request,               # 作成者本人以外が、承認を得て作成したか
+        "approved_by_nickname": approved_by_nickname,
+        "revoked_at": None,
+    }
+    items.append(entry)
+    return entry
+
+def _deck_share_public_view(entry):
+    return {
+        "token": entry["token"],
+        "url": f"{DECK_SHARE_VIEW_URL}?token={entry['token']}",
+        "deck_name": entry["deck_name"],
+        "created_at": entry["created_at"],
+        "expires_at": entry["expires_at"],
+    }
+
+def _deck_share_log_lines(entry):
+    """★ deck_shares_{guild_id}.json自体はtoken（合言葉そのもの）を含むため、
+    他カテゴリのようにfile_diff()でファイルの中身をそのまま運用ログ（ログイン
+    不要で閲覧可能）に出すことは絶対にしない。ここで作る文字列にはtokenを
+    含めず、デッキ名と有効期限だけを表示する。"""
+    expires_str = datetime.fromtimestamp(entry["expires_at"], JST).strftime("%Y-%m-%d")
+    return f"対象デッキ: {entry['deck_name']}\n有効期限: {expires_str}まで（30日間）"
+
+def load_share_grants(guild_id):
+    data, sha = local_get(f"deck_share_grants_{guild_id}.json")
+    return (data or []), sha
+
+def save_share_grants(guild_id, items, sha=None):
+    now = time.time()
+    items[:] = [it for it in items if now - it.get("granted_at", 0) <= SHARE_GRANT_TTL_SEC * 2]
+    if sha is None:
+        _, sha = local_get(f"deck_share_grants_{guild_id}.json")
+    local_put(f"deck_share_grants_{guild_id}.json", items, sha)
+
+def _find_usable_grant(items, filename, requester_id):
+    now = time.time()
+    for it in items:
+        if (it.get("filename") == filename
+                and str(it.get("requester_id")) == str(requester_id)
+                and not it.get("used_at")
+                and it.get("expires_at", 0) > now):
+            return it
+    return None
+
+def load_pending_share_requests(guild_id):
+    """/request_deck_shareがDiscord未連携でDMを送れなかった場合の控え
+    （pending_delete_requestsと同じ考え方。作成者が次にサイトを開いたときに
+    PendingShareCheck.jsが拾って確認モーダルを出す）。"""
+    data, sha = local_get(f"pending_share_requests_{guild_id}.json")
+    return (data or []), sha
+
+def save_pending_share_requests(guild_id, items, sha=None):
+    if sha is None:
+        _, sha = local_get(f"pending_share_requests_{guild_id}.json")
+    local_put(f"pending_share_requests_{guild_id}.json", items, sha)
+
+@app.route("/create_deck_share", methods=["POST"])
+def create_deck_share():
+    """
+    共有リンクを1件発行する。
+    body: { guild_id, session_token, filename }
+    ・作成者本人 → そのまま発行できる。
+    ・本人以外 → 有効な承認済みグラント（/respond_deck_share_requestで
+      作成者が承認済み・未使用・期限内）があれば発行できる（消費される）。
+      無ければ creator_approval_required を返す（フロント側は
+      /request_deck_share へのフォームに誘導する）。
+    ・作成者が記録されていない古いデッキ（この機能導入前に公開されたもの）は
+      誰でも直接発行できる（delete_cardsの owner_id が None のケースと同じ扱い）。
+    """
+    data = request.json or {}
+    guild_id, student_id, nickname, err = require_login_json(data)
+    if err:
+        return err
+    filename = data.get("filename")
+    if not filename:
+        return jsonify({"ok": False, "error": "filename は必須です"})
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return jsonify({"ok": False, "error": "invalid filename"})
+    deck_data, _ = get_card_file(filename)
+    if not deck_data:
+        return jsonify({"ok": False, "error": "ファイルが見つかりません"})
+
+    owner_id, owner_nickname = _deck_owner(filename)
+    via_request = False
+    approved_by_nickname = None
+    grant = None
+    grant_items = None
+    grant_sha = None
+    if owner_id and str(owner_id) != str(student_id):
+        grant_items, grant_sha = load_share_grants(guild_id)
+        grant = _find_usable_grant(grant_items, filename, student_id)
+        if not grant:
+            return jsonify({
+                "ok": False,
+                "error": "creator_approval_required",
+                "owner_nickname": owner_nickname or "作成者",
+            })
+        via_request = True
+        approved_by_nickname = grant.get("owner_nickname") or owner_nickname
+
+    items, sha = load_deck_shares(guild_id)
+    if _deck_share_count_today(items, student_id) >= DECK_SHARE_DAILY_LIMIT:
+        return jsonify({"ok": False, "error": "share_limit_reached"})
+
+    entry = _create_deck_share_entry(
+        items, guild_id, filename, deck_data.get("name") or filename,
+        student_id, nickname, via_request=via_request, approved_by_nickname=approved_by_nickname,
+    )
+    save_deck_shares(guild_id, items, sha)
+
+    if via_request and grant is not None:
+        grant["used_at"] = int(time.time())
+        save_share_grants(guild_id, grant_items, grant_sha)
+
+    log_event(
+        "card",
+        f"デッキ「{entry['deck_name']}」の共有リンクを{nickname}さんが作成しました。"
+        + (f"（{approved_by_nickname}さんの許可あり）" if via_request else ""),
+        actor=nickname,
+        detail=[{"file": None, "diff": _deck_share_log_lines(entry)}],
+    )
+    return jsonify({"ok": True, **_deck_share_public_view(entry)})
+
+@app.route("/list_deck_shares", methods=["GET"])
+def list_deck_shares():
+    """デッキ編集画面の「共有中のリンク」一覧用。閲覧できるのは、対象デッキの
+    作成者本人か、そのリンクを実際に作成した本人のみ（他人が作った共有の
+    存在自体を知られないよう、必ずフィルタしてから返す）。"""
+    guild_id = request.args.get("guild_id")
+    filename = request.args.get("filename")
+    if not guild_id or not filename:
+        return jsonify({"ok": False, "error": "missing params"})
+    try:
+        guild_id = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid guild_id"})
+    student_id, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return err
+    owner_id, _owner_nickname = _deck_owner(filename)
+    items, _ = load_deck_shares(guild_id)
+    now = time.time()
+    mine = [
+        it for it in items
+        if it.get("filename") == filename
+        and not it.get("revoked_at")
+        and it.get("expires_at", 0) > now
+        and (str(it.get("created_by")) == str(student_id) or (owner_id and str(owner_id) == str(student_id)))
+    ]
+    return jsonify({
+        "ok": True,
+        "shares": [
+            {
+                "token": it["token"],
+                "url": f"{DECK_SHARE_VIEW_URL}?token={it['token']}",
+                "created_by_nickname": it.get("created_by_nickname"),
+                "created_at": it.get("created_at"),
+                "expires_at": it.get("expires_at"),
+                "via_request": bool(it.get("via_request")),
+            }
+            for it in mine
+        ],
+        "remaining_today": max(0, DECK_SHARE_DAILY_LIMIT - _deck_share_count_today(items, student_id)),
+    })
+
+@app.route("/revoke_deck_share", methods=["POST"])
+def revoke_deck_share():
+    """発行済みの共有リンクを無効化する。取り消せるのは、そのリンクを
+    実際に作成した本人か、対象デッキの作成者本人のどちらか
+    （自分の知らないところで共有されたデッキを、作成者側からも止められるように）。"""
+    data = request.json or {}
+    guild_id, student_id, nickname, err = require_login_json(data)
+    if err:
+        return err
+    token = data.get("token")
+    if not token:
+        return jsonify({"ok": False, "error": "token は必須です"})
+    items, sha = load_deck_shares(guild_id)
+    entry = next((it for it in items if it.get("token") == token), None)
+    if not entry:
+        return jsonify({"ok": False, "error": "リンクが見つかりません"})
+    owner_id, _owner_nickname = _deck_owner(entry.get("filename"))
+    if str(entry.get("created_by")) != str(student_id) and not (owner_id and str(owner_id) == str(student_id)):
+        return jsonify({"ok": False, "error": "この操作を行う権限がありません"})
+    if not entry.get("revoked_at"):
+        entry["revoked_at"] = int(time.time())
+        save_deck_shares(guild_id, items, sha)
+        log_event(
+            "card",
+            f"デッキ「{entry.get('deck_name')}」の共有リンクを{nickname}さんが取り消しました。",
+            actor=nickname,
+        )
+    return jsonify({"ok": True})
+
+@app.route("/deck_share_info", methods=["GET"])
+def deck_share_info():
+    """DeckShare.html（ログイン不要の共有ビューア）が使う。トークンさえ
+    分かれば閲覧できる（＝トークン自体が合言葉）。有効な共有だけ、対象
+    デッキの中身（閲覧専用のフィールドのみ）を返す。"""
+    token = request.args.get("token", "")
+    guild_id = _parse_share_token_guild(token)
+    if guild_id is None:
+        return jsonify({"ok": False, "error": "リンクが正しくありません。"})
+    items, _ = load_deck_shares(guild_id)
+    entry = next((it for it in items if it.get("token") == token), None)
+    if not entry:
+        return jsonify({"ok": False, "error": "リンクが無効です。"})
+    if entry.get("revoked_at"):
+        return jsonify({"ok": False, "error": "このリンクは取り消されました。"})
+    if entry.get("expires_at", 0) <= time.time():
+        return jsonify({"ok": False, "error": "リンクの有効期限が切れています。"})
+    data, _ = get_card_file(entry["filename"])
+    if not data:
+        return jsonify({"ok": False, "error": "デッキが見つかりません。作成者が削除した可能性があります。"})
+    return jsonify({
+        "ok": True,
+        "name": data.get("name", entry.get("deck_name")),
+        "subject": data.get("subject"),
+        "cards": data.get("cards", []),
+        "choice_mode": data.get("choice_mode"),
+        "incomplete": bool(data.get("incomplete", False)),
+        "shared_by": entry.get("created_by_nickname"),
+        "expires_at": entry.get("expires_at"),
+    })
+
+@app.route("/request_deck_share", methods=["POST"])
+def request_deck_share():
+    """
+    作成者本人以外が「共有リンクを作りたい」と思ったときの入口。
+    ここでは何も発行せず、理由を添えて作成者にDiscord DMで確認を送るだけ。
+    承認されると、依頼者に「1回分の権利（グラント）」が付与され、依頼者が
+    改めて /create_deck_share を叩いた時点で実際にリンクが発行される。
+    body: { guild_id, session_token, filename, reason }
+    """
+    data = request.json or {}
+    guild_id, requester_id, requester_nickname, err = require_login_json(data)
+    if err:
+        return err
+    filename = data.get("filename")
+    reason = (data.get("reason") or "").strip()
+    if not filename:
+        return jsonify({"ok": False, "error": "filename は必須です"})
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return jsonify({"ok": False, "error": "invalid filename"})
+    if not reason:
+        return jsonify({"ok": False, "error": "理由を入力してください"})
+    if len(reason) > 500:
+        return jsonify({"ok": False, "error": "理由は500文字以内で入力してください"})
+    err = reject_if_bug_chars({"共有したい理由": reason})
+    if err:
+        return err
+
+    deck_data, _ = get_card_file(filename)
+    if not deck_data:
+        return jsonify({"ok": False, "error": "ファイルが見つかりません"})
+    owner_id, owner_nickname = _deck_owner(filename)
+    if not owner_id:
+        return jsonify({"ok": False, "error": "作成者が記録されていないため、確認を送れません。"})
+    if str(owner_id) == str(requester_id):
+        return jsonify({"ok": False, "error": "本人はこの手続きを使わず直接共有リンクを作成できます。"})
+
+    # ★ 依頼時点で、承認後にリンクを持つことになる依頼者本人の本日の上限を
+    #   あらかじめ確認しておく（上限に達しているのに依頼だけ飛んでしまい、
+    #   承認後に無駄になる事故を避ける。承認後の発行時にも再確認している）。
+    share_items, _ = load_deck_shares(guild_id)
+    if _deck_share_count_today(share_items, requester_id) >= DECK_SHARE_DAILY_LIMIT:
+        return jsonify({"ok": False, "error": "share_limit_reached"})
+
+    deck_name = deck_data.get("name") or filename
+    token = create_share_request_token({
+        "guild_id": guild_id,
+        "filename": filename,
+        "deck_name": deck_name,
+        "owner_id": owner_id,
+        "owner_nickname": owner_nickname,
+        "requester_id": requester_id,
+        "requester_nickname": requester_nickname,
+        "reason": reason,
+    })
+    review_url = f"{SHARE_APPROVAL_URL}?token={token}"
+    message = (
+        f"{requester_nickname}さんが、あなたが作成したカードデッキ\n"
+        f"「{deck_name}」の外部共有リンク発行を依頼しています。\n\n"
+        f"理由: {reason}\n\n"
+        f"承諾すると、ログインしていない人でも閲覧できる（編集は一切できない）"
+        f"リンクを{requester_nickname}さんが発行できるようになります。\n"
+        f"内容を確認してから、承諾／拒否を選んでください。\n"
+        f"{review_url}"
+    )
+    notified_via = "discord_dm"
+    try:
+        send_discord_dm(guild_id, owner_id, "🔗 共有の確認依頼", message)
+    except Exception:
+        try:
+            items, sha = load_pending_share_requests(guild_id)
+            items.append({
+                "token": token,
+                "deck_name": deck_name,
+                "owner_id": owner_id,
+                "requester_nickname": requester_nickname,
+                "reason": reason,
+                "created_at": int(time.time()),
+            })
+            save_pending_share_requests(guild_id, items, sha)
+        except DataWriteError as write_err:
+            return jsonify({"ok": False, "error": f"local_write_failed: {write_err}"})
+        notified_via = "web_pending"
+
+    log_event(
+        "card",
+        f"「{deck_name}」の共有リンク発行を{requester_nickname}さんが{owner_nickname or '作成者'}さんに依頼しました（承認待ち）。",
+        actor=requester_nickname,
+        detail=[{"file": None, "diff": f"理由: {reason}"}],
+    )
+    return jsonify({"ok": True, "owner_nickname": owner_nickname, "notified_via": notified_via})
+
+@app.route("/pending_share_requests", methods=["GET"])
+def pending_share_requests():
+    """ログイン中の本人宛の、Web確認待ちの共有依頼一覧
+    （/request_deck_shareがDiscord未連携でDMを送れなかったケースの受け皿。
+    pending_delete_requestsと同じ考え方）。"""
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    try:
+        guild_id = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid guild_id"})
+    student_id, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return err
+    items, _ = load_pending_share_requests(guild_id)
+    now = time.time()
+    mine = [
+        it for it in items
+        if str(it.get("owner_id")) == str(student_id)
+        and now - it.get("created_at", 0) <= SHARE_REQUEST_TOKEN_TTL_SEC
+    ]
+    return jsonify({"ok": True, "requests": [
+        {
+            "token": it.get("token"),
+            "deck_name": it.get("deck_name"),
+            "requester_nickname": it.get("requester_nickname"),
+            "reason": it.get("reason"),
+        }
+        for it in mine
+    ]})
+
+@app.route("/share_request_info", methods=["GET"])
+def share_request_info():
+    """共有承認ページ（ShareApproval.html）が、リンクのtokenから
+    「誰が・どのデッキを・なぜ共有したいか」を表示するための情報を取得する。
+    トークンさえ分かれば閲覧できる（DMで本人にだけ届く前提）ため、
+    ログイン不要にしてある。"""
+    token = request.args.get("token", "")
+    payload = resolve_share_request_token(token)
+    if not payload:
+        return jsonify({"ok": False, "error": "リンクが無効か、期限切れです。"})
+    filename = payload.get("filename")
+    exists = os.path.isfile(_data_path(f"{CARDS_DIR}/{filename}"))
+    # ★ 依頼時点のデッキ名ではなく、閲覧時点の最新のデッキ名を出す
+    #   （delete_request_infoと同じ考え方）。デッキ自体が既に無ければ依頼時点の名前のまま。
+    deck_name = payload.get("deck_name")
+    if exists:
+        current, _ = get_card_file(filename)
+        if current:
+            deck_name = current.get("name") or deck_name
+    return jsonify({
+        "ok": True,
+        "deck_name": deck_name,
+        "requester_nickname": payload.get("requester_nickname"),
+        "reason": payload.get("reason"),
+        "already_gone": not exists,
+    })
+
+@app.route("/respond_deck_share_request", methods=["POST"])
+def respond_deck_share_request():
+    """共有承認ページからの承諾／拒否。ログイン不要（DMで本人にだけ届いた
+    tokenの所持自体を本人確認の代わりにしている）。
+    承諾しても、この時点ではリンクは発行されない（依頼者に「1回分の権利」
+    ＝グラントを渡すだけ）。実際の発行は依頼者が/create_deck_shareを
+    叩いた時点で行われる。
+    body: { token, action: "approve"/"reject" }"""
+    data = request.json or {}
+    payload = resolve_share_request_token(data.get("token", ""))
+    if not payload:
+        return jsonify({"ok": False, "error": "リンクが無効か、期限切れです。"})
+    action = data.get("action")
+    if action not in ("approve", "reject"):
+        return jsonify({"ok": False, "error": "invalid action"})
+
+    guild_id = payload.get("guild_id")
+    filename = payload.get("filename")
+    deck_name = payload.get("deck_name") or filename
+    owner_id = payload.get("owner_id")
+    owner_nickname = payload.get("owner_nickname") or "作成者"
+    requester_id = payload.get("requester_id")
+    requester_nickname = payload.get("requester_nickname") or "依頼者"
+
+    if action == "approve":
+        if not os.path.isfile(_data_path(f"{CARDS_DIR}/{filename}")):
+            return jsonify({"ok": False, "error": "デッキが見つかりません。既に削除されている可能性があります。"})
+        items, sha = load_share_grants(guild_id)
+        now = int(time.time())
+        items.append({
+            "filename": filename,
+            "requester_id": requester_id,
+            "requester_nickname": requester_nickname,
+            "owner_id": owner_id,
+            "owner_nickname": owner_nickname,
+            "granted_at": now,
+            "expires_at": now + SHARE_GRANT_TTL_SEC,
+            "used_at": None,
+        })
+        save_share_grants(guild_id, items, sha)
+        log_event(
+            "card",
+            f"「{deck_name}」の共有リンク発行依頼を{owner_nickname}さんが承認しました（{requester_nickname}さんが発行可能に）。",
+            actor=owner_nickname,
+        )
+        result_message = "承認しました。依頼者が共有リンクを発行できるようになりました。"
+    else:
+        log_event(
+            "card",
+            f"「{deck_name}」の共有リンク発行依頼を{owner_nickname}さんが却下しました。",
+            actor=owner_nickname,
+        )
+        result_message = "却下しました。依頼者にはその旨が伝わります。"
+
+    # pending_share_requests（Discord未連携でWeb確認待ちになっていた控え）から、
+    # このtokenのエントリを取り除く。
+    if guild_id:
+        try:
+            items2, sha2 = load_pending_share_requests(guild_id)
+            new_items2 = [it for it in items2 if it.get("token") != data.get("token")]
+            if len(new_items2) != len(items2):
+                save_pending_share_requests(guild_id, new_items2, sha2)
+        except Exception:
+            pass
+
+    # ★ 依頼した本人にも結果をベストエフォートで伝える（Discord未連携／送信失敗
+    #   でも承認・却下そのものは成立させたいので例外は握りつぶす。承認の場合、
+    #   このDMが届かなくても依頼者はCardMakerの同じデッキメニューから
+    #   「共有リンクを作る」を押せば発行できるので、詰まることはない）。
+    if guild_id and requester_id:
+        try:
+            if action == "approve":
+                outcome_msg = (
+                    f"「{deck_name}」の共有リンク発行依頼が{owner_nickname}さんに承認されました。\n"
+                    f"CardMakerでこのデッキのメニューから「共有リンクを作る」をもう一度押すと発行できます。"
+                )
+            else:
+                outcome_msg = f"「{deck_name}」の共有リンク発行依頼は{owner_nickname}さんに却下されました。"
+            send_discord_dm(int(guild_id), requester_id, "🔗 共有依頼の結果", outcome_msg)
+        except Exception:
+            pass
+
+    return jsonify({"ok": True, "action": action, "message": result_message})
+
+# ================================
 #  ★ Flask API — みんなでクイズ（オンライン早押し4択）
 #  ─────────────────────────────
 #  Quiz.js から呼ばれる。ルームの状態は「今まさに進行中のゲーム」にしか
