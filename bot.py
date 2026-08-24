@@ -5114,6 +5114,51 @@ def revoke_deck_share():
         )
     return jsonify({"ok": True})
 
+@app.route("/list_my_deck_shares", methods=["GET"])
+def list_my_deck_shares():
+    """アカウント設定モーダル（StudyLog.js openAccountModal）の「共有中の
+    リンク」一覧用。/list_deck_sharesは1デッキ分（filename指定）しか
+    返さないが、こちらはログイン中の本人に関係する共有リンクを
+    デッキ横断でまとめて返す：
+    ①自分が発行したもの（本人直接発行・承認を得ての発行の両方を含む）
+    ②自分のデッキを、承認を得た他人が発行したもの
+    のどちらか。取り消し済み・期限切れは含めない。"""
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    try:
+        guild_id = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid guild_id"})
+    student_id, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return err
+    items, _ = load_deck_shares(guild_id)
+    now = time.time()
+    mine = []
+    for it in items:
+        if it.get("revoked_at") or it.get("expires_at", 0) <= now:
+            continue
+        is_own_created = str(it.get("created_by")) == str(student_id)
+        is_own_deck = False
+        if not is_own_created:
+            owner_id, _owner_nickname = _deck_owner(it.get("filename"))
+            is_own_deck = bool(owner_id) and str(owner_id) == str(student_id)
+        if not (is_own_created or is_own_deck):
+            continue
+        mine.append({
+            "token": it["token"],
+            "url": f"{DECK_SHARE_VIEW_URL}?token={it['token']}",
+            "deck_name": it.get("deck_name"),
+            "created_by_nickname": it.get("created_by_nickname"),
+            "created_at": it.get("created_at"),
+            "expires_at": it.get("expires_at"),
+            "via_request": bool(it.get("via_request")),
+            "is_own_deck": is_own_deck,  # True＝自分のデッキを他人（承認済み）が発行したもの
+        })
+    mine.sort(key=lambda x: x["created_at"], reverse=True)
+    return jsonify({"ok": True, "shares": mine})
+
 @app.route("/deck_share_info", methods=["GET"])
 def deck_share_info():
     """DeckShare.html（ログイン不要の共有ビューア）が使う。トークンさえ
