@@ -3708,8 +3708,13 @@ def _handle_discord_login_callback(discord_user_id: int, discord_username: str) 
     #   案内を出せるようにする。フロント側はこれで選択肢を描画し、実際の選択結果は
     #   必ずpending（トークン）と一緒に/finalize_loginへ送ってサーバー側で再検証させる。
     registered_ids = {gid for gid, _gname, _sid, _nn in registered}
+    # ★ guild_idはJSONの数値のまま渡すとJavaScript側の数値精度（53bit）を
+    #   超えるDiscordのID（64bit）が壊れるため、文字列化して渡す
+    #   （フロントはこの値をそのまま/finalize_loginへ送り返すだけなので、
+    #   文字列のままでも支障ない。int(guild_id)で受けるサーバー側も
+    #   文字列からの変換に対応済み）。
     display_candidates = json.dumps(
-        [{"guild_id": gid, "guild_name": gname, "registered": gid in registered_ids} for gid, gname in candidates],
+        [{"guild_id": str(gid), "guild_name": gname, "registered": gid in registered_ids} for gid, gname in candidates],
         ensure_ascii=False, separators=(",", ":"),
     )
     qs = urlencode({"guild_choice": pending, "candidates": display_candidates})
@@ -3751,7 +3756,7 @@ def finalize_login():
             "ok": True,
             "session_token": session_token,
             "student": {"id": match["student_id"], "nickname": match["nickname"]},
-            "guild_id": guild_id,
+            "guild_id": str(guild_id),  # ★ JS側の数値精度を超えるため文字列で返す（discord_reg_info参照）
             "guild_name": match.get("guild_name"),
             "multi_guild": True,  # ★ このエンドポイントは複数サーバーが候補にある場合しか呼ばれない
         })
@@ -3801,7 +3806,8 @@ def resolve_guild_invite_code():
         return jsonify({"ok": False, "error": "リンクが無効か期限切れです。"})
     del GUILD_INVITE_CODES[code]  # ★ 1回使い切り
     guild = bot.get_guild(entry["guild_id"]) if bot.is_ready() else None
-    return jsonify({"ok": True, "guild_id": entry["guild_id"], "guild_name": display_name_for_guild(guild) if guild else None})
+    # ★ guild_idはJSの数値精度を超えるため文字列で返す（discord_reg_info参照）
+    return jsonify({"ok": True, "guild_id": str(entry["guild_id"]), "guild_name": display_name_for_guild(guild) if guild else None})
 
 
 @app.route("/discord_reg_info", methods=["GET"])
@@ -3821,7 +3827,14 @@ def discord_reg_info():
         "discord_username": entry.get("discord_username", ""),
         # ★ 複数サーバー対応：このDiscordユーザーが実際にメンバーである
         #   候補サーバー一覧。1件ならフロント側で選択UIを省略してよい。
-        "candidates": entry.get("candidates", []),
+        # ★ guild_idはJSONの数値のまま返すとJavaScript側の数値精度
+        #   （53bit）を超えるDiscordのID（64bit）が壊れるため、文字列化して返す
+        #   （フロントは元々文字列としてしか扱わないので、str化しても後続の
+        #   比較・送信には影響しない）。
+        "candidates": [
+            {"guild_id": str(c.get("guild_id")), "guild_name": c.get("guild_name")}
+            for c in entry.get("candidates", [])
+        ],
     })
 
 
@@ -3912,7 +3925,7 @@ def discord_complete_registration():
             "ok": True,
             "session_token": token,
             "student": {"id": student_id, "nickname": final_nickname},
-            "guild_id": guild_id,
+            "guild_id": str(guild_id),  # ★ JS側の数値精度を超えるため文字列で返す（discord_reg_info参照）
             # ★ フロント側で「サーバーを切り替える」メニューを複数サーバーに
             #   実際に参加している人にだけ出すための判定材料。
             "multi_guild": len(entry.get("candidates", [])) > 1,
