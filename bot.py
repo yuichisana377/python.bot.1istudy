@@ -5163,6 +5163,20 @@ def save_cards():
                 })
             existing_published_by = existing_data.get("published_by")
 
+    # ★ 追加：「クイズ過去問」フォルダ（またはその配下）には、みんなでクイズの
+    #   結果から自動保存されたデッキ（quiz_archive: true）以外を入れられない
+    #   ようにする（2026/08/25、ユーザーの要望）。フォルダ側の移動制限
+    #   （save_folder、フォルダごと外へ出せない）とは別に、デッキ単位の
+    #   保存経路であるここでも直接強制する（Web側UIがそもそも選ばせない
+    #   対策とは別に、直接APIを叩かれた場合に備えてサーバー側でも強制する）。
+    if folder_id:
+        folders, _folders_sha = load_card_folders(guild_id)
+        if _is_in_archive_scope(folders, folder_id) and not is_quiz_archive:
+            return jsonify({
+                "ok": False,
+                "error": "「クイズ過去問」フォルダには、みんなでクイズの結果から自動保存されたデッキしか入れられません",
+            })
+
     # ★ 追加：published_by.id は「デッキの作成者」を表す唯一の場所（削除の
     #   作成者確認機能で使う）。nicknameは元からクライアント側（deck.published_by
     #   キャッシュ）が「元の公開者のまま維持する」よう送ってきているが、idは
