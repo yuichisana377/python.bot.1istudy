@@ -1432,6 +1432,30 @@ def consume_link_code(guild_id: int, code: str):
 
 
 # ================================
+#  ★ サーバー招待コード（複数サーバー対応）
+#  ─────────────────────────────
+#  未ログインの新規訪問者に、この端末が「どのサーバー向けか」を教える手段。
+#  Discordログインが基本経路だが、それを使いたくない/使えない人向けに、
+#  既にそのサーバーにログイン済みの誰かが発行したコードで代替できるように
+#  した。LINK_CODESと全く同じワンタイムコードのパターン（1回使い切り）。
+#  ★ guild_id自体は秘密情報ではない（ページのhidden inputに元々平文で
+#    載っていた値）が、「知らない人が勝手にこのサーバー向けの画面を
+#    開けるようにする」導線を無制限に公開しないよう、発行はログイン済みの
+#    本人のみ・コードは1回使い切りにしてある。
+# ================================
+GUILD_INVITE_CODE_TTL_SEC = 60 * 60 * 24  # コードの有効期限：24時間
+
+GUILD_INVITE_CODES = {}  # code(str) -> {"guild_id", "expires"}
+
+def _generate_guild_invite_code() -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    while True:
+        code = "".join(secrets.choice(alphabet) for _ in range(8))
+        if code not in GUILD_INVITE_CODES:
+            return code
+
+
+# ================================
 #  ★ Discord OAuth2 の一時state（CSRF対策 兼 「誰が認可画面に飛んだか」の記録）
 #  ─────────────────────────────
 #  生徒がStudyLog上のボタンから直接Discordの認可画面に飛ぶ方式。
@@ -1505,12 +1529,19 @@ def save_discord_login_links(guild_id: int, links: dict, sha=None):
 #  ・成功時のみ明示的に破棄する。
 # ================================
 DISCORD_REG_TOKEN_TTL_SEC = 10 * 60
-DISCORD_REG_TOKENS = {}  # token(str) -> {"guild_id","discord_user_id","discord_username","expires"}
+DISCORD_REG_TOKENS = {}  # token(str) -> {"candidates":[{"guild_id","guild_name"},...],"discord_user_id","discord_username","expires"}
 
-def issue_discord_reg_token(guild_id: int, discord_user_id: int, discord_username: str = "") -> str:
+def issue_discord_reg_token(candidates: list, discord_user_id: int, discord_username: str = "") -> str:
+    """
+    candidates: bot_member_guilds()が返す (guild_id, guild_name) のリスト
+    （＝このDiscordユーザーが実際にメンバーである、Bot導入済みサーバー一覧）。
+    ★ 複数サーバー対応：以前は単一guild_idだったが、同じ人が未登録のまま
+      複数サーバーのメンバーである場合に登録フォーム側で選ばせられるよう、
+      候補を全部持たせる形に変更した。
+    """
     token = secrets.token_urlsafe(24)
     DISCORD_REG_TOKENS[token] = {
-        "guild_id": guild_id,
+        "candidates": [{"guild_id": gid, "guild_name": gname} for gid, gname in candidates],
         "discord_user_id": discord_user_id,
         "discord_username": discord_username,
         "expires": time.time() + DISCORD_REG_TOKEN_TTL_SEC,
@@ -1534,6 +1565,19 @@ def discard_discord_reg_token(token):
 #  科目チャンネルユーティリティ
 # ================================
 def get_subject_channels(guild: discord.Guild) -> list:
+    """
+    ★ 複数サーバー対応：まずサーバーごとの設定
+    （config_{guild_id}.jsonのsubject_category_id、/set_subject_categoryで設定）を
+    優先して使う。未設定の場合のみ、旧来のグローバル環境変数
+    （SUBJECT_CATEGORY_ID/SUBJECT_CATEGORY、1I向けの後方互換フォールバック）を使う。
+    どれも一致しなければ、そのサーバーの全テキストチャンネルを返す。
+    """
+    config = load_config(guild.id)
+    configured_id = config.get("subject_category_id")
+    if configured_id:
+        for cat in guild.categories:
+            if cat.id == int(configured_id):
+                return list(cat.text_channels)
     if SUBJECT_CATEGORY_ID:
         for cat in guild.categories:
             if cat.id == int(SUBJECT_CATEGORY_ID):
@@ -1847,6 +1891,41 @@ async def setchannel(interaction: discord.Interaction, type: app_commands.Choice
     await interaction.followup.send(
         f"{label} の通知チャンネルを **#{interaction.channel.name}** に設定しました！"
     )
+
+@bot.tree.command(name="set_subject_category", description="このチャンネルが属するカテゴリを「科目チャンネル」の範囲として設定する")
+async def set_subject_category(interaction: discord.Interaction):
+    """
+    ★ 複数サーバー対応（追加）：以前はSUBJECT_CATEGORY_ID/SUBJECT_CATEGORY
+    という単一の環境変数（1I専用）で「科目チャンネルの範囲」を決めていたため、
+    他サーバーでは一致するカテゴリが無く、常に「サーバーの全テキストチャンネル」
+    が科目候補になってしまっていた（get_subject_channels参照）。
+    このコマンドを、科目チャンネルをまとめたカテゴリ内のいずれかのチャンネルで
+    実行すると、そのカテゴリをこのサーバー専用の科目範囲としてconfig_{guild_id}.json
+    に保存する（/setchannelと同じ「実行したチャンネルを対象にする」パターン）。
+    """
+    await interaction.response.defer(ephemeral=True)
+    category = getattr(interaction.channel, "category", None)
+    if category is None:
+        await interaction.followup.send(
+            "このチャンネルはカテゴリに属していません。科目チャンネルをまとめたカテゴリの中の、"
+            "いずれかのテキストチャンネルで実行してください。",
+            ephemeral=True,
+        )
+        return
+
+    guild_id = interaction.guild.id
+    config = await async_load_config(guild_id)
+    config["subject_category_id"] = category.id
+    try:
+        await async_save_config(guild_id, config)
+    except DataWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（データ保存エラー）。もう一度お試しください。\n{e}", ephemeral=True)
+        return
+    await interaction.followup.send(
+        f"科目チャンネルの範囲を「{category.name}」カテゴリに設定しました"
+        f"（{len(category.text_channels)}個のテキストチャンネル）。"
+    )
+
 def _migrate_role_panels(config: dict) -> list:
     """config内のロール振り分けパネル一覧を取得する。
     以前は1サーバーにつき1枚分の情報（role_panel_message_id等）しか
@@ -2076,6 +2155,7 @@ async def help_command(interaction: discord.Interaction):
         "**/delete** — 予定を削除する\n"
         "**/edit** — 予定を編集する\n"
         "**/setchannel** — 通知チャンネルを設定する（通生／寮生／お知らせ用を選択可）\n"
+        "**/set_subject_category** — このチャンネルが属するカテゴリを「科目チャンネル」の範囲として設定する\n"
         "**/setup_roles** — 通生/寮生 振り分けパネルを投稿する\n"
         "**/id連携** — StudyLogにログインして発行した連携コードを使い、DiscordアカウントをStudyLogと連携する（DM通知を受け取れるようになる）\n"
         "**webページ** - https://1istudyweb.pages.dev/\n"
@@ -3173,16 +3253,14 @@ def discord_login_start():
     ★ 学籍番号+パスワードでのログインとは完全に別経路。ここで発行するstateは
       「まだ誰でもない」ものに紐づく（CSRF対策のみが目的で、student_idは
       Discordの認可が終わって初めて分かる）。
+    ★ 複数サーバー対応：guild_idはここでは受け取らない（フロントも送らない）。
+      「どのサーバーのメンバーか」はコールバック側でDiscordの認可が終わった
+      後に bot_member_guilds() で自動的に見つける（_handle_discord_login_callback参照）。
     """
     if not DISCORD_CLIENT_SECRET:
         return _oauth_result_page(False, "現在Discordログインは準備中です。時間をおいてもう一度お試しください。")
 
-    guild_id = request.args.get("guild_id")
-    if not guild_id:
-        return _oauth_result_page(False, "不正なリクエストです。")
-
-    guild_id = int(guild_id)
-    state = issue_oauth_state(guild_id, None, purpose="login")
+    state = issue_oauth_state(None, None, purpose="login")
     authorize_url = "https://discord.com/oauth2/authorize?" + urlencode({
         "client_id":     DISCORD_CLIENT_ID,
         "redirect_uri":  DISCORD_OAUTH_REDIRECT_URI,
@@ -3309,7 +3387,7 @@ def discord_oauth_callback():
         return _oauth_result_page(False, "Discordのユーザー情報取得に失敗しました。時間をおいてもう一度お試しください。")
 
     if purpose == "login":
-        return _handle_discord_login_callback(guild_id, discord_user_id, discord_username)
+        return _handle_discord_login_callback(discord_user_id, discord_username)
     else:
         return _handle_discord_link_callback(guild_id, entry["student_id"], discord_user_id)
 
@@ -3353,7 +3431,49 @@ def _guild_membership_status(guild_id: int, discord_user_id: int) -> str:
     return "member" if guild.get_member(discord_user_id) is not None else "not_member"
 
 
-def _handle_discord_login_callback(guild_id: int, discord_user_id: int, discord_username: str) -> str:
+def bot_member_guilds(discord_user_id: int) -> list:
+    """
+    ★ 追加（複数サーバー対応）：Botが参加している全guildのうち、
+    discord_user_id が実際にメンバーであるものを (guild_id, guild_name) の
+    リストで返す。「Discordでログイン」時にguild_idを事前指定させず、
+    ここから候補を自動で見つける（_handle_discord_login_callback参照）。
+    Bot未準備の場合は空リスト（＝ログイン不可扱いになる。安全側）。
+    """
+    if not bot.is_ready():
+        return []
+    return [(g.id, g.name) for g in bot.guilds if g.get_member(discord_user_id) is not None]
+
+
+LOGIN_CHOICE_TOKEN_TTL_SEC = 10 * 60  # 複数サーバー選択画面用トークンの有効期限：10分
+
+def create_login_choice_token(payload: dict) -> str:
+    """create_delete_request_token等と全く同じ方式（署名付きトークンに情報を
+    全部載せるステートレス方式）。中身に有効なsession_tokenは一切含めない
+    （URLに複数の本物のsession_tokenを載せる事故を避けるため）。"""
+    body = dict(payload)
+    body["_t"] = int(time.time())
+    payload_json = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode()).decode()
+    sig = hmac.new(SESSION_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{sig}"
+
+def resolve_login_choice_token(token: str):
+    if not token or "." not in token:
+        return None
+    try:
+        payload_b64, sig = token.rsplit(".", 1)
+        expected_sig = hmac.new(SESSION_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()).decode())
+        if time.time() - payload.get("_t", 0) > LOGIN_CHOICE_TOKEN_TTL_SEC:
+            return None
+        return payload
+    except Exception:
+        return None
+
+
+def _handle_discord_login_callback(discord_user_id: int, discord_username: str) -> str:
     """
     Discordそのものでログインしようとしている（まだ未ログイン）。
     ★「全員に登録し直してもらう」方針のため、既存の discord_links
@@ -3368,35 +3488,159 @@ def _handle_discord_login_callback(guild_id: int, discord_user_id: int, discord_
       クエリパラメータとしてフロントエンドへ渡し、フロントエンド自身の
       JS（Login.js）がそちらのドメイン上でlocalStorageに保存する。
 
-    ★ Discordログイン自体は、guild_id のサーバーに参加していないアカウント
-      でも成功させる（完全ブロックはしない）。ただし参加していない場合は
-      「制限付きアカウント」として、編集操作や予定一覧以外の閲覧・DM機能が
-      require_member_session()／_session_is_member() 経由で拒否される
-      （ユーザーの明示的な指定。2026/08/20）。
-    """
-    login_links = load_discord_login_links(guild_id)
-    student_id = next((sid for sid, did in login_links.items() if int(did) == discord_user_id), None)
+    ★ 複数サーバー対応：guild_idはもう引数で受け取らない。代わりに
+      bot_member_guilds() で「Botが参加していて、かつこのDiscordユーザーが
+      実際にメンバーであるサーバー」を全て洗い出し、その中から判定する。
+        ・登録済みサーバーが1件だけ → 従来通りそのままログイン（挙動不変）。
+        ・登録済みサーバーが2件以上 → login_choiceトークンに候補一覧
+          （有効なsession_tokenは含めない）を積んで選択画面へ誘導する
+          （フロントは選ばれた1件を /finalize_login にPOSTしてトークンを貰う）。
+        ・登録済みサーバーが0件 → 未登録として学籍番号入力ステップへ
+          （メンバーであるサーバーが複数あれば、そこでも選ばせる）。
+        ・メンバーであるサーバー自体が1つも無い → エラー。
 
-    if student_id:
-        user = find_user(guild_id, student_id)
+    ★ Discordログイン自体は、対象サーバーに参加していないアカウントでも
+      成功させる方針だったが（2026/08/20）、複数サーバー対応では「どのサーバー
+      向けのセッションか」をそもそもここで確定できないため、bot_member_guilds()
+      で見つかった＝実際にメンバーであるサーバーだけを候補にする
+      （メンバーでないサーバーへの「制限付きアカウント」ログインは、
+      これまで通りguild_idが分かっている前提の他の入口（無し）に限られ、
+      このDiscordログイン経路では扱わない）。
+    """
+    candidates = bot_member_guilds(discord_user_id)
+    if not candidates:
+        return _oauth_result_page(False, "Botが導入されているサーバーのメンバーであることが確認できませんでした。")
+
+    registered = []  # (guild_id, guild_name, student_id, nickname)
+    for gid, gname in candidates:
+        login_links = load_discord_login_links(gid)
+        student_id = next((sid for sid, did in login_links.items() if int(did) == discord_user_id), None)
+        if not student_id:
+            continue
+        user = find_user(gid, student_id)
         if user:
-            token = create_session(guild_id, student_id)
-            nickname = user.get("nickname", student_id)
-            # ★ 不正防止：新たなログインが検出されるたび、対象サーバーのメンバー
-            #   本人にだけDMで通知する（制限付きアカウントにはDM機能自体を
-            #   使わせない方針のため、send_discord_dm側で自動的にスキップされる）。
-            _notify_new_login(guild_id, student_id, nickname)
-            qs = urlencode({
-                "discord_session_token": token,
-                "student_id": student_id,
-                "nickname": nickname,
-            })
-            return redirect(f"https://1istudyweb.pages.dev/Login?{qs}")
-        # ユーザーデータが見つからない（削除された等）→ 登録し直しへフォールバック
+            registered.append((gid, gname, student_id, user.get("nickname", student_id)))
+
+    if len(registered) == 1:
+        gid, gname, student_id, nickname = registered[0]
+        token = create_session(gid, student_id)
+        # ★ 不正防止：新たなログインが検出されるたび、対象サーバーのメンバー
+        #   本人にだけDMで通知する（制限付きアカウントにはDM機能自体を
+        #   使わせない方針のため、send_discord_dm側で自動的にスキップされる）。
+        _notify_new_login(gid, student_id, nickname)
+        qs = urlencode({
+            "discord_session_token": token,
+            "student_id": student_id,
+            "nickname": nickname,
+            "guild_id": gid,
+            "guild_name": gname,
+            # ★ 複数サーバー対応：フロント側で「サーバーを切り替える」メニューを
+            #   複数サーバーに実際に参加している人にだけ出すための判定材料。
+            #   ここでは登録済みサーバーが1件でも、Botが参加している他の
+            #   サーバーのメンバーでもあれば1にする（bot_member_guilds基準）。
+            "multi_guild": "1" if len(candidates) > 1 else "0",
+        })
+        return redirect(f"https://1istudyweb.pages.dev/Login?{qs}")
+
+    if len(registered) > 1:
+        pending = create_login_choice_token({
+            "candidates": [
+                {"guild_id": gid, "guild_name": gname, "student_id": sid, "nickname": nn}
+                for gid, gname, sid, nn in registered
+            ],
+        })
+        # ★ 表示用にguild_id/guild_nameだけの一覧もURLに載せる（session_token等の
+        #   秘密情報は一切含まないため問題ない）。フロント側はこれで選択肢を描画し、
+        #   実際の選択結果は必ずpending（トークン）と一緒に/finalize_loginへ送って
+        #   サーバー側で再検証させる。
+        display_candidates = json.dumps(
+            [{"guild_id": gid, "guild_name": gname} for gid, gname, _sid, _nn in registered],
+            ensure_ascii=False, separators=(",", ":"),
+        )
+        qs = urlencode({"guild_choice": pending, "candidates": display_candidates})
+        return redirect(f"https://1istudyweb.pages.dev/Login?{qs}")
 
     # 初回、またはデータ不整合 → 学籍番号入力（登録）ステップへ
-    reg_token = issue_discord_reg_token(guild_id, discord_user_id, discord_username)
+    # （メンバーであるサーバーが複数あれば、登録フォーム側で選ばせる）
+    reg_token = issue_discord_reg_token(candidates, discord_user_id, discord_username)
     return redirect(f"https://1istudyweb.pages.dev/Login?discord_reg={reg_token}")
+
+
+@app.route("/finalize_login", methods=["POST"])
+def finalize_login():
+    """
+    body: { token, guild_id }
+    ★ 複数サーバーに登録済みのDiscordユーザーが、Login.html側の選択画面で
+      1つ選んだ後に叩く。login_choiceトークン（候補一覧のみ、有効な
+      session_tokenは含まない）と選択されたguild_idを検証し、その1件分の
+      session_tokenをここで初めて発行してJSONで返す（GETリダイレクトの
+      URLには載せない＝2026/08/20の「session_tokenをURLクエリで送らない」
+      方針により忠実にするため）。
+    """
+    data = request.json or {}
+    token = data.get("token")
+    guild_id = data.get("guild_id")
+    if not token or guild_id is None:
+        return jsonify({"ok": False, "error": "missing fields"})
+    try:
+        guild_id = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid guild_id"})
+
+    payload = resolve_login_choice_token(token)
+    if not payload:
+        return jsonify({"ok": False, "error": "リンクの有効期限が切れました。もう一度ログインし直してください。"})
+
+    match = next((c for c in payload.get("candidates", []) if c.get("guild_id") == guild_id), None)
+    if not match:
+        return jsonify({"ok": False, "error": "invalid_guild"})
+
+    session_token = create_session(guild_id, match["student_id"])
+    _notify_new_login(guild_id, match["student_id"], match["nickname"])
+    return jsonify({
+        "ok": True,
+        "session_token": session_token,
+        "student": {"id": match["student_id"], "nickname": match["nickname"]},
+        "guild_id": guild_id,
+        "guild_name": match.get("guild_name"),
+        "multi_guild": True,  # ★ このエンドポイントは複数サーバーに登録済みの場合しか呼ばれない
+    })
+
+
+@app.route("/issue_guild_invite_code", methods=["POST"])
+def issue_guild_invite_code():
+    """
+    body: { guild_id, session_token }
+    ★ ログイン済みの本人だけが呼べる。発行された8桁コードを、まだこの
+      サーバーにログインしたことがない相手に渡すと、相手はDiscordログインを
+      せずにこの端末をこのサーバー向けとして使えるようになる
+      （/resolve_guild_invite_code参照。ログインそのものは代替しない＝
+      閲覧専用ページが動くようになるだけ）。
+    """
+    data = request.json or {}
+    guild_id, student_id, nickname, err = require_login_json(data)
+    if err:
+        return err
+    code = _generate_guild_invite_code()
+    GUILD_INVITE_CODES[code] = {"guild_id": guild_id, "expires": time.time() + GUILD_INVITE_CODE_TTL_SEC}
+    return jsonify({"ok": True, "code": code, "expires_in_sec": GUILD_INVITE_CODE_TTL_SEC})
+
+
+@app.route("/resolve_guild_invite_code", methods=["GET"])
+def resolve_guild_invite_code():
+    """
+    query: code
+    ★ ログイン不要（コード自体が合言葉）。有効なら対象のguild_id/guild_nameを
+      返し、コードを1回使い切りで消費する。
+    """
+    code = (request.args.get("code") or "").strip().upper()
+    entry = GUILD_INVITE_CODES.get(code)
+    if not entry or time.time() > entry["expires"]:
+        GUILD_INVITE_CODES.pop(code, None)
+        return jsonify({"ok": False, "error": "リンクが無効か期限切れです。"})
+    del GUILD_INVITE_CODES[code]  # ★ 1回使い切り
+    guild = bot.get_guild(entry["guild_id"]) if bot.is_ready() else None
+    return jsonify({"ok": True, "guild_id": entry["guild_id"], "guild_name": guild.name if guild else None})
 
 
 @app.route("/discord_reg_info", methods=["GET"])
@@ -3411,7 +3655,13 @@ def discord_reg_info():
     entry = get_discord_reg_token(request.args.get("dtoken"))
     if not entry:
         return jsonify({"ok": False, "error": "reg_token_invalid"})
-    return jsonify({"ok": True, "discord_username": entry.get("discord_username", "")})
+    return jsonify({
+        "ok": True,
+        "discord_username": entry.get("discord_username", ""),
+        # ★ 複数サーバー対応：このDiscordユーザーが実際にメンバーである
+        #   候補サーバー一覧。1件ならフロント側で選択UIを省略してよい。
+        "candidates": entry.get("candidates", []),
+    })
 
 
 @app.route("/discord_complete_registration", methods=["POST"])
@@ -3442,7 +3692,9 @@ def discord_complete_registration():
 
     guild_id = int(guild_id)
     entry = get_discord_reg_token(dtoken)
-    if not entry or entry["guild_id"] != guild_id:
+    # ★ 複数サーバー対応：単一guild_idとの一致ではなく、候補一覧
+    #   （このDiscordユーザーが実際にメンバーであるサーバー）に含まれるかで検証する。
+    if not entry or not any(c.get("guild_id") == guild_id for c in entry.get("candidates", [])):
         return jsonify({"ok": False, "error": "reg_token_invalid"})
 
     discord_user_id = entry["discord_user_id"]
@@ -3499,6 +3751,10 @@ def discord_complete_registration():
             "ok": True,
             "session_token": token,
             "student": {"id": student_id, "nickname": final_nickname},
+            "guild_id": guild_id,
+            # ★ フロント側で「サーバーを切り替える」メニューを複数サーバーに
+            #   実際に参加している人にだけ出すための判定材料。
+            "multi_guild": len(entry.get("candidates", [])) > 1,
         })
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_error: {e}"})
@@ -3804,13 +4060,13 @@ def save_pending_delete_requests(guild_id, items, sha=None):
         _, sha = local_get(f"pending_delete_requests_{guild_id}.json")
     local_put(f"pending_delete_requests_{guild_id}.json", items, sha)
 
-def _delete_target_summary(category, filename):
+def _delete_target_summary(guild_id, category, filename):
     """「今まさに削除されようとしている中身」を人が読める形にする。
     (表示名, 詳細行のリスト) を返す。読めない場合は (filename, [])。
     ★ 承認ページはリンクを開いた時点の最新の中身を都度取得して表示する
     （依頼を送った時点のスナップショットではない＝実際に消える中身と一致する）。"""
     if category == "deck":
-        data, _ = get_card_file(filename)
+        data, _ = get_card_file_for_guild(filename, guild_id)
         if not data:
             return filename, []
         name = data.get("name") or filename
@@ -3866,7 +4122,7 @@ def request_delete():
     if category == "deck":
         if "/" in filename or "\\" in filename or ".." in filename:
             return jsonify({"ok": False, "error": "invalid filename"})
-        owner_id, owner_nickname = _deck_owner(filename)
+        owner_id, owner_nickname = _deck_owner(guild_id, filename)
     else:
         if not _is_safe_notice_filename(filename):
             return jsonify({"ok": False, "error": "invalid filename"})
@@ -3877,7 +4133,7 @@ def request_delete():
     if str(owner_id) == str(requester_id):
         return jsonify({"ok": False, "error": "本人はこの手続きを使わず直接削除できます。"})
 
-    target_name, _lines = _delete_target_summary(category, filename)
+    target_name, _lines = _delete_target_summary(guild_id, category, filename)
 
     token = create_delete_request_token({
         "guild_id": guild_id,
@@ -3984,7 +4240,7 @@ def delete_request_info():
         return jsonify({"ok": False, "error": "リンクが無効か、期限切れです。"})
     category = payload.get("category")
     filename = payload.get("filename")
-    target_name, detail_lines = _delete_target_summary(category, filename)
+    target_name, detail_lines = _delete_target_summary(payload.get("guild_id"), category, filename)
     exists = (
         os.path.isfile(_data_path(f"{CARDS_DIR}/{filename}")) if category == "deck"
         else os.path.isfile(_data_path(f"{NOTICES_DIR}/{filename}"))
@@ -4020,7 +4276,7 @@ def respond_delete_request():
     requester_id = payload.get("requester_id")
     requester_nickname = payload.get("requester_nickname") or "依頼者"
     guild_id = payload.get("guild_id")
-    target_name, _lines = _delete_target_summary(category, filename)
+    target_name, _lines = _delete_target_summary(guild_id, category, filename)
 
     if action == "reject":
         log_event(
@@ -4032,7 +4288,7 @@ def respond_delete_request():
     else:
         note = f"（{requester_nickname}さんの削除依頼を{owner_nickname}さんが承認）"
         if category == "deck":
-            result = _delete_card_deck_file(filename, owner_nickname, approval_note=note)
+            result = _delete_card_deck_file(guild_id, filename, owner_nickname, approval_note=note)
         else:
             result = _delete_notice_file(filename, owner_nickname, approval_note=note)
 
@@ -4268,11 +4524,20 @@ def uncomplete_task():
 # ================================
 #  Flask API — 単語カード
 # ================================
+#  ★ 複数サーバー対応（追加）：以前はCardMakerのデッキが「サーバーの概念を
+#    持たない」設計で、Botを導入した全サーバーで同じ棚を共有していた。
+#    ユーザーの要望により、索引・フォルダ・並び順ファイルをguild_idごとに
+#    分割し、デッキ本体（words/*.json）にも"guild_id"フィールドを持たせる
+#    形にした（既存データはmigrate_cardmaker_data_to_guild()で移行）。
+# ================================
 CARDS_DIR = "words"
-CARDS_INDEX_FILE = "cards_index.json"
+LEGACY_CARDMAKER_GUILD_ID = 1509880344806162544  # ★ 移行専用定数。削除しないこと（migrate_cardmaker_data_to_guild参照）。
 # ★ 追加：CardMakerのフロントエンドURL。Discord通知に「該当デッキへ飛ぶリンク」を
 #   付けるために使う（Cardmaker.js 側で ?deck=<filename> を見て自動で移動する）。
 CARDMAKER_URL = "https://1istudyweb.pages.dev/Cardmaker.html"
+
+def cards_index_file(guild_id: int) -> str:
+    return f"cards_index_{guild_id}.json"
 
 def list_card_files():
     dir_path = _data_path(CARDS_DIR)
@@ -4286,6 +4551,18 @@ def list_card_files():
 
 def get_card_file(filename):
     data, sha = local_get(f"{CARDS_DIR}/{filename}")
+    return data, sha
+
+def get_card_file_for_guild(filename, guild_id: int):
+    """get_card_file()のguild_id検証付き版。デッキ本体のguild_idフィールドが
+    呼び出し元のguild_idと一致しない場合は「見つからない」扱いにする
+    （通常のUIはguildごとに分かれた索引経由でしかfilenameを知らないため
+    起きないはずだが、直接API操作された場合の防御として使う）。
+    guild_idフィールド自体が無い（移行漏れ）場合は、安全側に倒して
+    「見つからない」扱いにする。"""
+    data, sha = get_card_file(filename)
+    if data is not None and data.get("guild_id") != guild_id:
+        return None, None
     return data, sha
 
 def put_card_file(filename, content_obj, sha=None):
@@ -4386,10 +4663,10 @@ def _diff_deck_cards(old_cards, new_cards, max_lines=40):
         lines = lines[:max_lines] + [f"…ほか{len(lines) - max_lines}行"]
     return "\n".join(lines)
 
-def _card_folder_name_map():
+def _card_folder_name_map(guild_id):
     """folder_id → フォルダ名 の対応表（ログ表示で内部IDを出さないため）。"""
     try:
-        folders, _ = load_card_folders()
+        folders, _ = load_card_folders(guild_id)
         return {f.get("id"): f.get("name") for f in (folders or [])}
     except Exception:
         return {}
@@ -4411,13 +4688,13 @@ def _deck_meta_text(data, folder_names=None):
     lines.append(f"フォルダ: {folder_names.get(folder_id, folder_id) if folder_id else '(フォルダなし)'}")
     return "\n".join(lines)
 
-def deck_file_diff(file, old_data, new_data, folder_names=None):
+def deck_file_diff(guild_id, file, old_data, new_data, folder_names=None):
     """カードデッキ1ファイル分の運用ログ差分エントリを作る（file_diff()と
     同じ {"file","diff","status"} の形）。メタ情報は単純な行差分、カードは
     idベースの突き合わせ（_diff_deck_cards）と使い分けている点が
     file_diff()とは異なる（デッキの途中への挿入・並び替えで無関係な
     カードまでdiffに出ないようにするため）。"""
-    folder_names = folder_names if folder_names is not None else _card_folder_name_map()
+    folder_names = folder_names if folder_names is not None else _card_folder_name_map(guild_id)
     meta_diff = _text_diff_lines(_deck_meta_text(old_data, folder_names), _deck_meta_text(new_data, folder_names))
     cards_diff = _diff_deck_cards((old_data or {}).get("cards"), (new_data or {}).get("cards"))
     parts = [p for p in (meta_diff, cards_diff) if p]
@@ -4448,13 +4725,16 @@ def _text_diff_lines(old_text, new_text, max_lines=60):
         out = out[:max_lines] + [f"…ほか{len(out) - max_lines}行"]
     return "\n".join(out)
 
-def generate_card_filename():
+def generate_card_filename(guild_id: int):
+    """★ 複数サーバー対応：ファイル名にguild_idを含めることで、サーバーを
+    またいだファイル名衝突を構造的に防ぐ（乱数部分だけだと理論上衝突しうる
+    ため）。既存ファイルのリネームは不要（新規作成分だけが対象）。"""
     import string
     now   = datetime.now(JST)
     date  = now.strftime("%Y%m%d")
     time_ = now.strftime("%H%M")
     rand  = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
-    return f"set_{date}_{time_}_{rand}.json"
+    return f"set_{guild_id}_{date}_{time_}_{rand}.json"
 
 def _meta_from_card_data(filename, data):
     cards = data.get("cards", [])
@@ -4494,57 +4774,59 @@ def _card_index_entry_lines(entry, folder_names=None):
     ]
     return _json_block(fields)
 
-def _card_index_diff(old_entry, new_entry, folder_names=None):
+def _card_index_diff(guild_id, old_entry, new_entry, folder_names=None):
     """索引ファイル内の1エントリの変更を、log_event の detail に渡す
     {"file","diff","status"} の形にする（無ければNone）。upsert/remove
     のたびに呼び、デッキ本体のファイルだけでなく索引ファイルも実際に
     書き換わっていることを運用ログに残す（2026/08/19追加）。"""
-    folder_names = folder_names if folder_names is not None else _card_folder_name_map()
+    folder_names = folder_names if folder_names is not None else _card_folder_name_map(guild_id)
     old_text = "\n".join(_card_index_entry_lines(old_entry, folder_names))
     new_text = "\n".join(_card_index_entry_lines(new_entry, folder_names))
     diff = _text_diff_lines(old_text, new_text)
     if not diff:
         return None
     status = "added" if old_entry is None else ("deleted" if new_entry is None else "modified")
-    return {"file": CARDS_INDEX_FILE, "diff": diff, "status": status}
+    return {"file": cards_index_file(guild_id), "diff": diff, "status": status}
 
-def load_cards_index():
+def load_cards_index(guild_id: int):
     """索引ファイルを取得する。存在しない場合は None を返す（呼び出し側で再構築する）。"""
-    data, sha = local_get(CARDS_INDEX_FILE)
+    data, sha = local_get(cards_index_file(guild_id))
     return data, sha
 
-def save_cards_index(index_list, sha=None):
+def save_cards_index(guild_id: int, index_list, sha=None):
     if sha is None:
-        _, sha = local_get(CARDS_INDEX_FILE)
-    local_put(CARDS_INDEX_FILE, index_list, sha)
-    notify_change()  # ★ list_cards はguildをまたいで共有されるため全体に通知
+        _, sha = local_get(cards_index_file(guild_id))
+    local_put(cards_index_file(guild_id), index_list, sha)
+    notify_change(guild_id)  # ★ 複数サーバー対応：guildごとに分離したので、そのguildだけに通知する
 
-def rebuild_cards_index():
+def rebuild_cards_index(guild_id: int):
     """
     索引ファイルが無い（初回・以前のデータ）場合に、wordsフォルダを
     スキャンして索引を作り直す。これは初回だけ発生する重い処理。
+    ★ 複数サーバー対応：words/ にはguildをまたいで全デッキが同居しているため、
+    デッキ自身のguild_idフィールドで対象guildの分だけに絞り込む。
     """
     files = list_card_files()
     index = []
     for f in files:
         data, _ = local_get(f"{CARDS_DIR}/{f['name']}")
-        if data is None:
+        if data is None or data.get("guild_id") != guild_id:
             continue
         index.append(_meta_from_card_data(f["name"], data))
     try:
-        save_cards_index(index, sha=None)
+        save_cards_index(guild_id, index, sha=None)
     except DataWriteError as e:
         print(f"[WARN] cards_index の再構築保存に失敗しました: {e}")
     return index
 
-def upsert_cards_index_entry(filename, data):
+def upsert_cards_index_entry(guild_id, filename, data):
     """save_cards のたびに呼び出し、索引ファイル内の該当エントリだけを更新する。
     運用ログ用に、このエントリの変更差分（無ければNone）を返す
     （2026/08/19追加。呼び出し側でdetailの2件目として渡す）。"""
-    index, sha = load_cards_index()
+    index, sha = load_cards_index(guild_id)
     if index is None:
-        index = rebuild_cards_index()
-        index, sha = load_cards_index()
+        index = rebuild_cards_index(guild_id)
+        index, sha = load_cards_index(guild_id)
     meta = _meta_from_card_data(filename, data)
     old_entry = None
     found = False
@@ -4556,53 +4838,54 @@ def upsert_cards_index_entry(filename, data):
             break
     if not found:
         index.append(meta)
-    save_cards_index(index, sha)
-    return _card_index_diff(old_entry, meta)
+    save_cards_index(guild_id, index, sha)
+    return _card_index_diff(guild_id, old_entry, meta)
 
-def remove_cards_index_entry(filename):
+def remove_cards_index_entry(guild_id, filename):
     """delete_cards のたびに呼び出し、索引ファイルから該当エントリを削除する。
     運用ログ用に、削除されたエントリの差分（無ければNone）を返す
     （2026/08/19追加）。"""
-    index, sha = load_cards_index()
+    index, sha = load_cards_index(guild_id)
     if index is None:
-        index = rebuild_cards_index()
-        index, sha = load_cards_index()
+        index = rebuild_cards_index(guild_id)
+        index, sha = load_cards_index(guild_id)
     removed_entry = next((e for e in index if e.get("filename") == filename), None)
     new_index = [e for e in index if e.get("filename") != filename]
     if len(new_index) != len(index):
-        save_cards_index(new_index, sha)
+        save_cards_index(guild_id, new_index, sha)
     if removed_entry is None:
         return None
-    return _card_index_diff(removed_entry, None)
+    return _card_index_diff(guild_id, removed_entry, None)
 
 
 @app.route("/list_cards", methods=["GET"])
 def list_cards():
     # ★ 追加（2026/08/24）：予定一覧以外の閲覧系APIをサーバー参加済み
-    #   ログインユーザー限定にする方針により追加。デッキ本体はguildを
-    #   またいで共有される設計だが、認証チェックにguild_idは必要なため
-    #   フロント側で必ず付けてもらう。
-    _guild_id, _student_id, err = require_member_session_get()
+    #   ログインユーザー限定にする方針により追加。
+    # ★ 複数サーバー対応：以前はデッキ本体がguildをまたいで共有される設計
+    #   だったが、サーバーごとに分離したため、この認証で得たguild_idを
+    #   索引の取得にもそのまま使う。
+    guild_id, _student_id, err = require_member_session_get()
     if err:
         return err
     try:
-        index, _ = load_cards_index()
+        index, _ = load_cards_index(guild_id)
         if index is None:
-            index = rebuild_cards_index()
+            index = rebuild_cards_index(guild_id)
         return jsonify({"ok": True, "sets": index})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
 @app.route("/get_card_set", methods=["GET"])
 def get_card_set():
-    _guild_id, _student_id, err = require_member_session_get()
+    guild_id, _student_id, err = require_member_session_get()
     if err:
         return err
     filename = request.args.get("filename")
     if not filename:
         return jsonify({"ok": False, "error": "filename は必須です"})
     try:
-        data, _ = get_card_file(filename)
+        data, _ = get_card_file_for_guild(filename, guild_id)
         if data is None:
             return jsonify({"ok": False, "error": "ファイルが見つかりません"})
         return jsonify({
@@ -4670,7 +4953,7 @@ def save_cards():
 
     is_update = bool(filename)
     if not filename:
-        filename = generate_card_filename()
+        filename = generate_card_filename(guild_id)
 
     sha = None
     existing_data = None
@@ -4678,6 +4961,12 @@ def save_cards():
     is_quiz_archive = False
     if is_update:
         existing_data, sha = get_card_file(filename)
+        # ★ 複数サーバー対応：filenameはクライアント入力なので、既に他サーバーの
+        #   デッキとして存在するfilenameを指定された場合は上書きさせない
+        #   （ファイルがまだ存在しない場合はこれまで通り新規作成として続行する
+        #   ＝「作成中」として先にfilenameだけ登録済みのデッキの初回公開を壊さないため）。
+        if existing_data is not None and existing_data.get("guild_id") not in (None, guild_id):
+            return jsonify({"ok": False, "error": "ファイルが見つかりません"})
         # ★「クイズ過去問」デッキ（みんなでクイズの結果を自動保存したもの、
         #   _archive_manual_quiz参照）は、フォルダ移動・デッキ名の変更・
         #   非公開に戻す・削除はできるが、問題の中身（cards）は編集できない
@@ -4722,6 +5011,7 @@ def save_cards():
         #   維持する（cardsと同じく、改ざん・取りこぼしで中身の形式が変わらないように）。
         "choice_mode": existing_data.get("choice_mode") if is_quiz_archive else choice_mode,
         "quiz_archive": is_quiz_archive,  # ★ 追加：クイズ過去問デッキかどうか（一度trueになったら維持され続ける）
+        "guild_id": guild_id,  # ★ 複数サーバー対応：このデッキがどのサーバー向けかを記録する
     }
 
     try:
@@ -4732,7 +5022,7 @@ def save_cards():
     # ★ 索引ファイルも合わせて更新する（list_cardsを軽く保つため）
     index_change = None
     try:
-        index_change = upsert_cards_index_entry(filename, card_payload)
+        index_change = upsert_cards_index_entry(guild_id, filename, card_payload)
     except DataWriteError as e:
         # カード本体の保存自体は成功しているので、索引更新の失敗は警告に留める。
         # 次回 list_cards アクセス時に再構築されるので実害は小さい。
@@ -4783,7 +5073,7 @@ def save_cards():
 
     is_actual_update = is_update and not bool(first_publish)
     old_deck_for_diff = existing_data if (is_update and existing_data) else None
-    change = deck_file_diff(f"{CARDS_DIR}/{filename}", old_deck_for_diff, card_payload)
+    change = deck_file_diff(guild_id, f"{CARDS_DIR}/{filename}", old_deck_for_diff, card_payload)
     detail = [c for c in (change, index_change) if c]  # ★ デッキ本体＋索引ファイルの両方の変更を載せる
     log_event(
         "card",
@@ -4793,19 +5083,22 @@ def save_cards():
     )
     return jsonify({"ok": True, "filename": filename, "is_update": is_update})
 
-def _deck_owner(filename):
+def _deck_owner(guild_id, filename):
     """デッキの作成者 (owner_id, owner_nickname) を返す。
     読めない／記録が無い（作成者確認機能より前に公開された古いデッキ等）
-    場合は (None, None)。owner_id が None のときは「作成者不明」として
-    従来通り誰でも削除できる扱いにする（過去のデッキを誰も削除できなくなる
-    事態を避けるため）。"""
-    data, _ = get_card_file(filename)
+    ／他サーバーのデッキだった場合は (None, None)。owner_id が None のときは
+    「作成者不明」として従来通り誰でも削除できる扱いにする（過去のデッキを
+    誰も削除できなくなる事態を避けるため）。★ 複数サーバー対応：他サーバーの
+    デッキも同じ(None, None)にすることで、結果的に「見つからない」のと
+    同じ扱いになる（＝作成者確認を求められた上で、実際には対象が存在しない
+    ため何も起きない）。"""
+    data, _ = get_card_file_for_guild(filename, guild_id)
     if not data:
         return None, None
     pub = data.get("published_by") or {}
     return pub.get("id"), pub.get("nickname")
 
-def _delete_card_deck_file(filename, actor_nickname, approval_note=None):
+def _delete_card_deck_file(guild_id, filename, actor_nickname, approval_note=None):
     """デッキファイル削除の実処理（本人による直接削除・削除依頼の承認の
     どちらからも呼ばれる共通処理）。作成者チェックは呼び出し側の責務。"""
     path = _data_path(f"{CARDS_DIR}/{filename}")
@@ -4814,8 +5107,10 @@ def _delete_card_deck_file(filename, actor_nickname, approval_note=None):
     # ★ 削除前にデッキの中身を読んでおく（運用ログの表示用）。読めなかった
     #   場合はデッキ名・カードの内容が分からないので、無理に内部ファイル名
     #   （ハッシュ）などを代わりに出さず、それらの表示自体を省く。
-    deleted_data, _ = get_card_file(filename)
-    deleted_name = (deleted_data or {}).get("name")
+    deleted_data, _ = get_card_file_for_guild(filename, guild_id)
+    if deleted_data is None:
+        return jsonify({"ok": False, "error": "ファイルが見つかりません"})
+    deleted_name = deleted_data.get("name")
     try:
         os.remove(path)
     except OSError as e:
@@ -4824,14 +5119,14 @@ def _delete_card_deck_file(filename, actor_nickname, approval_note=None):
     # ★ 索引ファイルからも削除する
     index_change = None
     try:
-        index_change = remove_cards_index_entry(filename)
+        index_change = remove_cards_index_entry(guild_id, filename)
     except DataWriteError as e:
         print(f"[WARN] cards_index からの削除に失敗しました: {e}")
 
     # ★ 並び順（list_order.json）からも、このデッキのキーを取り除いておく
-    cleanup_list_order(remove_keys={f"deck:{filename}"})
+    cleanup_list_order(guild_id, remove_keys={f"deck:{filename}"})
 
-    change = deck_file_diff(f"{CARDS_DIR}/{filename}", deleted_data, None)
+    change = deck_file_diff(guild_id, f"{CARDS_DIR}/{filename}", deleted_data, None)
     detail = [c for c in (change, index_change) if c]
     summary = f"カードデッキ「{deleted_name}」を削除しました。" if deleted_name else "カードデッキを削除しました。"
     if approval_note:
@@ -4842,7 +5137,7 @@ def _delete_card_deck_file(filename, actor_nickname, approval_note=None):
 @app.route("/delete_cards", methods=["POST"])
 def delete_cards():
     data     = request.json
-    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
     if err:
         return err
     filename = data.get("filename")
@@ -4855,7 +5150,7 @@ def delete_cards():
     # ★ 追加：作成者本人以外は直接削除できない（非公開に戻す＝menuUnpublish()も
     #   このAPIを叩くため、ここを守るだけで「削除」「非公開に戻す」両方に効く）。
     #   作成者以外が削除したい場合は /request_delete で本人にDiscord確認を送る。
-    owner_id, owner_nickname = _deck_owner(filename)
+    owner_id, owner_nickname = _deck_owner(guild_id, filename)
     # ★ 2026/08/20 一旦revert：discord_linksに紐づいていない＝孤立、として
     #   確認フローを自動でスキップする判定を入れていたが、これだと「まだ
     #   /id連携していないだけの、現役の本人」まで巻き込んでしまい、
@@ -4870,7 +5165,7 @@ def delete_cards():
             "error": "creator_approval_required",
             "owner_nickname": owner_nickname or "作成者",
         })
-    return _delete_card_deck_file(filename, nickname)
+    return _delete_card_deck_file(guild_id, filename, nickname)
 
 # ================================
 #  ★ 追加（2026/08/24）：CardMaker — 未ログインの人にも見せられる
@@ -5068,11 +5363,11 @@ def create_deck_share():
         return jsonify({"ok": False, "error": "filename は必須です"})
     if "/" in filename or "\\" in filename or ".." in filename:
         return jsonify({"ok": False, "error": "invalid filename"})
-    deck_data, _ = get_card_file(filename)
+    deck_data, _ = get_card_file_for_guild(filename, guild_id)
     if not deck_data:
         return jsonify({"ok": False, "error": "ファイルが見つかりません"})
 
-    owner_id, owner_nickname = _deck_owner(filename)
+    owner_id, owner_nickname = _deck_owner(guild_id, filename)
     via_request = False
     approved_by_nickname = None
     grant = None
@@ -5129,7 +5424,7 @@ def list_deck_shares():
     student_id, err = require_member_session(session_token_from_request(), guild_id)
     if err:
         return err
-    owner_id, _owner_nickname = _deck_owner(filename)
+    owner_id, _owner_nickname = _deck_owner(guild_id, filename)
     items, _ = load_deck_shares(guild_id)
     now = time.time()
     mine = [
@@ -5171,7 +5466,7 @@ def revoke_deck_share():
     entry = next((it for it in items if it.get("token") == token), None)
     if not entry:
         return jsonify({"ok": False, "error": "リンクが見つかりません"})
-    owner_id, _owner_nickname = _deck_owner(entry.get("filename"))
+    owner_id, _owner_nickname = _deck_owner(guild_id, entry.get("filename"))
     if str(entry.get("created_by")) != str(student_id) and not (owner_id and str(owner_id) == str(student_id)):
         return jsonify({"ok": False, "error": "この操作を行う権限がありません"})
     if not entry.get("revoked_at"):
@@ -5212,7 +5507,7 @@ def list_my_deck_shares():
         is_own_created = str(it.get("created_by")) == str(student_id)
         is_own_deck = False
         if not is_own_created:
-            owner_id, _owner_nickname = _deck_owner(it.get("filename"))
+            owner_id, _owner_nickname = _deck_owner(guild_id, it.get("filename"))
             is_own_deck = bool(owner_id) and str(owner_id) == str(student_id)
         if not (is_own_created or is_own_deck):
             continue
@@ -5246,7 +5541,7 @@ def deck_share_info():
         return jsonify({"ok": False, "error": "このリンクは取り消されました。"})
     if entry.get("expires_at", 0) <= time.time():
         return jsonify({"ok": False, "error": "リンクの有効期限が切れています。"})
-    data, _ = get_card_file(entry["filename"])
+    data, _ = get_card_file_for_guild(entry["filename"], guild_id)
     if not data:
         return jsonify({"ok": False, "error": "デッキが見つかりません。作成者が削除した可能性があります。"})
     return jsonify({
@@ -5287,10 +5582,10 @@ def request_deck_share():
     if err:
         return err
 
-    deck_data, _ = get_card_file(filename)
+    deck_data, _ = get_card_file_for_guild(filename, guild_id)
     if not deck_data:
         return jsonify({"ok": False, "error": "ファイルが見つかりません"})
-    owner_id, owner_nickname = _deck_owner(filename)
+    owner_id, owner_nickname = _deck_owner(guild_id, filename)
     if not owner_id:
         return jsonify({"ok": False, "error": "作成者が記録されていないため、確認を送れません。"})
     if str(owner_id) == str(requester_id):
@@ -5399,7 +5694,7 @@ def share_request_info():
     #   （delete_request_infoと同じ考え方）。デッキ自体が既に無ければ依頼時点の名前のまま。
     deck_name = payload.get("deck_name")
     if exists:
-        current, _ = get_card_file(filename)
+        current, _ = get_card_file_for_guild(filename, payload.get("guild_id"))
         if current:
             deck_name = current.get("name") or deck_name
     return jsonify({
@@ -5694,9 +5989,18 @@ def _quiz_auth_from_json():
     nickname = (user or {}).get("nickname") or str(student_id)
     return data, guild_id, student_id, nickname, None
 
-def _quiz_get_room_or_error(code):
+def _quiz_get_room_or_error(code, guild_id):
+    """
+    ★ 修正（複数サーバー対応）：QUIZ_ROOMSは5文字コードの単一グローバル
+      空間で全サーバー共通のため、部屋自体のguild_idを検証せずに
+      コードだけで引き当てると、他サーバーのメンバーがコードを知る/
+      推測するだけで部屋に参加できてしまっていた（複数サーバー運用を
+      始めると実際に問題になるため、対応の一環として修正）。
+      list_rooms側は元々guild_idでフィルタ済みだったが、こちらの
+      「コードで直接引き当てる」経路が漏れていた。
+    """
     room = QUIZ_ROOMS.get((code or "").strip().upper())
-    if room is None:
+    if room is None or room.get("guild_id") != guild_id:
         return None, jsonify({"ok": False, "error": "room_not_found"})
     return room, None
 
@@ -5802,7 +6106,7 @@ def _pick_distractors(correct: str, pool: list, k: int) -> list:
     return random.sample(scored[:pool_size], k)
 
 
-def _build_deck_questions(deck_filenames, num_questions):
+def _build_deck_questions(guild_id, deck_filenames, num_questions):
     """単語カードのデッキ（表面=question／裏面=answer）から、答えをシャッフルした
     4択問題を自動生成する。
     ★ deck_filenames は単一のファイル名（文字列）でも、複数のファイル名のリストでも
@@ -5824,7 +6128,7 @@ def _build_deck_questions(deck_filenames, num_questions):
     for deck_filename in deck_filenames:
         if not isinstance(deck_filename, str) or "/" in deck_filename or "\\" in deck_filename or ".." in deck_filename:
             return None, "deck_not_found"
-        data, _ = get_card_file(deck_filename)
+        data, _ = get_card_file_for_guild(deck_filename, guild_id)
         if data is None:
             return None, "deck_not_found"
         cards.extend(
@@ -5888,7 +6192,7 @@ def _validate_manual_questions(raw_questions):
         questions.append({"question": question_text, "choices": choices, "correct_index": correct_index})
     return (questions, check_fields), None
 
-def _archive_manual_quiz(title, questions, student_id, nickname):
+def _archive_manual_quiz(guild_id, title, questions, student_id, nickname):
     """
     ★ ホストが「自分で問題を作る」（オリジナル4択）で作成したクイズを、
       CardMakerの「クイズ過去問」フォルダにデッキとして自動保存する。
@@ -5906,7 +6210,7 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
     ・アーカイブに失敗しても、クイズ自体の進行は失敗させない（ベストエフォート）。
     """
     try:
-        _ensure_quiz_archive_folder()
+        _ensure_quiz_archive_folder(guild_id)
         cards = [{
             "id": secrets.token_hex(6),
             "question": q["question"],
@@ -5916,7 +6220,7 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
             "explanation": "",
             "imgs_q": [], "imgs_a": [], "imgs_e": [],
         } for q in questions]
-        filename = generate_card_filename()
+        filename = generate_card_filename(guild_id)
         card_payload = {
             "name": title,
             "cards": cards,
@@ -5929,10 +6233,11 @@ def _archive_manual_quiz(title, questions, student_id, nickname):
             # フォルダ位置に依存させると、フォルダの外へ移動できるようにした際に
             # 判定できなくなる（save_cardsが問題編集を禁止する対象の特定にも使う）ため、
             # デッキ自身に持たせる。
+            "guild_id": guild_id,  # ★ 複数サーバー対応：このデッキがどのサーバー向けかを記録する
         }
         put_card_file(filename, card_payload)
-        index_change = upsert_cards_index_entry(filename, card_payload)
-        change = deck_file_diff(f"{CARDS_DIR}/{filename}", None, card_payload)
+        index_change = upsert_cards_index_entry(guild_id, filename, card_payload)
+        change = deck_file_diff(guild_id, f"{CARDS_DIR}/{filename}", None, card_payload)
         detail = [c for c in (change, index_change) if c]
         log_event(
             "card",
@@ -5954,7 +6259,7 @@ def _archive_room_if_needed(room):
     if room.get("source") != "manual" or room.get("archived"):
         return
     room["archived"] = True
-    _archive_manual_quiz(room["title"], room["questions"], room["host_id"], room["host_nickname"])
+    _archive_manual_quiz(room["guild_id"], room["title"], room["questions"], room["host_id"], room["host_nickname"])
 
 @app.route("/quiz_create", methods=["POST"])
 def quiz_create():
@@ -5974,7 +6279,7 @@ def quiz_create():
             deck_filenames = [single] if single else None
         if not deck_filenames:
             return jsonify({"ok": False, "error": "deck_not_found"})
-        questions, q_err = _build_deck_questions(deck_filenames, data.get("num_questions"))
+        questions, q_err = _build_deck_questions(guild_id, deck_filenames, data.get("num_questions"))
         if q_err:
             return jsonify({"ok": False, "error": q_err})
         err = reject_if_bug_chars({"タイトル": title})
@@ -6104,7 +6409,7 @@ def quiz_archive_submit_score():
     #     デッキが汎用機能になったため、choice_modeの有無で判定するよう変更。
     #   ★ choice_modeはtruthyチェックにする（真偽値trueの新形式だけでなく、
     #     移行前に保存された旧形式の文字列"single"/"multi"も引き続き通す）。
-    card_data, _ = get_card_file(filename)
+    card_data, _ = get_card_file_for_guild(filename, guild_id)
     if card_data is None:
         return jsonify({"ok": False, "error": "deck_not_found"})
     if not card_data.get("choice_mode"):
@@ -6212,7 +6517,7 @@ def quiz_join():
     now = time.time()
     with QUIZ_ROOMS_LOCK:
         _quiz_gc_locked(now)
-        room, err = _quiz_get_room_or_error(code)
+        room, err = _quiz_get_room_or_error(code, guild_id)
         if err:
             return err
         is_host = (student_id == room["host_id"])
@@ -6255,7 +6560,7 @@ def quiz_state():
     now = time.time()
     with QUIZ_ROOMS_LOCK:
         _quiz_gc_locked(now)
-        room, err = _quiz_get_room_or_error(code)
+        room, err = _quiz_get_room_or_error(code, guild_id)
         if err:
             return err
         is_host = (student_id == room["host_id"])
@@ -6276,7 +6581,7 @@ def quiz_start():
 
     now = time.time()
     with QUIZ_ROOMS_LOCK:
-        room, err = _quiz_get_room_or_error(code)
+        room, err = _quiz_get_room_or_error(code, guild_id)
         if err:
             return err
         if student_id != room["host_id"]:
@@ -6316,7 +6621,7 @@ def quiz_answer():
 
     now = time.time()
     with QUIZ_ROOMS_LOCK:
-        room, err = _quiz_get_room_or_error(code)
+        room, err = _quiz_get_room_or_error(code, guild_id)
         if err:
             return err
         if room["state"] != "question":
@@ -6356,7 +6661,7 @@ def quiz_end():
 
     now = time.time()
     with QUIZ_ROOMS_LOCK:
-        room, err = _quiz_get_room_or_error(code)
+        room, err = _quiz_get_room_or_error(code, guild_id)
         if err:
             return err
         if student_id != room["host_id"]:
@@ -6376,7 +6681,7 @@ def quiz_leave():
     code = (data.get("code") or "").strip().upper()
 
     with QUIZ_ROOMS_LOCK:
-        room, err = _quiz_get_room_or_error(code)
+        room, err = _quiz_get_room_or_error(code, guild_id)
         if err:
             return err
         room["players"].pop(student_id, None)
@@ -6886,18 +7191,20 @@ def set_notice_done():
 # ================================
 #  Flask API — カードのフォルダ（みんなで共有）
 # ================================
-FOLDERS_FILE = "folders.json"
 MAX_FOLDER_DEPTH = 3
 
-def load_card_folders():
-    data, sha = local_get(FOLDERS_FILE)
+def folders_file(guild_id: int) -> str:
+    return f"folders_{guild_id}.json"
+
+def load_card_folders(guild_id: int):
+    data, sha = local_get(folders_file(guild_id))
     return (data or []), sha
 
-def save_card_folders(folders, sha=None):
+def save_card_folders(guild_id: int, folders, sha=None):
     if sha is None:
-        _, sha = local_get(FOLDERS_FILE)
-    local_put(FOLDERS_FILE, folders, sha)
-    notify_change()  # ★ フォルダもguildをまたいで共有されるため全体に通知
+        _, sha = local_get(folders_file(guild_id))
+    local_put(folders_file(guild_id), folders, sha)
+    notify_change(guild_id)  # ★ 複数サーバー対応：guildごとに分離したので、そのguildだけに通知する
 
 def _folders_text(folders):
     """運用ログ用：folders.json（全フォルダ一覧）を { ... } のブロックの並びにする。"""
@@ -6973,12 +7280,15 @@ def generate_folder_id():
 QUIZ_ARCHIVE_FOLDER_ID   = "quiz_archive_root"
 QUIZ_ARCHIVE_FOLDER_NAME = "クイズ過去問"
 
-def _ensure_quiz_archive_folder():
-    """「クイズ過去問」フォルダが無ければ作る（あれば何もしない）。"""
-    folders, sha = load_card_folders()
+def _ensure_quiz_archive_folder(guild_id):
+    """「クイズ過去問」フォルダが無ければ作る（あれば何もしない）。
+    ★ 複数サーバー対応：固定ID(QUIZ_ARCHIVE_FOLDER_ID)はguildごとの
+    folders_{guild_id}.json内でのみ一意であればよいため、各guildが
+    それぞれ自分専用の「クイズ過去問」フォルダを持つ。"""
+    folders, sha = load_card_folders(guild_id)
     if not any(f.get("id") == QUIZ_ARCHIVE_FOLDER_ID for f in folders):
         folders.append({"id": QUIZ_ARCHIVE_FOLDER_ID, "name": QUIZ_ARCHIVE_FOLDER_NAME, "parent_id": None})
-        save_card_folders(folders, sha)
+        save_card_folders(guild_id, folders, sha)
 
 def _is_in_archive_scope(folders, folder_id):
     """folder_id が「クイズ過去問」フォルダ自身、またはその子孫かどうか。"""
@@ -6999,12 +7309,16 @@ def _migrate_legacy_quiz_archive_decks():
       デッキ）はスキップする。1回移行してしまえば、以降このフラグだけで
       判定できるので、次回起動時はほぼ何もせず即座に終わる。
     """
+    # ★ 複数サーバー対応：quiz_archiveフラグ導入前のデータは、フォルダ・索引が
+    #   guildごとに分かれる前（＝旧LEGACY_CARDMAKER_GUILD_ID）に作られたものしか
+    #   存在しないため、対象はそのguildだけでよい。
+    guild_id = LEGACY_CARDMAKER_GUILD_ID
     try:
-        folders, _ = load_card_folders()
+        folders, _ = load_card_folders(guild_id)
         for f in list_card_files():
             filename = f["name"]
             data, sha = get_card_file(filename)
-            if not data or data.get("quiz_archive"):
+            if not data or data.get("guild_id") != guild_id or data.get("quiz_archive"):
                 continue
             if not data.get("choice_mode"):
                 continue
@@ -7013,7 +7327,7 @@ def _migrate_legacy_quiz_archive_decks():
             data["quiz_archive"] = True
             try:
                 put_card_file(filename, data, sha)
-                upsert_cards_index_entry(filename, data)
+                upsert_cards_index_entry(guild_id, filename, data)
                 print(f"[INFO] 「{data.get('name')}」に quiz_archive フラグを補いました（{filename}、既存データの移行）")
             except DataWriteError as e:
                 print(f"[WARN] {filename} への quiz_archive フラグ移行に失敗しました: {e}")
@@ -7022,11 +7336,11 @@ def _migrate_legacy_quiz_archive_decks():
 
 @app.route("/list_folders", methods=["GET"])
 def list_folders():
-    _guild_id, _student_id, err = require_member_session_get()
+    guild_id, _student_id, err = require_member_session_get()
     if err:
         return err
     try:
-        folders, _ = load_card_folders()
+        folders, _ = load_card_folders(guild_id)
         return jsonify({"ok": True, "folders": folders})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -7038,7 +7352,7 @@ def save_folder():
     改名／移動: { id, name, parent_id }
     """
     data      = request.json or {}
-    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
     if err:
         return err
     folder_id = data.get("id")
@@ -7053,7 +7367,7 @@ def save_folder():
         return err
 
     try:
-        folders, sha = load_card_folders()
+        folders, sha = load_card_folders(guild_id)
         old_folders_text = _folders_text(folders)  # ★ 運用ログでファイル全体の差分を見せるため、変更前に控えておく
 
         if folder_id:
@@ -7077,8 +7391,8 @@ def save_folder():
             folder_id = generate_folder_id()
             folders.append({"id": folder_id, "name": name, "parent_id": parent_id})
 
-        save_card_folders(folders, sha)
-        change = file_diff(FOLDERS_FILE, old_folders_text, _folders_text(folders))
+        save_card_folders(guild_id, folders, sha)
+        change = file_diff(folders_file(guild_id), old_folders_text, _folders_text(folders))
         log_event("card", f"フォルダ「{name}」を保存しました。", actor=nickname, detail=[change] if change else None)
         return jsonify({"ok": True, "id": folder_id})
     except DataWriteError as e:
@@ -7089,7 +7403,7 @@ def save_folder():
 @app.route("/delete_folder", methods=["POST"])
 def delete_folder():
     data      = request.json or {}
-    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
     if err:
         return err
     folder_id = data.get("id")
@@ -7099,24 +7413,25 @@ def delete_folder():
     if folder_id == QUIZ_ARCHIVE_FOLDER_ID:
         return jsonify({"ok": False, "error": "このフォルダは削除できません"})
     try:
-        folders, sha = load_card_folders()
+        folders, sha = load_card_folders(guild_id)
         # ★ 削除前に名前を控えておく（運用ログの詳細表示用。IDだけでは
         #   何のフォルダだったか分からないため）
         deleted_folder = next((f for f in folders if f["id"] == folder_id), None)
         desc_ids   = [f["id"] for f in _folder_descendants(folders, folder_id)]
         remove_ids = set([folder_id] + desc_ids)
         new_folders = [f for f in folders if f["id"] not in remove_ids]
-        save_card_folders(new_folders, sha)
+        save_card_folders(guild_id, new_folders, sha)
 
         # ★ 並び順（list_order.json）からも、削除したフォルダ自身のスコープと、
         #   他のフォルダ内に残っていた folder: キーの参照を取り除いておく
         cleanup_list_order(
+            guild_id,
             remove_keys=set(f"folder:{fid}" for fid in remove_ids),
             remove_scopes=remove_ids,
         )
 
         deleted_folder_name = (deleted_folder or {}).get("name")
-        change = file_diff(FOLDERS_FILE, _folders_text(folders), _folders_text(new_folders))
+        change = file_diff(folders_file(guild_id), _folders_text(folders), _folders_text(new_folders))
         log_event(
             "card",
             f"フォルダ「{deleted_folder_name}」を削除しました。" if deleted_folder_name else "フォルダを削除しました。",
@@ -7136,21 +7451,22 @@ def delete_folder():
 #    その中でのフォルダ・公開済みデッキの並び順（data-keyの配列）を保存する。
 #  ・未公開（各自の下書き）デッキは他人からは見えないデータなので、
 #    ここには含めない（フロント側でも送らないようにフィルタしている）。
-ORDER_FILE = "list_order.json"
+def list_order_file(guild_id: int) -> str:
+    return f"list_order_{guild_id}.json"
 
-def load_list_order():
-    data, sha = local_get(ORDER_FILE)
+def load_list_order(guild_id: int):
+    data, sha = local_get(list_order_file(guild_id))
     return (data or {}), sha
 
-def save_list_order(order_map, sha=None):
+def save_list_order(guild_id: int, order_map, sha=None):
     if sha is None:
-        _, sha = local_get(ORDER_FILE)
-    local_put(ORDER_FILE, order_map, sha)
-    notify_change()  # ★ 並び順もguildをまたいで共有されるため全体に通知
+        _, sha = local_get(list_order_file(guild_id))
+    local_put(list_order_file(guild_id), order_map, sha)
+    notify_change(guild_id)  # ★ 複数サーバー対応：guildごとに分離したので、そのguildだけに通知する
 
-def cleanup_list_order(remove_keys=None, remove_scopes=None):
+def cleanup_list_order(guild_id, remove_keys=None, remove_scopes=None):
     """
-    フォルダ・デッキが削除された際に、list_order.json から
+    フォルダ・デッキが削除された際に、list_order_{guild_id}.json から
     もう存在しない項目のエントリを取り除いておく（放っておいても表示は壊れないが、
     ファイルが際限なく肥大化するのを防ぐための後片付け）。
     ・remove_keys:   各スコープの並び順配列から取り除く要素（例: {"folder:xxx", "deck:yyy.json"}）
@@ -7165,7 +7481,7 @@ def cleanup_list_order(remove_keys=None, remove_scopes=None):
     if not remove_keys and not remove_scopes:
         return
     try:
-        order_map, sha = load_list_order()
+        order_map, sha = load_list_order(guild_id)
         changed = False
         for scope in remove_scopes:
             if scope in order_map:
@@ -7178,7 +7494,7 @@ def cleanup_list_order(remove_keys=None, remove_scopes=None):
                     order_map[scope] = new_keys
                     changed = True
         if changed:
-            save_list_order(order_map, sha)
+            save_list_order(guild_id, order_map, sha)
     except DataWriteError as e:
         print(f"[WARN] list_order のクリーンアップに失敗しました: {e}")
     except Exception as e:
@@ -7186,11 +7502,11 @@ def cleanup_list_order(remove_keys=None, remove_scopes=None):
 
 @app.route("/list_order", methods=["GET"])
 def list_order():
-    _guild_id, _student_id, err = require_member_session_get()
+    guild_id, _student_id, err = require_member_session_get()
     if err:
         return err
     try:
-        order_map, _ = load_list_order()
+        order_map, _ = load_list_order(guild_id)
         return jsonify({"ok": True, "order": order_map})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -7198,18 +7514,24 @@ def list_order():
 @app.route("/save_order", methods=["POST"])
 def save_order():
     """
-    body: { scope: "__root__" または フォルダid, keys: ["folder:xxx", "deck:yyy", ...] }
+    body: { guild_id, session_token, scope: "__root__" または フォルダid, keys: ["folder:xxx", "deck:yyy", ...] }
     指定したscope（フォルダの場所）の並び順だけを丸ごと置き換えて保存する。
+    ★ 複数サーバー対応でguild_idが必須になったのに合わせ、以前は認証チェックが
+      無かった（他の変更系APIと異なり2026/08/19のログイン必須化から漏れていた）
+      のを、同じ require_login_json() パターンに揃えて修正した。
     """
-    data  = request.json or {}
+    data = request.json or {}
+    guild_id, _student_id, _nickname, err = require_login_json(data)
+    if err:
+        return err
     scope = data.get("scope")
     keys  = data.get("keys")
     if not scope or not isinstance(keys, list):
         return jsonify({"ok": False, "error": "scope と keys は必須です"})
     try:
-        order_map, sha = load_list_order()
+        order_map, sha = load_list_order(guild_id)
         order_map[scope] = keys
-        save_list_order(order_map, sha)
+        save_list_order(guild_id, order_map, sha)
         return jsonify({"ok": True})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -7708,6 +8030,60 @@ async def on_ready():
 async def on_disconnect():
     print("[WARN] Discord からの接続が切断されました。discord.py 内部で自動再接続を試みます。")
 
+
+def migrate_cardmaker_data_to_guild(guild_id: int):
+    """
+    ★ 複数サーバー対応（追加）：CardMakerは元々「サーバーの概念を持たない」
+    設計で、Botを導入した全サーバーで同じ棚（cards_index.json/folders.json/
+    list_order.json + words/*.json）を共有していた。ユーザーの要望で
+    サーバーごとに分離することになったため、既存データを全部この
+    guild_id（1Iサーバー・LEGACY_CARDMAKER_GUILD_ID）に紐付ける形で
+    一度だけ移行する。
+    ・起動のたびに呼んでも問題ない冪等な処理（移行後は各判定がFalseになり
+      ほぼ何もせず即座に終わる。_migrate_legacy_quiz_archive_decks()と同じ考え方）。
+    ・Flaskがリクエストを受け付け始める前（keep_alive()より前）に必ず
+      同期的に完了させる。on_readyの中（Discord接続後）で非同期に行うと、
+      その間にsave_cards/list_cards等が新旧どちらのファイルを読むか
+      不定になるレースコンディションが起きうるため。
+    """
+    migrated_something = False
+
+    # --- 索引・フォルダ・並び順ファイルを、guildごとのファイル名にリネーム ---
+    for old_name, new_name in [
+        ("cards_index.json", cards_index_file(guild_id)),
+        ("folders.json", folders_file(guild_id)),
+        ("list_order.json", list_order_file(guild_id)),
+    ]:
+        if os.path.isfile(_data_path(new_name)):
+            continue  # 移行済み
+        data, _ = local_get(old_name)
+        if data is None:
+            continue  # 元々存在しない（新規デプロイ等）
+        try:
+            local_put(new_name, data)
+            os.remove(_data_path(old_name))
+            print(f"[INFO] CardMaker移行: {old_name} → {new_name}")
+            migrated_something = True
+        except (DataWriteError, OSError) as e:
+            print(f"[WARN] CardMaker移行に失敗しました（{old_name} → {new_name}）: {e}")
+
+    # --- 各デッキ本体（words/*.json）に、無ければguild_idフィールドを補う ---
+    for f in list_card_files():
+        filename = f["name"]
+        data, sha = get_card_file(filename)
+        if data is None or "guild_id" in data:
+            continue
+        data["guild_id"] = guild_id
+        try:
+            put_card_file(filename, data, sha)
+            migrated_something = True
+        except DataWriteError as e:
+            print(f"[WARN] {filename} へのguild_id移行に失敗しました: {e}")
+
+    if migrated_something:
+        print(f"[INFO] CardMakerの既存データをguild_id={guild_id}に移行しました。")
+
+migrate_cardmaker_data_to_guild(LEGACY_CARDMAKER_GUILD_ID)
 
 keep_alive()
 start_quiz_scheduler()
