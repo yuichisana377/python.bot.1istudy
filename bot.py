@@ -2299,10 +2299,14 @@ async def send_tomorrow_plans():
                 continue
             await channel.send(msg + "@everyone")
 
-async def send_today_plans_for(config_key: str):
+async def send_today_plans_for(config_key: str, guild_ids_allowed=None):
     """
     朝の「今日の予定」通知を config_key で指定したチャンネル宛に送る。
     config_key: "remind_channel_id"（通生） または "remind_channel_id_dorm"（寮生）
+    guild_ids_allowed: ★ 複数サーバー対応（追加）：指定した場合、そのguild_idの
+      集合に含まれるサーバーだけを対象にする。通生/寮生で時間帯を分ける
+      （5:30/7:20）のは寮のある1I勉強会（高専）特有の事情のため、他サーバーは
+      ここで除外し、代わりに朝8:00の一般枠（send_today_plans_generic）で送る。
     """
     now = datetime.now(JST)
     # 実行日が土曜(5)・日曜(6) の場合は「土曜朝」「日曜朝」の通知にあたるため、
@@ -2310,6 +2314,8 @@ async def send_today_plans_for(config_key: str):
     quiet_if_empty = now.weekday() in (5, 6)  # 5=土, 6=日
     for filename in list_all_configs():
         guild_id = int(filename.replace("config_", "").replace(".json", ""))
+        if guild_ids_allowed is not None and guild_id not in guild_ids_allowed:
+            continue
         config = load_config(guild_id)
         channel_id = config.get(config_key)
         if not channel_id:
@@ -2331,12 +2337,49 @@ async def send_today_plans_for(config_key: str):
         await channel.send(msg + "@everyone")
 
 async def send_today_plans_commute():
-    """通生向け：朝5:30の通知（既存のremind_channel_idを使用）"""
-    await send_today_plans_for("remind_channel_id")
+    """通生向け：朝5:30の通知（1I勉強会専用。remind_channel_idを使用）"""
+    await send_today_plans_for("remind_channel_id", guild_ids_allowed={LEGACY_GUILD_ID})
 
 async def send_today_plans_dorm():
-    """寮生向け：朝7:20の通知（remind_channel_id_dormを使用）"""
-    await send_today_plans_for("remind_channel_id_dorm")
+    """寮生向け：朝7:20の通知（1I勉強会専用。remind_channel_id_dormを使用）"""
+    await send_today_plans_for("remind_channel_id_dorm", guild_ids_allowed={LEGACY_GUILD_ID})
+
+async def send_today_plans_generic():
+    """
+    ★ 複数サーバー対応（追加）：1I勉強会以外のサーバー向け、朝8:00の
+    「今日の予定」通知。1Iは通生/寮生で時間帯を分けている（5:30/7:20）が、
+    これは寮のある高専特有の事情のため、他サーバーには一般的な朝8:00を
+    デフォルトにする。/setchannelで「通生」「寮生」どちらを選んで設定して
+    いても拾えるよう、remind_channel_id/remind_channel_id_dormの両方を見る
+    （同じチャンネルを両方に設定していた場合の二重送信も防ぐ）。
+    """
+    now = datetime.now(JST)
+    quiet_if_empty = now.weekday() in (5, 6)  # 5=土, 6=日
+    for filename in list_all_configs():
+        guild_id = int(filename.replace("config_", "").replace(".json", ""))
+        if guild_id == LEGACY_GUILD_ID:
+            continue  # 1Iは専用の時間帯（5:30/7:20）で別途送信済み
+        config = load_config(guild_id)
+        today = now.strftime("%Y-%m-%d")
+        plans = [p for p in load_plans(guild_id) if p["date"] == today]
+        if plans:
+            msg = "おはようございます！今日の予定です。\n"
+            for p in plans:
+                msg += f"・{p['subject']} {strip_note(p['content'])}\n"
+        else:
+            if quiet_if_empty or is_holiday(guild_id, today):
+                continue
+            msg = "おはようございます！今日の予定はありません。\n"
+        sent_channel_ids = set()
+        for config_key in ("remind_channel_id", "remind_channel_id_dorm"):
+            channel_id = config.get(config_key)
+            if not channel_id or channel_id in sent_channel_ids:
+                continue
+            channel = bot.get_channel(channel_id)
+            if not channel:
+                continue
+            await channel.send(msg + "@everyone")
+            sent_channel_ids.add(channel_id)
 
 WEEKLY_NOTIFY_CHANNEL_KEYS = ("remind_channel_id", "remind_channel_id_dorm")  # 通生・寮生 両方に送信
 WEEKDAY_JP = ["月", "火", "水", "木", "金", "土", "日"]
@@ -3623,61 +3666,68 @@ def _handle_discord_login_callback(discord_user_id: int, discord_username: str) 
         if user:
             registered.append((gid, gname, student_id, user.get("nickname", student_id)))
 
-    if len(registered) == 1:
-        gid, gname, student_id, nickname = registered[0]
-        token = create_session(gid, student_id)
-        # ★ 不正防止：新たなログインが検出されるたび、対象サーバーのメンバー
-        #   本人にだけDMで通知する（制限付きアカウントにはDM機能自体を
-        #   使わせない方針のため、send_discord_dm側で自動的にスキップされる）。
-        _notify_new_login(gid, student_id, nickname)
-        qs = urlencode({
-            "discord_session_token": token,
-            "student_id": student_id,
-            "nickname": nickname,
-            "guild_id": gid,
-            "guild_name": gname,
-            # ★ 複数サーバー対応：フロント側で「サーバーを切り替える」メニューを
-            #   複数サーバーに実際に参加している人にだけ出すための判定材料。
-            #   ここでは登録済みサーバーが1件でも、Botが参加している他の
-            #   サーバーのメンバーでもあれば1にする（bot_member_guilds基準）。
-            "multi_guild": "1" if len(candidates) > 1 else "0",
-        })
-        return redirect(f"https://1istudyweb.pages.dev/Login?{qs}")
+    if len(candidates) == 1:
+        gid, gname = candidates[0]
+        if registered:
+            _gid, _gname, student_id, nickname = registered[0]
+            token = create_session(gid, student_id)
+            # ★ 不正防止：新たなログインが検出されるたび、対象サーバーのメンバー
+            #   本人にだけDMで通知する（制限付きアカウントにはDM機能自体を
+            #   使わせない方針のため、send_discord_dm側で自動的にスキップされる）。
+            _notify_new_login(gid, student_id, nickname)
+            qs = urlencode({
+                "discord_session_token": token,
+                "student_id": student_id,
+                "nickname": nickname,
+                "guild_id": gid,
+                "guild_name": gname,
+                "multi_guild": "0",
+            })
+            return redirect(f"https://1istudyweb.pages.dev/Login?{qs}")
+        # 初回、またはデータ不整合 → 学籍番号入力（登録）ステップへ
+        reg_token = issue_discord_reg_token(candidates, discord_user_id, discord_username)
+        return redirect(f"https://1istudyweb.pages.dev/Login?discord_reg={reg_token}")
 
-    if len(registered) > 1:
-        pending = create_login_choice_token({
-            "candidates": [
-                {"guild_id": gid, "guild_name": gname, "student_id": sid, "nickname": nn}
-                for gid, gname, sid, nn in registered
-            ],
-        })
-        # ★ 表示用にguild_id/guild_nameだけの一覧もURLに載せる（session_token等の
-        #   秘密情報は一切含まないため問題ない）。フロント側はこれで選択肢を描画し、
-        #   実際の選択結果は必ずpending（トークン）と一緒に/finalize_loginへ送って
-        #   サーバー側で再検証させる。
-        display_candidates = json.dumps(
-            [{"guild_id": gid, "guild_name": gname} for gid, gname, _sid, _nn in registered],
-            ensure_ascii=False, separators=(",", ":"),
-        )
-        qs = urlencode({"guild_choice": pending, "candidates": display_candidates})
-        return redirect(f"https://1istudyweb.pages.dev/Login?{qs}")
-
-    # 初回、またはデータ不整合 → 学籍番号入力（登録）ステップへ
-    # （メンバーであるサーバーが複数あれば、登録フォーム側で選ばせる）
-    reg_token = issue_discord_reg_token(candidates, discord_user_id, discord_username)
-    return redirect(f"https://1istudyweb.pages.dev/Login?discord_reg={reg_token}")
+    # ★ 修正：候補（Botが参加していて、かつ本人がメンバーであるサーバー）が
+    #   2件以上ある場合は、登録済みかどうかに関わらず必ず選択させる。
+    #   以前は「登録済みサーバーが1件だけなら無条件で自動ログイン」だったため、
+    #   既に1つのサーバーに登録済みの人が新しく別サーバーにも参加した場合、
+    #   その新サーバーへ辿り着く手段自体が無くなってしまっていた（自動的に
+    #   元のサーバーへログインし続けてしまう）。
+    pending = create_login_choice_token({
+        "discord_user_id": discord_user_id,
+        "discord_username": discord_username,
+        "registered": [
+            {"guild_id": gid, "guild_name": gname, "student_id": sid, "nickname": nn}
+            for gid, gname, sid, nn in registered
+        ],
+        "candidates": [{"guild_id": gid, "guild_name": gname} for gid, gname in candidates],
+    })
+    # ★ 表示用一覧もURLに載せる（session_token等の秘密情報は一切含まないため問題ない）。
+    #   未登録の候補には registered:false を付け、フロント側で「（未登録）」等の
+    #   案内を出せるようにする。フロント側はこれで選択肢を描画し、実際の選択結果は
+    #   必ずpending（トークン）と一緒に/finalize_loginへ送ってサーバー側で再検証させる。
+    registered_ids = {gid for gid, _gname, _sid, _nn in registered}
+    display_candidates = json.dumps(
+        [{"guild_id": gid, "guild_name": gname, "registered": gid in registered_ids} for gid, gname in candidates],
+        ensure_ascii=False, separators=(",", ":"),
+    )
+    qs = urlencode({"guild_choice": pending, "candidates": display_candidates})
+    return redirect(f"https://1istudyweb.pages.dev/Login?{qs}")
 
 
 @app.route("/finalize_login", methods=["POST"])
 def finalize_login():
     """
     body: { token, guild_id }
-    ★ 複数サーバーに登録済みのDiscordユーザーが、Login.html側の選択画面で
-      1つ選んだ後に叩く。login_choiceトークン（候補一覧のみ、有効な
-      session_tokenは含まない）と選択されたguild_idを検証し、その1件分の
-      session_tokenをここで初めて発行してJSONで返す（GETリダイレクトの
-      URLには載せない＝2026/08/20の「session_tokenをURLクエリで送らない」
-      方針により忠実にするため）。
+    ★ 複数サーバーの候補（登録済み・未登録どちらも含む）から、Login.html側の
+      選択画面で1つ選んだ後に叩く。login_choiceトークン（候補一覧のみ、
+      有効なsession_tokenは含まない）と選択されたguild_idを検証する。
+      ・選んだguild_idが既に登録済み → その場でsession_tokenを発行して
+        JSONで返す（GETリダイレクトのURLには載せない＝2026/08/20の
+        「session_tokenをURLクエリで送らない」方針により忠実にするため）。
+      ・未登録 → その1サーバーだけを候補にしたdiscord_regトークンを新規発行し、
+        フロント側の学籍番号登録ステップ（openDiscordRegisterStep）へ誘導する。
     """
     data = request.json or {}
     token = data.get("token")
@@ -3693,20 +3743,29 @@ def finalize_login():
     if not payload:
         return jsonify({"ok": False, "error": "リンクの有効期限が切れました。もう一度ログインし直してください。"})
 
-    match = next((c for c in payload.get("candidates", []) if c.get("guild_id") == guild_id), None)
-    if not match:
+    match = next((c for c in payload.get("registered", []) if c.get("guild_id") == guild_id), None)
+    if match:
+        session_token = create_session(guild_id, match["student_id"])
+        _notify_new_login(guild_id, match["student_id"], match["nickname"])
+        return jsonify({
+            "ok": True,
+            "session_token": session_token,
+            "student": {"id": match["student_id"], "nickname": match["nickname"]},
+            "guild_id": guild_id,
+            "guild_name": match.get("guild_name"),
+            "multi_guild": True,  # ★ このエンドポイントは複数サーバーが候補にある場合しか呼ばれない
+        })
+
+    candidate = next((c for c in payload.get("candidates", []) if c.get("guild_id") == guild_id), None)
+    if not candidate:
         return jsonify({"ok": False, "error": "invalid_guild"})
 
-    session_token = create_session(guild_id, match["student_id"])
-    _notify_new_login(guild_id, match["student_id"], match["nickname"])
-    return jsonify({
-        "ok": True,
-        "session_token": session_token,
-        "student": {"id": match["student_id"], "nickname": match["nickname"]},
-        "guild_id": guild_id,
-        "guild_name": match.get("guild_name"),
-        "multi_guild": True,  # ★ このエンドポイントは複数サーバーに登録済みの場合しか呼ばれない
-    })
+    reg_token = issue_discord_reg_token(
+        [(guild_id, candidate.get("guild_name"))],
+        payload.get("discord_user_id"),
+        payload.get("discord_username", ""),
+    )
+    return jsonify({"ok": True, "needs_registration": True, "discord_reg_token": reg_token})
 
 
 @app.route("/issue_guild_invite_code", methods=["POST"])
@@ -8134,8 +8193,9 @@ async def scheduled_backup_data_to_github():
 # ================================
 scheduler.add_job(scheduled_backup_data_to_github, "cron", hour=0, minute=0)  # ★ 追加：毎日0:00（JST）にデータを自動バックアップ
 scheduler.add_job(send_tomorrow_plans,     "cron", hour=20, minute=0)
-scheduler.add_job(send_today_plans_commute, "cron", hour=5,  minute=30)  # 通生（現行時間）
-scheduler.add_job(send_today_plans_dorm,    "cron", hour=7,  minute=20)  # 寮生
+scheduler.add_job(send_today_plans_commute, "cron", hour=5,  minute=30)  # 通生（1I勉強会専用）
+scheduler.add_job(send_today_plans_dorm,    "cron", hour=7,  minute=20)  # 寮生（1I勉強会専用）
+scheduler.add_job(send_today_plans_generic, "cron", hour=8,  minute=0)   # ★ 追加：1I勉強会以外のサーバー向け、朝8:00の一般枠
 scheduler.add_job(send_weekly_plans,        "cron", day_of_week="sun", hour=14, minute=0)  # 毎週日曜14:00に今週の予定
 scheduler.add_job(check_study_timers,       "interval", minutes=1)  # ★ 勉強タイマーの3時間ごとの自動休憩チェック（最大1分遅れで検知）
 
