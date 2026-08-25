@@ -389,7 +389,28 @@ async def async_local_put(filename, content_obj, sha=None):
 #    points_{guild_id}.json自体の中身は本人にしか見えない）。
 # ================================
 SYSTEM_LOG_MAX_ENTRIES = 300
+SYSTEM_LOG_MAX_AGE_DAYS = 7  # ★ 追加：1週間より古いエントリは削除する（2026/08/25、ユーザーの要望）
 _system_log_lock = Lock()
+
+def _filter_recent_log_entries(entries):
+    """運用ログのエントリのうち、SYSTEM_LOG_MAX_AGE_DAYSより古いものを取り除く。
+    time が壊れている・無い（想定外の形式）エントリは、古いかどうか判断できない
+    ので念のため残す（SYSTEM_LOG_MAX_ENTRIESの件数上限で自然に押し出される）。"""
+    cutoff = datetime.now(JST) - timedelta(days=SYSTEM_LOG_MAX_AGE_DAYS)
+    kept = []
+    for e in entries:
+        t = e.get("time") if isinstance(e, dict) else None
+        if not t:
+            kept.append(e)
+            continue
+        try:
+            ts = datetime.strptime(t, "%Y-%m-%d %H:%M:%S").replace(tzinfo=JST)
+        except ValueError:
+            kept.append(e)
+            continue
+        if ts >= cutoff:
+            kept.append(e)
+    return kept
 
 def system_log_file(guild_id: int) -> str:
     return f"system_log_{guild_id}.json"
@@ -450,6 +471,7 @@ def log_event(guild_id, category, summary, level="info", actor=None, detail=None
             if safe_files:
                 entry["detail"] = safe_files
             entries.append(entry)
+            entries = _filter_recent_log_entries(entries)  # ★ 追加：1週間より古いエントリを削除
             entries = entries[-SYSTEM_LOG_MAX_ENTRIES:]
             local_put(system_log_file(guild_id), entries, sha)
     except Exception as e:
@@ -8215,10 +8237,39 @@ async def scheduled_backup_data_to_github():
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, backup_data_to_github)
 
+def prune_old_system_logs():
+    """★ 追加（2026/08/25）：運用ログの「1週間より古いエントリは削除」を、
+    操作の有無に関わらず毎日一律で行う。log_event()側でも書き込みの
+    たびに同じ絞り込み（_filter_recent_log_entries）をしているが、それ
+    だけだとしばらく操作が無いサーバーで古いエントリが残り続けて
+    しまうため、全サーバー（list_all_configs()）を対象にこちらも回す。"""
+    for filename in list_all_configs():
+        try:
+            guild_id = int(filename.replace("config_", "").replace(".json", ""))
+        except ValueError:
+            continue
+        try:
+            with _system_log_lock:
+                entries, sha = local_get(system_log_file(guild_id))
+                if not isinstance(entries, list) or not entries:
+                    continue
+                filtered = _filter_recent_log_entries(entries)
+                if len(filtered) != len(entries):
+                    local_put(system_log_file(guild_id), filtered, sha)
+        except Exception as e:
+            print(f"[WARN] 運用ログの古いエントリの削除に失敗しました（guild={guild_id}）: {e}")
+
+async def scheduled_prune_old_system_logs():
+    """★ prune_old_system_logsもファイルI/Oを含む同期関数なので、
+    scheduled_backup_data_to_githubと同じ理由で別スレッドで実行する。"""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, prune_old_system_logs)
+
 # ================================
 #  スケジューラー & 起動
 # ================================
 scheduler.add_job(scheduled_backup_data_to_github, "cron", hour=0, minute=0)  # ★ 追加：毎日0:00（JST）にデータを自動バックアップ
+scheduler.add_job(scheduled_prune_old_system_logs, "cron", hour=0, minute=10)  # ★ 追加：毎日0:10（JST）に運用ログの1週間より古いエントリを削除
 scheduler.add_job(send_tomorrow_plans,     "cron", hour=20, minute=0)
 scheduler.add_job(send_today_plans_commute, "cron", hour=5,  minute=30)  # 通生（1I勉強会専用）
 scheduler.add_job(send_today_plans_dorm,    "cron", hour=7,  minute=20)  # 寮生（1I勉強会専用）
