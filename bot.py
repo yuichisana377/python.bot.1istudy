@@ -388,12 +388,18 @@ async def async_local_put(filename, content_obj, sha=None):
 #    週間ランキングはstudy_logsから毎回再計算した別の値のため、
 #    points_{guild_id}.json自体の中身は本人にしか見えない）。
 # ================================
-SYSTEM_LOG_FILE = "system_log.json"
 SYSTEM_LOG_MAX_ENTRIES = 300
 _system_log_lock = Lock()
 
-def log_event(category, summary, level="info", actor=None, detail=None):
+def system_log_file(guild_id: int) -> str:
+    return f"system_log_{guild_id}.json"
+
+def log_event(guild_id, category, summary, level="info", actor=None, detail=None):
     """運用ログに1件追加する。summary は日本語の短い説明文。
+    ★ 複数サーバー対応：以前はguild_idの概念が無く全サーバー共通の
+    単一ファイル（system_log.json）だったため、新サーバーの運用ログに
+    1Iの操作履歴が全部混ざって見えてしまっていた。guild_idを必須の
+    第一引数にし、system_log_{guild_id}.jsonへ分離した。
     actor は実行者のニックネーム（分からない/サーバー主導の処理の場合は
     Noneのままでよい。Discord IDなどより強く個人を特定できる情報は渡さない
     こと）。level は "info" または "error"（失敗をWeb側で視覚的に区別する
@@ -418,7 +424,7 @@ def log_event(category, summary, level="info", actor=None, detail=None):
     1件のfile:None・status:Noneエントリとして扱う。"""
     try:
         with _system_log_lock:
-            entries, sha = local_get(SYSTEM_LOG_FILE)
+            entries, sha = local_get(system_log_file(guild_id))
             if not isinstance(entries, list):
                 entries = []
             entry = {
@@ -445,9 +451,22 @@ def log_event(category, summary, level="info", actor=None, detail=None):
                 entry["detail"] = safe_files
             entries.append(entry)
             entries = entries[-SYSTEM_LOG_MAX_ENTRIES:]
-            local_put(SYSTEM_LOG_FILE, entries, sha)
+            local_put(system_log_file(guild_id), entries, sha)
     except Exception as e:
         print(f"[WARN] システムログの記録に失敗しました: {e}")
+
+def log_event_all_guilds(category, summary, level="info", detail=None):
+    """★ 複数サーバー対応：バックアップのように「特定の1サーバーの操作」
+    ではなく全サーバー共通で起きるイベント用。設定済みの全サーバー
+    （list_all_configs()）それぞれの運用ログに同じ内容を書く
+    （バックアップは全サーバーのデータをまとめて対象にしているため、
+    どのサーバーのログにも「バックアップが行われた」事実は関係がある）。"""
+    for filename in list_all_configs():
+        try:
+            guild_id = int(filename.replace("config_", "").replace(".json", ""))
+        except ValueError:
+            continue
+        log_event(guild_id, category, summary, level=level, detail=detail)
 
 def _json_block(fields, label=None):
     """「フィールド名: 値」の一覧を、GitHubのコミット差分でJSONファイルを
@@ -491,21 +510,25 @@ def system_log():
     # ★ 追加（2026/08/20）：このAPI自体は元々ログイン不要（11人の小規模運用の
     #   ため誰でも閲覧可）だが、制限付きアカウント（対象サーバーに参加していない
     #   ログイン済みDiscordアカウント）には見せない方針にした。session_token
-    #   （＋guild_id）が送られてきた場合だけメンバーシップを確認し、
-    #   何も送られてこない場合（未ログインの匿名アクセス）は従来通り誰でも見られる。
+    #   が送られてきた場合だけメンバーシップを確認し、何も送られてこない場合
+    #   （未ログインの匿名アクセス）は従来通り誰でも見られる。
+    # ★ 複数サーバー対応：以前はguild_id自体が任意（無指定なら全サーバー共通の
+    #   ログを返す）だったが、guildごとにファイルを分けたため必須にした。
     guild_id = request.args.get("guild_id")
-    token = session_token_from_request()
-    if guild_id and token:
-        try:
-            guild_id_int = int(guild_id)
-        except (TypeError, ValueError):
-            guild_id_int = None
-        if guild_id_int is not None:
-            student_id = resolve_session(token, guild_id_int)
-            if student_id and not _session_is_member(guild_id_int, student_id):
-                return jsonify({"ok": False, "error": "guild_membership_required"})
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    try:
+        guild_id_int = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid guild_id"})
 
-    entries, _ = local_get(SYSTEM_LOG_FILE)
+    token = session_token_from_request()
+    if token:
+        student_id = resolve_session(token, guild_id_int)
+        if student_id and not _session_is_member(guild_id_int, student_id):
+            return jsonify({"ok": False, "error": "guild_membership_required"})
+
+    entries, _ = local_get(system_log_file(guild_id_int))
     if not isinstance(entries, list):
         entries = []
     try:
@@ -1926,6 +1949,63 @@ async def set_subject_category(interaction: discord.Interaction):
         f"（{len(category.text_channels)}個のテキストチャンネル）。"
     )
 
+@bot.tree.command(name="name", description="このサーバー向けのBot・Webサイトの表示名を設定する")
+@app_commands.describe(name="表示する名前（1〜32文字。Botのニックネームにも反映されます）")
+async def set_display_name(interaction: discord.Interaction, name: str):
+    """
+    ★ 複数サーバー対応（追加）：Botの表示名（サーバー内でのニックネーム）と
+    Webサイトのロゴ・ログイン画面等に出す名前を、このコマンド1つで
+    まとめて設定する（同じ名前でよいという要望のため、あえて別々の
+    コマンドに分けていない）。設定値は config_{guild_id}.json の
+    display_name に保存し、bot_member_guilds()/resolve_guild_invite_code
+    経由でWeb側のログイン・招待コードのレスポンスに乗る
+    （display_name_for_guild()参照）。未設定のサーバーは、従来通り
+    Discordサーバー本来の名前がそのまま使われる。
+    """
+    await interaction.response.defer(ephemeral=True)
+    name = (name or "").strip()
+    if not name or len(name) > 32:
+        await interaction.followup.send("名前は1〜32文字で入力してください。", ephemeral=True)
+        return
+    err = reject_if_bug_chars({"表示名": name})
+    if err:
+        await interaction.followup.send("使用できない文字が含まれています。", ephemeral=True)
+        return
+
+    guild_id = interaction.guild.id
+    config = await async_load_config(guild_id)
+    config["display_name"] = name
+    try:
+        await async_save_config(guild_id, config)
+    except DataWriteError as e:
+        await interaction.followup.send(f"保存に失敗しました（データ保存エラー）。もう一度お試しください。\n{e}", ephemeral=True)
+        return
+
+    # ★ Botのニックネームも合わせて変更する（ベストエフォート。権限が無い場合はスキップ）。
+    nick_note = ""
+    try:
+        await interaction.guild.me.edit(nick=name)
+    except discord.Forbidden:
+        nick_note = "\n（Botのニックネーム変更には「ニックネームの管理」権限が必要です。Webサイト側の表示名は設定できています。）"
+    except Exception as e:
+        nick_note = f"\n（Botのニックネーム変更には失敗しました: {e}）"
+
+    await interaction.followup.send(f"表示名を「{name}」に設定しました。{nick_note}")
+
+@bot.tree.command(name="start", description="Bot・Webサイトの使い方（導入手順）を表示する")
+async def start_command(interaction: discord.Interaction):
+    msg = (
+        "📘 **はじめに（このサーバーでの導入手順）**\n\n"
+        "1️⃣ **/setchannel** — 予定・お知らせの通知を送るチャンネルを設定する（通生／寮生／お知らせ用、それぞれ実行したいチャンネルで実行）\n"
+        "2️⃣ **/set_subject_category** — 科目チャンネルをまとめているカテゴリ内のどれかのチャンネルで実行し、CardMakerの公開通知先などを設定する（任意）\n"
+        "3️⃣ **/setup_roles** — 通生/寮生の振り分けパネルを投稿する（任意）\n"
+        "4️⃣ **/name** — Bot・Webサイトの表示名を設定する（任意。未設定ならこのDiscordサーバーの名前がそのまま使われます）\n\n"
+        "🌐 **Webサイト**\nhttps://1istudyweb.pages.dev/\n"
+        "「Discordでログイン」から、このサーバーのメンバーなら誰でも使えます（学籍番号の登録は初回のみ）。\n\n"
+        "コマンド一覧は **/help** を見てください。"
+    )
+    await interaction.response.send_message(msg, ephemeral=True)
+
 def _migrate_role_panels(config: dict) -> list:
     """config内のロール振り分けパネル一覧を取得する。
     以前は1サーバーにつき1枚分の情報（role_panel_message_id等）しか
@@ -2150,6 +2230,7 @@ async def link_student_id(interaction: discord.Interaction, code: str):
 async def help_command(interaction: discord.Interaction):
     msg = (
         "📘 **使えるコマンド一覧**\n\n"
+        "**/start** — Bot・Webサイトの使い方（導入手順）を表示する\n"
         "**/add** — 予定を登録する\n"
         "**/list** — 予定を表示する\n"
         "**/delete** — 予定を削除する\n"
@@ -2157,6 +2238,7 @@ async def help_command(interaction: discord.Interaction):
         "**/setchannel** — 通知チャンネルを設定する（通生／寮生／お知らせ用を選択可）\n"
         "**/set_subject_category** — このチャンネルが属するカテゴリを「科目チャンネル」の範囲として設定する\n"
         "**/setup_roles** — 通生/寮生 振り分けパネルを投稿する\n"
+        "**/name** — Bot・Webサイトの表示名を設定する\n"
         "**/id連携** — StudyLogにログインして発行した連携コードを使い、DiscordアカウントをStudyLogと連携する（DM通知を受け取れるようになる）\n"
         "**webページ** - https://1istudyweb.pages.dev/\n"
     )
@@ -2402,7 +2484,7 @@ def add_schedule():
     )
     ok, msg, detail = future.result(timeout=30)
     if ok:
-        log_event("schedule", f"予定「{subject}」を追加しました（{date}）。", actor=nickname, detail=detail)
+        log_event(int(guild_id), "schedule", f"予定「{subject}」を追加しました（{date}）。", actor=nickname, detail=detail)
     if ok and guild:
         target_channel = get_subject_channel_by_name(guild, subject)
         if target_channel:
@@ -2579,6 +2661,7 @@ def add_study_log():
 
     change = _diff_study_logs(f"study_logs_{guild_id}.json", old_logs, logs)
     log_event(
+        guild_id,
         "study",
         f"学習ログ「{subject}」を記録しました（{entry['minutes']}分・{earned}pt加算）。",
         actor=nickname,
@@ -2630,6 +2713,7 @@ def delete_study_log():
 
     change = _diff_study_logs(f"study_logs_{guild_id}.json", logs, new_logs)
     log_event(
+        guild_id,
         "study",
         f"学習ログ「{target.get('subject')}」を削除しました（{target.get('minutes')}分・{earned}pt減算）。",
         actor=nickname,
@@ -2761,6 +2845,7 @@ def edit_schedule():
     write_log(guild_id, "edit", detail=f"{before_str} → {after_str}")
     change = file_diff(f"plans_{guild_id}.json", old_plans_text, _plans_text(plans))
     log_event(
+        guild_id,
         "schedule",
         f"予定「{found['subject']}」を編集しました（{found['date']}）。",
         actor=nickname,
@@ -2806,6 +2891,7 @@ def delete_schedule():
     write_log(guild_id, "delete", detail=detail)
     change = file_diff(f"plans_{guild_id}.json", _plans_text(plans), _plans_text(new_plans))
     log_event(
+        guild_id,
         "schedule",
         f"予定「{deleted['subject']}」を削除しました（{deleted['date']}）。",
         actor=nickname,
@@ -2942,6 +3028,7 @@ def update_timetable():
     write_log(guild_id, "edit", detail=tt_detail)
     change = file_diff(f"timetable_{guild_id}.json", old_tt_text, _timetable_text(tt))
     log_event(
+        guild_id,
         "timetable",
         f"時間割「{data.get('subject')}」を更新しました（{data.get('date')}）。",
         actor=nickname,
@@ -2975,6 +3062,7 @@ def set_holiday():
     write_log(guild_id, "edit", detail=holiday_detail)
     change = file_diff(f"timetable_{guild_id}.json", old_tt_text, _timetable_text(tt))
     log_event(
+        guild_id,
         "timetable",
         f"休校設定「{data.get('date')}」を更新しました。",
         actor=nickname,
@@ -3018,6 +3106,7 @@ def set_period_holiday():
     write_log(guild_id, "edit", detail=period_holiday_detail)
     change = file_diff(f"timetable_{guild_id}.json", old_tt_text, _timetable_text(tt))
     log_event(
+        guild_id,
         "timetable",
         f"休み設定「{data.get('date')} {period}限」を更新しました。",
         actor=nickname,
@@ -3046,6 +3135,7 @@ def delete_timetable():
         write_log(guild_id, "edit", detail=f"時間割変更削除: {key}")
         change = file_diff(f"timetable_{guild_id}.json", old_tt_text, _timetable_text(tt))
         log_event(
+            guild_id,
             "timetable",
             f"時間割の変更「{old_entry.get('date')}」を削除しました。",
             actor=nickname,
@@ -3157,6 +3247,7 @@ def save_term():
     write_log(guild_id, "edit", detail=term_detail)
     change = file_diff(f"terms_{guild_id}.json", old_terms_text, _terms_text(terms))
     log_event(
+        guild_id,
         "timetable",
         f"学期時間割「{name}」を保存しました。",
         actor=nickname,
@@ -3185,6 +3276,7 @@ def delete_term():
         write_log(guild_id, "edit", detail=f"学期時間割削除: {name}")
         change = file_diff(f"terms_{guild_id}.json", old_terms_text, _terms_text(terms))
         log_event(
+            guild_id,
             "timetable",
             f"学期時間割「{name}」を削除しました。",
             actor=nickname,
@@ -3431,6 +3523,16 @@ def _guild_membership_status(guild_id: int, discord_user_id: int) -> str:
     return "member" if guild.get_member(discord_user_id) is not None else "not_member"
 
 
+def display_name_for_guild(guild) -> str:
+    """
+    ★ 追加：/nameコマンドでサーバーごとに設定した表示名（config内の
+    display_name）があればそれを使い、無ければDiscordサーバー本来の名前
+    （guild.name）にフォールバックする。Web側にはこの名前が「guild_name」
+    として渡り、ログイン画面・ドロワーのロゴ等に表示される。
+    """
+    config = load_config(guild.id)
+    return config.get("display_name") or guild.name
+
 def bot_member_guilds(discord_user_id: int) -> list:
     """
     ★ 追加（複数サーバー対応）：Botが参加している全guildのうち、
@@ -3441,7 +3543,7 @@ def bot_member_guilds(discord_user_id: int) -> list:
     """
     if not bot.is_ready():
         return []
-    return [(g.id, g.name) for g in bot.guilds if g.get_member(discord_user_id) is not None]
+    return [(g.id, display_name_for_guild(g)) for g in bot.guilds if g.get_member(discord_user_id) is not None]
 
 
 LOGIN_CHOICE_TOKEN_TTL_SEC = 10 * 60  # 複数サーバー選択画面用トークンの有効期限：10分
@@ -3640,7 +3742,7 @@ def resolve_guild_invite_code():
         return jsonify({"ok": False, "error": "リンクが無効か期限切れです。"})
     del GUILD_INVITE_CODES[code]  # ★ 1回使い切り
     guild = bot.get_guild(entry["guild_id"]) if bot.is_ready() else None
-    return jsonify({"ok": True, "guild_id": entry["guild_id"], "guild_name": guild.name if guild else None})
+    return jsonify({"ok": True, "guild_id": entry["guild_id"], "guild_name": display_name_for_guild(guild) if guild else None})
 
 
 @app.route("/discord_reg_info", methods=["GET"])
@@ -3725,7 +3827,7 @@ def discord_complete_registration():
             })
             save_users(guild_id, users)
             change = file_diff(f"users_{guild_id}.json", old_users_text, _users_text(users))
-            log_event("user", "新しいユーザーが登録されました。", actor=nickname, detail=[change] if change else None)
+            log_event(guild_id, "user", "新しいユーザーが登録されました。", actor=nickname, detail=[change] if change else None)
             final_nickname = nickname
 
         # --- ログイン用の紐付けを保存 ---
@@ -4082,7 +4184,7 @@ def _delete_target_summary(guild_id, category, filename):
             lines.extend(preview)
         return name, lines
     elif category == "notice":
-        path = _data_path(f"{NOTICES_DIR}/{filename}")
+        path = _data_path(f"{notices_dir(guild_id)}/{filename}")
         content = None
         if os.path.isfile(path):
             try:
@@ -4126,7 +4228,7 @@ def request_delete():
     else:
         if not _is_safe_notice_filename(filename):
             return jsonify({"ok": False, "error": "invalid filename"})
-        owner_id, owner_nickname = _notice_owner(filename)
+        owner_id, owner_nickname = _notice_owner(guild_id, filename)
 
     if not owner_id:
         return jsonify({"ok": False, "error": "作成者が記録されていないため、確認を送れません。"})
@@ -4187,6 +4289,7 @@ def request_delete():
         notified_via = "web_pending"
 
     log_event(
+        guild_id,
         "card" if category == "deck" else "notice",
         f"「{target_name}」の削除を{requester_nickname}さんが{owner_nickname or '作成者'}さんに依頼しました（承認待ち）。",
         actor=requester_nickname,
@@ -4243,7 +4346,7 @@ def delete_request_info():
     target_name, detail_lines = _delete_target_summary(payload.get("guild_id"), category, filename)
     exists = (
         os.path.isfile(_data_path(f"{CARDS_DIR}/{filename}")) if category == "deck"
-        else os.path.isfile(_data_path(f"{NOTICES_DIR}/{filename}"))
+        else os.path.isfile(_data_path(f"{notices_dir(payload.get('guild_id'))}/{filename}"))
     )
     return jsonify({
         "ok": True,
@@ -4280,6 +4383,7 @@ def respond_delete_request():
 
     if action == "reject":
         log_event(
+            guild_id,
             "card" if category == "deck" else "notice",
             f"「{target_name}」の削除依頼を{owner_nickname}さんが却下しました。",
             actor=owner_nickname,
@@ -4290,7 +4394,7 @@ def respond_delete_request():
         if category == "deck":
             result = _delete_card_deck_file(guild_id, filename, owner_nickname, approval_note=note)
         else:
-            result = _delete_notice_file(filename, owner_nickname, approval_note=note)
+            result = _delete_notice_file(guild_id, filename, owner_nickname, approval_note=note)
 
     # ★ pending_delete_requests（Discord未連携でWeb確認待ちになっていた控え）に
     #   このtokenのエントリが残っていれば取り除く。承認・拒否どちらの経路で
@@ -4531,7 +4635,8 @@ def uncomplete_task():
 #    形にした（既存データはmigrate_cardmaker_data_to_guild()で移行）。
 # ================================
 CARDS_DIR = "words"
-LEGACY_CARDMAKER_GUILD_ID = 1509880344806162544  # ★ 移行専用定数。削除しないこと（migrate_cardmaker_data_to_guild参照）。
+LEGACY_GUILD_ID = 1509880344806162544  # ★ 移行専用定数（1I勉強会）。削除しないこと
+# （CardMaker/お知らせ/運用ログの各migrate_*_to_guild()が参照する）。
 # ★ 追加：CardMakerのフロントエンドURL。Discord通知に「該当デッキへ飛ぶリンク」を
 #   付けるために使う（Cardmaker.js 側で ?deck=<filename> を見て自動で移動する）。
 CARDMAKER_URL = "https://1istudyweb.pages.dev/Cardmaker.html"
@@ -5076,6 +5181,7 @@ def save_cards():
     change = deck_file_diff(guild_id, f"{CARDS_DIR}/{filename}", old_deck_for_diff, card_payload)
     detail = [c for c in (change, index_change) if c]  # ★ デッキ本体＋索引ファイルの両方の変更を載せる
     log_event(
+        guild_id,
         "card",
         f"カードデッキ「{name}」を{'更新' if is_actual_update else '公開'}しました（{len(cards)}問）。",
         actor=publisher_nickname,
@@ -5131,7 +5237,7 @@ def _delete_card_deck_file(guild_id, filename, actor_nickname, approval_note=Non
     summary = f"カードデッキ「{deleted_name}」を削除しました。" if deleted_name else "カードデッキを削除しました。"
     if approval_note:
         summary += approval_note
-    log_event("card", summary, actor=actor_nickname, detail=detail if detail else None)
+    log_event(guild_id, "card", summary, actor=actor_nickname, detail=detail if detail else None)
     return jsonify({"ok": True})
 
 @app.route("/delete_cards", methods=["POST"])
@@ -5400,6 +5506,7 @@ def create_deck_share():
         save_share_grants(guild_id, grant_items, grant_sha)
 
     log_event(
+        guild_id,
         "card",
         f"デッキ「{entry['deck_name']}」の共有リンクを{nickname}さんが作成しました。"
         + (f"（{approved_by_nickname}さんの許可あり）" if via_request else ""),
@@ -5473,6 +5580,7 @@ def revoke_deck_share():
         entry["revoked_at"] = int(time.time())
         save_deck_shares(guild_id, items, sha)
         log_event(
+            guild_id,
             "card",
             f"デッキ「{entry.get('deck_name')}」の共有リンクを{nickname}さんが取り消しました。",
             actor=nickname,
@@ -5639,6 +5747,7 @@ def request_deck_share():
         notified_via = "web_pending"
 
     log_event(
+        guild_id,
         "card",
         f"「{deck_name}」の共有リンク発行を{requester_nickname}さんが{owner_nickname or '作成者'}さんに依頼しました（承認待ち）。",
         actor=requester_nickname,
@@ -5746,6 +5855,7 @@ def respond_deck_share_request():
         })
         save_share_grants(guild_id, items, sha)
         log_event(
+            guild_id,
             "card",
             f"「{deck_name}」の共有リンク発行依頼を{owner_nickname}さんが承認しました（{requester_nickname}さんが発行可能に）。",
             actor=owner_nickname,
@@ -5753,6 +5863,7 @@ def respond_deck_share_request():
         result_message = "承認しました。依頼者が共有リンクを発行できるようになりました。"
     else:
         log_event(
+            guild_id,
             "card",
             f"「{deck_name}」の共有リンク発行依頼を{owner_nickname}さんが却下しました。",
             actor=owner_nickname,
@@ -6240,6 +6351,7 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname):
         change = deck_file_diff(guild_id, f"{CARDS_DIR}/{filename}", None, card_payload)
         detail = [c for c in (change, index_change) if c]
         log_event(
+            guild_id,
             "card",
             f"みんなでクイズの結果を「{title}」として「クイズ過去問」に保存しました（{len(cards)}問）。",
             actor=nickname,
@@ -6698,17 +6810,19 @@ def quiz_leave():
 #  ・実際に公開（save_cards）されたら、対応するエントリはここから取り除く。
 #  ・登録から一定期間（IN_PROGRESS_STALE_DAYS）経っても公開されないものは、
 #    作成を放棄したものとみなして list_in_progress を返す際に自動的に間引く。
-IN_PROGRESS_FILE = "in_progress_decks.json"
+def in_progress_file(guild_id: int) -> str:
+    return f"in_progress_decks_{guild_id}.json"
+
 IN_PROGRESS_STALE_DAYS = 14
 
-def load_in_progress():
-    data, sha = local_get(IN_PROGRESS_FILE)
+def load_in_progress(guild_id: int):
+    data, sha = local_get(in_progress_file(guild_id))
     return (data or []), sha
 
-def save_in_progress(items, sha=None):
+def save_in_progress(guild_id: int, items, sha=None):
     if sha is None:
-        _, sha = local_get(IN_PROGRESS_FILE)
-    local_put(IN_PROGRESS_FILE, items, sha)
+        _, sha = local_get(in_progress_file(guild_id))
+    local_put(in_progress_file(guild_id), items, sha)
 
 def _prune_stale_in_progress(items):
     """登録から IN_PROGRESS_STALE_DAYS 日以上経過したエントリを取り除いた新しいリストを返す。
@@ -6728,15 +6842,15 @@ def _prune_stale_in_progress(items):
 
 @app.route("/list_in_progress", methods=["GET"])
 def list_in_progress():
-    _guild_id, _student_id, err = require_member_session_get()
+    guild_id, _student_id, err = require_member_session_get()
     if err:
         return err
     try:
-        items, sha = load_in_progress()
+        items, sha = load_in_progress(guild_id)
         pruned = _prune_stale_in_progress(items)
         if len(pruned) != len(items):
             try:
-                save_in_progress(pruned, sha)
+                save_in_progress(guild_id, pruned, sha)
             except DataWriteError as e:
                 print(f"[WARN] in_progress の自動間引き保存に失敗しました: {e}")
         return jsonify({"ok": True, "items": pruned})
@@ -6746,11 +6860,17 @@ def list_in_progress():
 @app.route("/register_in_progress", methods=["POST"])
 def register_in_progress():
     """
-    body: { id, name, subject, folder_id, creator_id, creator_nickname }
+    body: { guild_id, session_token, id, name, subject, folder_id, creator_id, creator_nickname }
     ・id はフロント側で生成しているデッキのローカルID（他人と衝突しない前提）。
     ・同じ id で既にエントリがある場合は上書きする（念のため）。
+    ★ 複数サーバー対応の一環でguild_idが必須になったのに合わせ、以前は
+      認証チェック自体が無かった（誰でも呼べた）のを、他の変更系APIと
+      同じrequire_login_json()パターンに揃えて修正した。
     """
     data = request.json or {}
+    guild_id, _student_id, _nickname, err = require_login_json(data)
+    if err:
+        return err
     draft_id = data.get("id")
     name     = data.get("name")
     if not draft_id or not name:
@@ -6775,10 +6895,10 @@ def register_in_progress():
         "created_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S"),
     }
     try:
-        items, sha = load_in_progress()
+        items, sha = load_in_progress(guild_id)
         items = [it for it in items if it.get("id") != draft_id]
         items.append(entry)
-        save_in_progress(items, sha)
+        save_in_progress(guild_id, items, sha)
         return jsonify({"ok": True})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -6788,16 +6908,19 @@ def register_in_progress():
 @app.route("/update_in_progress", methods=["POST"])
 def update_in_progress():
     """
-    body: { id, name?, subject?, folder_id? }
+    body: { guild_id, session_token, id, name?, subject?, folder_id? }
     作成中デッキの名前変更・フォルダ移動をみんなの表示にも反映する。
     該当エントリが無ければ（既に公開済み・削除済みなど）何もせず ok:true を返す。
     """
-    data     = request.json or {}
+    data = request.json or {}
+    guild_id, _student_id, _nickname, err = require_login_json(data)
+    if err:
+        return err
     draft_id = data.get("id")
     if not draft_id:
         return jsonify({"ok": False, "error": "id は必須です"})
     try:
-        items, sha = load_in_progress()
+        items, sha = load_in_progress(guild_id)
         found = False
         for it in items:
             if it.get("id") == draft_id:
@@ -6807,7 +6930,7 @@ def update_in_progress():
                 found = True
                 break
         if found:
-            save_in_progress(items, sha)
+            save_in_progress(guild_id, items, sha)
         return jsonify({"ok": True, "found": found})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -6816,16 +6939,19 @@ def update_in_progress():
 
 @app.route("/remove_in_progress", methods=["POST"])
 def remove_in_progress():
-    """body: { id } — 公開された・削除された・非公開のまま維持することにした等で不要になったエントリを消す。"""
-    data     = request.json or {}
+    """body: { guild_id, session_token, id } — 公開された・削除された・非公開のまま維持することにした等で不要になったエントリを消す。"""
+    data = request.json or {}
+    guild_id, _student_id, _nickname, err = require_login_json(data)
+    if err:
+        return err
     draft_id = data.get("id")
     if not draft_id:
         return jsonify({"ok": False, "error": "id は必須です"})
     try:
-        items, sha = load_in_progress()
+        items, sha = load_in_progress(guild_id)
         new_items = [it for it in items if it.get("id") != draft_id]
         if len(new_items) != len(items):
-            save_in_progress(new_items, sha)
+            save_in_progress(guild_id, new_items, sha)
         return jsonify({"ok": True})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -6835,9 +6961,21 @@ def remove_in_progress():
 #  Flask API — お知らせ（notices）
 # ================================================================
 
-NOTICES_DIR = "notices"
-NOTICES_META_FILE = "notices_meta.json"
 NOTICE_ALLOWED_EXT = (".md", ".txt")
+
+# ★ 複数サーバー対応：以前はnotices/・notices_meta.jsonが全サーバー共通の
+#   単一の置き場だったため、新サーバーのお知らせ一覧に1Iのお知らせが
+#   全部混ざって見えてしまっていた。お知らせはCardMakerのデッキと違い
+#   生のMarkdown/テキストファイル（JSON構造を持たない）なので、ファイル内に
+#   guild_idを埋め込む方式が使えない。かつファイル名は利用者が自由に
+#   付けられる（CardMakerのようなランダムファイル名ではない）ため、
+#   共有ディレクトリのままだと他サーバーとファイル名が衝突するリスクもある。
+#   そのため、ディレクトリ自体をサーバーごとに分ける方式にした。
+def notices_dir(guild_id: int) -> str:
+    return f"notices_{guild_id}"
+
+def notices_meta_file(guild_id: int) -> str:
+    return f"notices_meta_{guild_id}.json"
 
 
 def _is_safe_notice_filename(filename: str) -> bool:
@@ -6849,8 +6987,8 @@ def _is_safe_notice_filename(filename: str) -> bool:
     return filename.lower().endswith(NOTICE_ALLOWED_EXT)
 
 
-def list_notice_files():
-    dir_path = _data_path(NOTICES_DIR)
+def list_notice_files(guild_id: int):
+    dir_path = _data_path(notices_dir(guild_id))
     if not os.path.isdir(dir_path):
         return []
     results = []
@@ -6863,16 +7001,16 @@ def list_notice_files():
     return results
 
 
-def load_notices_meta():
-    data, sha = local_get(NOTICES_META_FILE)
+def load_notices_meta(guild_id: int):
+    data, sha = local_get(notices_meta_file(guild_id))
     return (data or {}), sha
 
 
-def save_notices_meta(meta, sha=None):
+def save_notices_meta(guild_id: int, meta, sha=None):
     if sha is None:
-        _, sha = local_get(NOTICES_META_FILE)
-    local_put(NOTICES_META_FILE, meta, sha)
-    notify_change()  # ★ お知らせもguildをまたいで共有されるため全体に通知
+        _, sha = local_get(notices_meta_file(guild_id))
+    local_put(notices_meta_file(guild_id), meta, sha)
+    notify_change(guild_id)  # ★ 複数サーバー対応：guildごとに分離したので、そのguildだけに通知する
 
 def _notice_meta_entry_lines(filename, entry):
     """notices_meta.json内の1エントリを { ... } のブロックにする。
@@ -6897,9 +7035,9 @@ def _notices_meta_text(meta):
         lines.extend(_notice_meta_entry_lines(filename, entry))
     return "\n".join(lines)
 
-def _notice_meta_entry_diff(filename, old_entry, new_entry):
-    """notices_meta.json内の1エントリの変更を、log_event の detail に
-    渡す {"file","diff","status"} の形にする（無ければNone）。
+def _notice_meta_entry_diff(guild_id, filename, old_entry, new_entry):
+    """notices_meta_{guild_id}.json内の1エントリの変更を、log_event の
+    detail に渡す {"file","diff","status"} の形にする（無ければNone）。
     ★ 追加（2026/08/19）：upload_notice/delete_noticeは、お知らせ本体の
     ファイルだけでなくnotices_meta.json（投稿者・投稿日時）も実際に
     書き換えているのに、これまで運用ログに出ていなかったため対応。"""
@@ -6909,7 +7047,7 @@ def _notice_meta_entry_diff(filename, old_entry, new_entry):
     if not diff:
         return None
     status = "added" if old_entry is None else ("deleted" if new_entry is None else "modified")
-    return {"file": NOTICES_META_FILE, "diff": diff, "status": status}
+    return {"file": notices_meta_file(guild_id), "diff": diff, "status": status}
 
 
 @app.route("/list_notices", methods=["GET"])
@@ -6917,12 +7055,12 @@ def list_notices():
     """お知らせファイルの一覧を返す（中身は含まない、投稿者名つき）"""
     # ★ 追加（2026/08/24）：予定一覧以外の閲覧系APIをサーバー参加済み
     #   ログインユーザー限定にする方針により追加。
-    _guild_id, _student_id, err = require_member_session_get()
+    guild_id, _student_id, err = require_member_session_get()
     if err:
         return err
     try:
-        files = list_notice_files()
-        meta, _ = load_notices_meta()
+        files = list_notice_files(guild_id)
+        meta, _ = load_notices_meta(guild_id)
         notices = []
         for f in files:
             m = meta.get(f["name"], {})
@@ -6944,20 +7082,20 @@ def list_notices():
 @app.route("/get_notice", methods=["GET"])
 def get_notice():
     """お知らせ1件の中身（テキスト本文）と投稿者名を返す"""
-    _guild_id, _student_id, err = require_member_session_get()
+    guild_id, _student_id, err = require_member_session_get()
     if err:
         return err
     filename = request.args.get("filename", "")
     if not _is_safe_notice_filename(filename):
         return jsonify({"ok": False, "error": "invalid filename"})
     try:
-        path = _data_path(f"{NOTICES_DIR}/{filename}")
+        path = _data_path(f"{notices_dir(guild_id)}/{filename}")
         if not os.path.isfile(path):
             return jsonify({"ok": False, "error": "not found"})
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        meta, _ = load_notices_meta()
+        meta, _ = load_notices_meta(guild_id)
         m = meta.get(filename, {})
 
         return jsonify({
@@ -6991,7 +7129,7 @@ def upload_notice():
     if err:
         return err
 
-    path = _data_path(f"{NOTICES_DIR}/{filename}")
+    path = _data_path(f"{notices_dir(guild_id)}/{filename}")
     dirname = os.path.dirname(path)
     if dirname:
         os.makedirs(dirname, exist_ok=True)
@@ -7018,10 +7156,10 @@ def upload_notice():
             "error": f"local_write_failed: {e}"
         })
 
-    # --- 投稿者メタ情報を notices_meta.json に保存 ---
+    # --- 投稿者メタ情報を notices_meta_{guild_id}.json に保存 ---
     meta_change = None
     try:
-        meta, meta_sha = load_notices_meta()
+        meta, meta_sha = load_notices_meta(guild_id)
         old_meta_entry = meta.get(filename)
         meta[filename] = {
             "uploader": uploader,
@@ -7033,8 +7171,8 @@ def upload_notice():
             "uploader_id": _student_id,
             "uploaded_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
         }
-        save_notices_meta(meta, meta_sha)
-        meta_change = _notice_meta_entry_diff(filename, old_meta_entry, meta[filename])
+        save_notices_meta(guild_id, meta, meta_sha)
+        meta_change = _notice_meta_entry_diff(guild_id, filename, old_meta_entry, meta[filename])
     except DataWriteError as e:
         # 本体の保存自体は成功しているので、メタ情報の失敗は警告に留める
         print(f"[WARN] notices_meta の更新に失敗しました: {e}")
@@ -7059,9 +7197,10 @@ def upload_notice():
         except Exception as e:
             print(f"[WARN] upload_notice notify failed: {e}")
 
-    change = file_diff(f"{NOTICES_DIR}/{filename}", old_content, content)
+    change = file_diff(f"{notices_dir(guild_id)}/{filename}", old_content, content)
     detail = [c for c in (change, meta_change) if c]
     log_event(
+        guild_id,
         "notice",
         f"お知らせ「{filename}」を{'更新' if is_update else '追加'}しました。",
         actor=uploader,
@@ -7070,18 +7209,18 @@ def upload_notice():
     return jsonify({"ok": True, "filename": filename, "is_update": is_update, "uploader": uploader})
 
 
-def _notice_owner(filename):
+def _notice_owner(guild_id, filename):
     """お知らせの投稿者 (uploader_id, uploader_nickname) を返す。
     記録が無い（作成者確認機能より前に投稿された古いお知らせ等）場合は
     (None, None)＝作成者不明として従来通り誰でも削除できる扱いにする。"""
-    meta, _ = load_notices_meta()
+    meta, _ = load_notices_meta(guild_id)
     entry = meta.get(filename) or {}
     return entry.get("uploader_id"), entry.get("uploader")
 
-def _delete_notice_file(filename, actor_nickname, approval_note=None):
+def _delete_notice_file(guild_id, filename, actor_nickname, approval_note=None):
     """お知らせファイル削除の実処理（本人による直接削除・削除依頼の承認の
     どちらからも呼ばれる共通処理）。作成者チェックは呼び出し側の責務。"""
-    path = _data_path(f"{NOTICES_DIR}/{filename}")
+    path = _data_path(f"{notices_dir(guild_id)}/{filename}")
     if not os.path.isfile(path):
         return jsonify({"ok": False, "error": "ファイルが見つかりません"})
     # ★ 削除前に内容を読んでおく（運用ログの詳細表示用）。読めなくても削除は続行する。
@@ -7101,28 +7240,28 @@ def _delete_notice_file(filename, actor_nickname, approval_note=None):
     # メタ情報からも削除
     meta_change = None
     try:
-        meta, meta_sha = load_notices_meta()
+        meta, meta_sha = load_notices_meta(guild_id)
         if filename in meta:
             old_meta_entry = meta[filename]
             del meta[filename]
-            save_notices_meta(meta, meta_sha)
-            meta_change = _notice_meta_entry_diff(filename, old_meta_entry, None)
+            save_notices_meta(guild_id, meta, meta_sha)
+            meta_change = _notice_meta_entry_diff(guild_id, filename, old_meta_entry, None)
     except DataWriteError as e:
         print(f"[WARN] notices_meta からの削除に失敗しました: {e}")
 
-    change = file_diff(f"{NOTICES_DIR}/{filename}", deleted_content, None)
+    change = file_diff(f"{notices_dir(guild_id)}/{filename}", deleted_content, None)
     detail = [c for c in (change, meta_change) if c]
     summary = f"お知らせ「{filename}」を削除しました。"
     if approval_note:
         summary += approval_note
-    log_event("notice", summary, actor=actor_nickname, detail=detail if detail else None)
+    log_event(guild_id, "notice", summary, actor=actor_nickname, detail=detail if detail else None)
     return jsonify({"ok": True})
 
 @app.route("/delete_notice", methods=["POST"])
 def delete_notice():
     """お知らせファイルを削除する（メタ情報も合わせて削除）"""
     data = request.json or {}
-    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
     if err:
         return err
     filename = data.get("filename", "")
@@ -7130,7 +7269,7 @@ def delete_notice():
         return jsonify({"ok": False, "error": "invalid filename"})
     # ★ 追加：投稿者本人以外は直接削除できない。それ以外の人が削除したい
     #   場合は /request_delete で本人にDiscord確認を送る。
-    owner_id, owner_nickname = _notice_owner(filename)
+    owner_id, owner_nickname = _notice_owner(guild_id, filename)
     # ★ 2026/08/20 一旦revert：delete_cards側と同じ理由で、discord_links
     #   未紐づけを「孤立」とみなして自動で確認フローをスキップする判定は
     #   セキュリティ上の後退になるため外した（詳細はdelete_cards参照）。
@@ -7140,7 +7279,7 @@ def delete_notice():
             "error": "creator_approval_required",
             "owner_nickname": owner_nickname or "投稿者",
         })
-    return _delete_notice_file(filename, nickname)
+    return _delete_notice_file(guild_id, filename, nickname)
 
 
 # ================================
@@ -7155,7 +7294,7 @@ def delete_notice():
 def set_notice_done():
     """指定したお知らせの「実行済み」状態（true/false）を、全員共有で設定する。"""
     data = request.json or {}
-    _guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
+    guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
     if err:
         return err
     filename = data.get("filename")
@@ -7165,15 +7304,16 @@ def set_notice_done():
     try:
         last_err = None
         for _ in range(4):
-            meta, sha = load_notices_meta()
+            meta, sha = load_notices_meta(guild_id)
             old_meta_text = _notices_meta_text(meta)  # ★ 上書き前に控えておく
             entry = meta.get(filename, {})
             entry["done"] = done
             meta[filename] = entry
             try:
-                save_notices_meta(meta, sha)
-                change = file_diff(NOTICES_META_FILE, old_meta_text, _notices_meta_text(meta))
+                save_notices_meta(guild_id, meta, sha)
+                change = file_diff(notices_meta_file(guild_id), old_meta_text, _notices_meta_text(meta))
                 log_event(
+                    guild_id,
                     "notice",
                     f"お知らせ「{filename}」を{'実行済み' if done else '未実行'}にしました。",
                     actor=nickname,
@@ -7310,9 +7450,9 @@ def _migrate_legacy_quiz_archive_decks():
       判定できるので、次回起動時はほぼ何もせず即座に終わる。
     """
     # ★ 複数サーバー対応：quiz_archiveフラグ導入前のデータは、フォルダ・索引が
-    #   guildごとに分かれる前（＝旧LEGACY_CARDMAKER_GUILD_ID）に作られたものしか
+    #   guildごとに分かれる前（＝旧LEGACY_GUILD_ID）に作られたものしか
     #   存在しないため、対象はそのguildだけでよい。
-    guild_id = LEGACY_CARDMAKER_GUILD_ID
+    guild_id = LEGACY_GUILD_ID
     try:
         folders, _ = load_card_folders(guild_id)
         for f in list_card_files():
@@ -7393,7 +7533,7 @@ def save_folder():
 
         save_card_folders(guild_id, folders, sha)
         change = file_diff(folders_file(guild_id), old_folders_text, _folders_text(folders))
-        log_event("card", f"フォルダ「{name}」を保存しました。", actor=nickname, detail=[change] if change else None)
+        log_event(guild_id, "card", f"フォルダ「{name}」を保存しました。", actor=nickname, detail=[change] if change else None)
         return jsonify({"ok": True, "id": folder_id})
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
@@ -7433,6 +7573,7 @@ def delete_folder():
         deleted_folder_name = (deleted_folder or {}).get("name")
         change = file_diff(folders_file(guild_id), _folders_text(folders), _folders_text(new_folders))
         log_event(
+            guild_id,
             "card",
             f"フォルダ「{deleted_folder_name}」を削除しました。" if deleted_folder_name else "フォルダを削除しました。",
             actor=nickname,
@@ -7963,7 +8104,7 @@ def backup_data_to_github():
         )
         _run_git(["push", "origin", "HEAD:main"], cwd=BACKUP_REPO_DIR, use_auth=True)
         print(f"[backup] {timestamp} のバックアップをpushしました。")
-        log_event(
+        log_event_all_guilds(
             "backup",
             f"データをバックアップしました（{change_summary}）" if change_summary else "データをバックアップしました。",
             detail=_backup_status_files(status.stdout),
@@ -7974,11 +8115,11 @@ def backup_data_to_github():
         safe_cmd = _redact_token(" ".join(e.cmd))
         safe_stderr = _redact_token(e.stderr or "")
         print(f"[backup] 失敗しました（{safe_cmd}）: {safe_stderr}")
-        log_event("backup", f"バックアップに失敗しました: {safe_stderr[:200]}", level="error", detail=f"{safe_cmd}\n{safe_stderr}")
+        log_event_all_guilds("backup", f"バックアップに失敗しました: {safe_stderr[:200]}", level="error", detail=f"{safe_cmd}\n{safe_stderr}")
     except Exception as e:
         safe_msg = _redact_token(str(e))
         print(f"[backup] 失敗しました: {safe_msg}")
-        log_event("backup", f"バックアップに失敗しました: {safe_msg[:200]}", level="error", detail=safe_msg)
+        log_event_all_guilds("backup", f"バックアップに失敗しました: {safe_msg[:200]}", level="error", detail=safe_msg)
 
 async def scheduled_backup_data_to_github():
     """★ backup_data_to_github() はブロッキングI/O（subprocess・ファイルコピー）
@@ -8037,7 +8178,7 @@ def migrate_cardmaker_data_to_guild(guild_id: int):
     設計で、Botを導入した全サーバーで同じ棚（cards_index.json/folders.json/
     list_order.json + words/*.json）を共有していた。ユーザーの要望で
     サーバーごとに分離することになったため、既存データを全部この
-    guild_id（1Iサーバー・LEGACY_CARDMAKER_GUILD_ID）に紐付ける形で
+    guild_id（1Iサーバー・LEGACY_GUILD_ID）に紐付ける形で
     一度だけ移行する。
     ・起動のたびに呼んでも問題ない冪等な処理（移行後は各判定がFalseになり
       ほぼ何もせず即座に終わる。_migrate_legacy_quiz_archive_decks()と同じ考え方）。
@@ -8083,7 +8224,61 @@ def migrate_cardmaker_data_to_guild(guild_id: int):
     if migrated_something:
         print(f"[INFO] CardMakerの既存データをguild_id={guild_id}に移行しました。")
 
-migrate_cardmaker_data_to_guild(LEGACY_CARDMAKER_GUILD_ID)
+def migrate_notices_data_to_guild(guild_id: int):
+    """
+    ★ 複数サーバー対応（追加）：お知らせ（notices/・notices_meta.json）も
+    CardMakerと同じく全サーバー共通の置き場だったため、guildごとに分離した
+    （notices_dir()/notices_meta_file()参照）。お知らせは生のMarkdown/
+    テキストファイルでJSON構造を持たずファイル内にguild_idを埋め込めない
+    ため、CardMakerの「ファイルにフィールドを補う」方式ではなく、
+    ディレクトリ自体をリネームする方式にした。起動のたびに呼んでも
+    問題ない冪等な処理（移行後は判定がFalseになり即座に終わる）。
+    """
+    old_dir = _data_path("notices")
+    new_dir = _data_path(notices_dir(guild_id))
+    if os.path.isdir(old_dir) and not os.path.isdir(new_dir):
+        try:
+            os.rename(old_dir, new_dir)
+            print(f"[INFO] お知らせ移行: notices/ → {notices_dir(guild_id)}/")
+        except OSError as e:
+            print(f"[WARN] お知らせディレクトリの移行に失敗しました: {e}")
+
+    old_meta = "notices_meta.json"
+    new_meta = notices_meta_file(guild_id)
+    if not os.path.isfile(_data_path(new_meta)):
+        data, _ = local_get(old_meta)
+        if data is not None:
+            try:
+                local_put(new_meta, data)
+                os.remove(_data_path(old_meta))
+                print(f"[INFO] お知らせ移行: {old_meta} → {new_meta}")
+            except (DataWriteError, OSError) as e:
+                print(f"[WARN] お知らせメタ情報の移行に失敗しました: {e}")
+
+def migrate_system_log_to_guild(guild_id: int):
+    """
+    ★ 複数サーバー対応（追加）：運用ログ（system_log.json）もCardMaker・
+    お知らせと同じく全サーバー共通の単一ファイルだったため、guildごとに
+    分離した（system_log_file()参照）。起動のたびに呼んでも問題ない
+    冪等な処理。
+    """
+    old_name = "system_log.json"
+    new_name = system_log_file(guild_id)
+    if os.path.isfile(_data_path(new_name)):
+        return  # 移行済み
+    data, _ = local_get(old_name)
+    if data is None:
+        return  # 元々存在しない
+    try:
+        local_put(new_name, data)
+        os.remove(_data_path(old_name))
+        print(f"[INFO] 運用ログ移行: {old_name} → {new_name}")
+    except (DataWriteError, OSError) as e:
+        print(f"[WARN] 運用ログの移行に失敗しました: {e}")
+
+migrate_cardmaker_data_to_guild(LEGACY_GUILD_ID)
+migrate_notices_data_to_guild(LEGACY_GUILD_ID)
+migrate_system_log_to_guild(LEGACY_GUILD_ID)
 
 keep_alive()
 start_quiz_scheduler()
