@@ -6053,6 +6053,14 @@ QUIZ_INTRO_DURATION_SEC = 2     # ★ 追加：各問題の直前に「第N問�
 QUIZ_MAX_QUESTIONS = 30
 QUIZ_MAX_SOURCE_DECKS = 30  # ★ 追加：「デッキから自動作成」で一度に選べるデッキ数の上限（フォルダ選択で一気に増えうるため）
 QUIZ_ANSWER_BASE_POINTS = 10
+
+# ★ 追加：ローカルAI（Ollama）による「デッキから自動作成」誤答の強化（任意機能）。
+#   OLLAMA_HOST未設定の環境（開発機など）では常にスキップされ、従来の類似度アルゴリズム
+#   （_pick_distractors）だけで動作する。詳細は _ai_enhance_quiz_room_choices のコメント参照。
+OLLAMA_HOST = (os.environ.get("OLLAMA_HOST") or "").strip().rstrip("/")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL") or "qwen2.5-coder:7b"
+QUIZ_AI_TIMEOUT_SEC = 45        # Ollamaへの問い合わせ1回あたりのタイムアウト（バックグラウンド実行なので余裕を持たせる）
+QUIZ_AI_SHORTLIST_SIZE = 12    # AIに渡す誤答候補の数（プロンプトを軽くするため、類似度上位のみに絞る）
 QUIZ_FIRST_CORRECT_BONUS = 2
 
 # ★ フロント（Login.js の AVATAR_COLORS / paletteFor）と全く同じ規則で、
@@ -6325,6 +6333,184 @@ def _pick_distractors(correct: str, pool: list, k: int) -> list:
     return random.sample(scored[:pool_size], k)
 
 
+def _distractor_shortlist(correct: str, pool: list, k: int) -> list:
+    """_pick_distractorsと同じ類似度スコアで、上位k件を（ランダム抽選せず）そのまま返す。
+    AIに渡す候補を絞り込むための下ごしらえとして使う（プロンプトを軽くする目的）。"""
+    def _score(a):
+        seq_ratio = difflib.SequenceMatcher(None, correct, a).ratio()
+        longer = max(len(correct), len(a), 1)
+        length_ratio = 1 - abs(len(correct) - len(a)) / longer
+        return seq_ratio * 0.7 + length_ratio * 0.3
+    return sorted(pool, key=_score, reverse=True)[:k]
+
+
+def _ollama_generate_json(prompt: str, timeout=QUIZ_AI_TIMEOUT_SEC):
+    """ローカルAI（Ollama）にプロンプトを送り、応答をJSONとしてパースして返す。
+    OLLAMA_HOST未設定・接続不可・タイムアウト・JSON解析失敗など、何かあれば
+    Noneを返す（呼び出し元は必ず「AIが使えなかった場合」のフォールバックを持つこと）。"""
+    if not OLLAMA_HOST:
+        return None
+    try:
+        resp = requests.post(
+            f"{OLLAMA_HOST}/api/generate",
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json",
+                "options": {"temperature": 0.7, "num_predict": 4096},
+            },
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        return json.loads(resp.json().get("response") or "")
+    except Exception as e:
+        print(f"[WARN] ローカルAI（Ollama）への問い合わせに失敗しました: {e}")
+        return None
+
+
+def _collect_deck_unique_answers(guild_id, deck_filenames):
+    """指定デッキ群から、空でない解答（answer）だけを重複除去して集める
+    （順序は維持）。_ai_enhance_quiz_room_choicesが誤答候補プールを作るために使う。"""
+    answers = []
+    seen = set()
+    for deck_filename in deck_filenames:
+        data, _ = get_card_file_for_guild(deck_filename, guild_id)
+        if not data:
+            continue
+        for c in data.get("cards", []):
+            if not isinstance(c, dict):
+                continue
+            a = str(c.get("answer") or "").strip()
+            if a and a not in seen:
+                seen.add(a)
+                answers.append(a)
+    return answers
+
+
+def _build_quiz_distractor_prompt(items):
+    """_ai_pick_quiz_distractorsが使う、Ollamaへのプロンプト文字列を組み立てる。"""
+    lines = [
+        "あなたはクイズ作成者です。4択クイズの「誤答（ダミーの選択肢）」を、"
+        "きちんと覚えていないと迷うくらい紛らわしいものに選び直してください。",
+        "各問題に question（問題文）・correct（正解）・candidates（誤答の候補。"
+        "実際に他の問題の正解として使われている値のリスト）を与えます。",
+        "まずはcandidatesの中から、correctと意味・カテゴリが近く紛らわしいものを"
+        "3つ選んでください。candidatesの中に紛らわしいものが3つ無い場合に限り、"
+        "correctと同じ分野・形式のもっともらしい誤答を新しく考えて補ってください"
+        "（正解と同じ値、明らかに無関係な内容、長い説明文は避け、correctと同程度の"
+        "短さにすること）。",
+        "出力は次の形式のJSONオブジェクトのみ。説明文やコードブロックは書かないこと。",
+        '{"questions": [{"i": <問題番号>, "distractors": ["誤答1", "誤答2", "誤答3"]}, ...]}',
+        "",
+        "問題一覧（1行1問、JSON形式）:",
+    ]
+    for item in items:
+        lines.append(json.dumps({
+            "i": item["i"],
+            "question": item["question"],
+            "correct": item["correct"],
+            "candidates": item["candidates"],
+        }, ensure_ascii=False))
+    return "\n".join(lines)
+
+
+def _sanitize_ai_distractors(distractors, correct: str):
+    """AIが返した誤答候補を検証する。重複なく・correctと異なり・禁止文字を含まない
+    文字列がちょうど3件そろえばそのリストを、そろわなければNoneを返す
+    （None＝この問題は差し替えず、既存の選択肢のまま使う）。"""
+    if not isinstance(distractors, list):
+        return None
+    max_len = max(60, len(correct) * 3)
+    cleaned = []
+    seen = {correct.strip()}
+    for d in distractors:
+        text = str(d or "").strip()
+        if not text or len(text) > max_len or text in seen or find_bug_chars(text):
+            continue
+        seen.add(text)
+        cleaned.append(text)
+        if len(cleaned) == 3:
+            break
+    return cleaned if len(cleaned) == 3 else None
+
+
+def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
+    """questions（_build_deck_questionsの出力）を受け取り、各問題の誤答3つを
+    ローカルAIでより紛らわしいものに差し替えた新しいリストを返す。
+    1問ごとに差し替えの成否を判定し、失敗した問題だけ元のままにする。
+    AIへの問い合わせ自体が失敗・応答不正だった場合はNoneを返す
+    （呼び出し元は既存の選択肢をそのまま使うこと）。"""
+    answer_pool = _collect_deck_unique_answers(guild_id, deck_filenames)
+    if len(answer_pool) < 2:
+        return None
+
+    items = []
+    for i, q in enumerate(questions):
+        correct = q["choices"][q["correct_index"]]
+        candidates = _distractor_shortlist(
+            correct, [a for a in answer_pool if a != correct], QUIZ_AI_SHORTLIST_SIZE
+        )
+        items.append({"i": i, "question": q["question"], "correct": correct, "candidates": candidates})
+
+    result = _ollama_generate_json(_build_quiz_distractor_prompt(items))
+    if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
+        return None
+    picks_by_i = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
+
+    new_questions = list(questions)
+    changed = False
+    for i, q in enumerate(questions):
+        pick = picks_by_i.get(i)
+        if not pick:
+            continue
+        correct = q["choices"][q["correct_index"]]
+        distractors = _sanitize_ai_distractors(pick.get("distractors"), correct)
+        if distractors is None:
+            continue
+        choices = distractors + [correct]
+        random.shuffle(choices)
+        new_questions[i] = {
+            "question": q["question"],
+            "choices": choices,
+            "correct_index": choices.index(correct),
+        }
+        changed = True
+    return new_questions if changed else None
+
+
+def _ai_enhance_quiz_room_choices(code, guild_id, deck_filenames):
+    """
+    ★ 「デッキから自動作成」のクイズについて、ロビー中（ホストが「開始」する前）に
+      バックグラウンドでローカルAI（Ollama）に問い合わせ、誤答（不正解の選択肢）を
+      文字列の綴りだけでなく意味的にも紛らわしいものへ差し替える。
+      quiz_create自体はこの処理を待たずに即座に応答を返す（Web側のタイムアウトは
+      12秒に対し、CPU動作のローカルAIは数秒〜数十秒かかることがあるため、
+      作成リクエストの応答をブロックしない設計にしてある）。
+      ホストが開始してしまった後（room["state"] != "lobby"）は差し替えを行わない
+      （出題中・発表中のデータを書き換えると、既に配信済みの選択肢と食い違う
+      不整合が起きるため）。呼び出しはこの関数専用のバックグラウンドスレッドから行い、
+      失敗・タイムアウト時は何もしない（既存の類似度ベースの誤答のまま進行する）。
+    """
+    with QUIZ_ROOMS_LOCK:
+        room = QUIZ_ROOMS.get(code)
+        if room is None or room["state"] != "lobby":
+            return
+        questions = room["questions"]
+    try:
+        improved = _ai_pick_quiz_distractors(questions, guild_id, deck_filenames)
+    except Exception as e:
+        print(f"[WARN] クイズ選択肢のAI強化に失敗しました（既存の選択肢のまま続行）: {e}")
+        return
+    if not improved:
+        return
+    with QUIZ_ROOMS_LOCK:
+        room = QUIZ_ROOMS.get(code)
+        if room is None or room["state"] != "lobby":
+            return  # 差し替え中にホストが開始してしまった場合は捨てる（進行中データとの不整合防止）
+        room["questions"] = improved
+
+
 def _build_deck_questions(guild_id, deck_filenames, num_questions):
     """単語カードのデッキ（表面=question／裏面=answer）から、答えをシャッフルした
     4択問題を自動生成する。
@@ -6568,6 +6754,10 @@ def quiz_create():
         }
     # ★ クイズの開始は予定管理などと違い頻繁に行われる一時的な操作なので、
     #   write_log（予定の追加・編集・削除ログ）には残さない。
+    if source == "deck" and OLLAMA_HOST:
+        # ★ ローカルAIによる誤答強化はロビー中に裏で行う（quiz_create自体はブロックしない）。
+        #   OLLAMA_HOST未設定（開発機など）なら従来通りスレッドすら起動しない。
+        Thread(target=_ai_enhance_quiz_room_choices, args=(code, guild_id, deck_filenames), daemon=True).start()
     return jsonify({"ok": True, "code": code})
 
 # ================================
