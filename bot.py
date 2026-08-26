@@ -6359,6 +6359,12 @@ def _ollama_generate_json(prompt: str, timeout=QUIZ_AI_TIMEOUT_SEC):
                 "stream": False,
                 "format": "json",
                 "options": {"temperature": 0.7, "num_predict": 4096},
+                # ★ 追加：既定（5分）だとクイズ/CardMakerの利用間隔が空くたびにモデルが
+                #   アンロードされ、次回問い合わせ時にモデル再ロード（数秒）が生成時間に
+                #   上乗せされてしまう。常駐時間を延ばし、体感の「最初の1問が出るまでの
+                #   時間」を縮める（3bモデルへの切り替えは実測の結果、速度・精度とも
+                #   悪化したため見送った＝小型モデルへの変更は解決策にならない）。
+                "keep_alive": "30m",
             },
             timeout=timeout,
         )
@@ -6400,6 +6406,45 @@ def _build_quiz_distractor_prompt(items):
         "correctと同じ分野・形式のもっともらしい誤答を新しく考えて補ってください"
         "（正解と同じ値、明らかに無関係な内容、長い説明文は避け、correctと同程度の"
         "短さにすること）。",
+        "出力は次の形式のJSONオブジェクトのみ。説明文やコードブロックは書かないこと。",
+        '{"questions": [{"i": <問題番号>, "distractors": ["誤答1", "誤答2", "誤答3"]}, ...]}',
+        "",
+        "問題一覧（1行1問、JSON形式）:",
+    ]
+    for item in items:
+        lines.append(json.dumps({
+            "i": item["i"],
+            "question": item["question"],
+            "correct": item["correct"],
+            "candidates": item["candidates"],
+        }, ensure_ascii=False))
+    return "\n".join(lines)
+
+
+def _build_cardmaker_distractor_prompt(items):
+    """
+    ★ 追加（2026/08/26）：CardMaker「4択にする」専用のプロンプト。
+      _build_quiz_distractor_prompt（みんなでクイズ用）とほぼ同じだが、以下の点だけ
+      あえて分けてある：
+      ・みんなでクイズ側の紛らわしさ（プロンプトの文言）はユーザーの明示的な希望で
+        現状維持と決まっているため、CardMaker側だけをより踏み込んだ文言に変えたい
+        場合にQuiz側へ影響させないため。
+      ・CardMaker側は対象デッキを「答えの異なり10件超」に厳格化した結果、
+        candidatesの件数自体がクイズ側より多い（CARDMAKER_AI_SHORTLIST_SIZE参照）。
+        「その中から探す」ことを明示し、pool不足時は積極的に新しく作ってよいことを
+        より強調する文言にしている（「なるべく」ではなく「本当に迷うレベルまで」）。
+    """
+    lines = [
+        "あなたはクイズ作成者です。4択クイズの「誤答（ダミーの選択肢）」を、"
+        "本当に紛らわしい（きちんと覚えていないと確実に迷う）レベルまで作り込んでください。",
+        "各問題に question（問題文）・correct（正解）・candidates（誤答の候補。"
+        "同じデッキの他のカードの正解として使われている値のリスト）を与えます。",
+        "candidatesは実在するデッキの中身なので、まずはこの中を広く探し、correctと"
+        "意味・カテゴリが近く紛らわしいものを3つ選んでください。candidatesの中に"
+        "本当に紛らわしいと言えるものが3つ無い場合は、無理に妥協せず、correctと"
+        "同じ分野・形式でもっともらしい誤答を新しく考えて補ってください（正解と"
+        "同じ値、明らかに無関係な内容、長い説明文は避け、correctと同程度の"
+        "短さ・文体にすること）。",
         "出力は次の形式のJSONオブジェクトのみ。説明文やコードブロックは書かないこと。",
         '{"questions": [{"i": <問題番号>, "distractors": ["誤答1", "誤答2", "誤答3"]}, ...]}',
         "",
@@ -6771,7 +6816,11 @@ CARDMAKER_AI_MAX_TEXT_LEN = 200  # ★ 追加：question/correct/candidates各�
 #   元々大きい。AIに渡す候補数もQUIZ_AI_SHORTLIST_SIZE（みんなでクイズ用、12件）とは
 #   別に、CardMaker用として少し広めに確保する（Quiz側のAI強化の挙動には影響させない
 #   ため、あえて別定数にしてある）。
-CARDMAKER_AI_SHORTLIST_SIZE = 16
+#   ★ 修正（同日）：JS側の綴り類似度による事前絞り込み（上位16件）だけだと、記述式
+#   （文章）の解答では「綴りは近いが意味は無関係」「綴りは遠いが実は紛らわしい」の
+#   両方が起きやすく、AIに見せる候補が狭すぎるとの指摘を受け40件へ拡大した。
+#   AIが「デッキの中から広く探す」余地を増やす目的。
+CARDMAKER_AI_SHORTLIST_SIZE = 40
 
 @app.route("/cardmaker_ai_distractors", methods=["POST"])
 def cardmaker_ai_distractors():
@@ -6810,8 +6859,10 @@ def cardmaker_ai_distractors():
         candidates = candidates[:CARDMAKER_AI_SHORTLIST_SIZE]
         items.append({"i": it["i"], "question": question, "correct": correct, "candidates": candidates})
 
-    timeout = max(QUIZ_AI_TIMEOUT_SEC, 20 * len(items))
-    result = _ollama_generate_json(_build_quiz_distractor_prompt(items), timeout=timeout)
+    # ★ 候補数がクイズ側より多い（最大40件/問）ぶん、1問あたりの時間見積もりも
+    #   少し余裕を持たせている（25秒/問）。
+    timeout = max(QUIZ_AI_TIMEOUT_SEC, 25 * len(items))
+    result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout)
     if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
         return jsonify({"ok": False, "error": "ai_failed"})
     picks_by_i = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
