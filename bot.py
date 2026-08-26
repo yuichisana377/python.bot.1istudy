@@ -329,10 +329,30 @@ def _local_write_once(filename, content_obj, expected_sha=None):
         return False, current_sha
 
     encoded = json.dumps(content_obj, ensure_ascii=False, indent=2).encode("utf-8")
-    tmp_path = f"{path}.tmp"
-    with open(tmp_path, "wb") as f:
-        f.write(encoded)
-    os.replace(tmp_path, path)
+    # ★ 修正（不具合修正、2026/08/26）：以前は tmp_path が f"{path}.tmp" という
+    #   固定名だったため、同じファイルへほぼ同時に書き込む2つのリクエスト
+    #   （Flaskはthreaded=Trueで複数リクエストを並行処理するため起こりうる）が
+    #   同じ一時ファイルを共有してしまい、片方が書き込み中にもう片方が同じ
+    #   ファイルを開いて中身を上書き（truncate）することで、2つの内容が
+    #   物理的に混ざった壊れたJSON（前半は新しい短い内容、末尾に前の長い
+    #   内容の残骸が付着する、等）ができてしまうことがあった
+    #   （実際にstudy_data_*.jsonでこの壊れ方が発生し、「わかる率」の集計から
+    #   その生徒のデータが丸ごと無視される不具合として発覚）。
+    #   os.replace自体はアトミックだが、その前段の一時ファイルへの書き込みが
+    #   複数リクエスト間で競合していたことが原因。呼び出しごとに一意な
+    #   一時ファイル名にすることで、他のリクエストと絶対に衝突しないようにする。
+    tmp_path = f"{path}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    try:
+        with open(tmp_path, "wb") as f:
+            f.write(encoded)
+        os.replace(tmp_path, path)
+    finally:
+        # ★ os.replaceが成功していれば既に無いはずだが、途中で例外が起きた場合に
+        #   一時ファイルが残り続けないよう後始末する。
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
     return True, _file_sha(encoded)
 
 def local_put(filename, content_obj, sha=None):
