@@ -139,6 +139,13 @@ NO_CACHE_PATHS = {
     "/get_points",
     "/get_completed_tasks",
     "/quiz_archive_leaderboard",
+    # ★ 追加（不具合修正、2026/08/26）：/cardmaker_choice_cache もログイン必須の
+    #   GET APIで、応答内容が時間とともに変わる（usedフラグの反転・バックグラウンド
+    #   生成による中身の更新）ため、追加が漏れていた。上の/list_schedule等と
+    #   同じ理由でキャッシュされると、AI強化済みの選択肢がいつまでも
+    #   反映されなくなる（または誰も使っていない前の応答がキャッシュされたまま
+    #   になる）おそれがある。
+    "/cardmaker_choice_cache",
 }
 
 @app.after_request
@@ -373,6 +380,30 @@ def local_put(filename, content_obj, sha=None):
         return {"content": {"sha": info2}}
 
     raise DataWriteError(f"ローカル保存に失敗しました（再試行後も失敗）: {filename}")
+
+def local_put_cas(filename, content_obj, sha=None):
+    """
+    ★ 追加（不具合修正、2026/08/26）：local_put の「本当の」CAS（Compare-And-Swap）版。
+      ─────────────────────────────────────────────
+      local_put は sha が競合していても「無条件で1回だけ再試行」＝渡された
+      content_obj でそのまま強制上書きしてしまう。update_student_study_data や
+      _update_quiz_leaderboard のように「読み込み→mutate_fn で書き換え→保存、
+      競合したら最新を読み直してもう一度 mutate_fn を適用し直す」という
+      リトライループを書いていても、local_put 自身が競合時に例外を送出せず
+      常に成功したことにしてしまうため、このリトライループは実質的に
+      一度も再試行されずに動いていなかった（＝ほぼ同時に届いた2つの更新の
+      片方が、もう片方の変更を含まない古い内容で静かに上書きしてしまう
+      「lost update」が起きうる状態だった。実際に「わからないマークを
+      押しても消える」不具合の一因として発覚）。
+      この関数は sha が競合した場合、強制上書きせずに DataWriteError を
+      送出する。呼び出し側（read-modify-writeのリトライループ）は、この
+      例外を受けて「最新のsha・内容を読み直してmutate_fnを再適用する」を
+      実際にやり直せる。
+    """
+    ok, info = _local_write_once(filename, content_obj, sha)
+    if ok:
+        return {"content": {"sha": info}}
+    raise DataWriteError(f"sha競合により保存できませんでした（呼び出し元で読み直して再試行してください）: {filename}")
 
 async def async_local_get(filename):
     loop = asyncio.get_event_loop()
@@ -5267,7 +5298,7 @@ def save_cards():
     #   走ってしまうため）。選択式デッキ（choice_mode）・クイズ過去問は対象外
     #   （既に選択肢を持っている／編集不可のため）。
     if not card_payload["choice_mode"] and not is_quiz_archive and not incomplete:
-        Thread(target=_cardmaker_generate_choice_cache, args=(guild_id, filename, cards), daemon=True).start()
+        _cardmaker_start_cache_generation(guild_id, filename, cards)  # ★ 修正：二重生成防止ロックを経由させる
 
     # --- Discord通知（silentがtrueならスキップ） ---
     if guild_id and not silent:
@@ -7071,9 +7102,20 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
         print(f"[WARN] CardMaker「4択にする」のキャッシュ生成に失敗しました（guild={guild_id}, filename={deck_filename}）: {ex}")
 
 
-def _cardmaker_trigger_cache_regen(guild_id, deck_filename):
-    """GET /cardmaker_choice_cache が「used」を初めてTrueにした直後に呼ぶ。
-    同じデッキに対する再生成が既に進行中なら何もしない（二重生成防止）。"""
+def _cardmaker_start_cache_generation(guild_id, deck_filename, cards=None):
+    """
+    ★ 追加（不具合修正、2026/08/26）：four_choice_cacheの生成は、同じデッキに
+      対して「公開保存のたびに」（save_cards）と「誰かが初めて使った後」
+      （GET /cardmaker_choice_cache、旧_cardmaker_trigger_cache_regen）の
+      2箇所から起動されうる。以前はsave_cards側がこの関数を経由せず
+      Threadを直接起動していたため、_CARDMAKER_CACHE_REGEN_INFLIGHTによる
+      二重生成防止が効かず、ほぼ同時に両方のきっかけが重なると同じキャッシュ
+      ファイルへ2つの生成スレッドが同時に書き込み、AI呼び出しが倍になる上、
+      互いの書き込みを取りこぼす（lost update）ことがあった。
+      以後、両方の呼び出し元は必ずこの関数を経由して起動すること。
+      cardsを省略した場合は、実行直前に最新のデッキ内容を読み直す
+      （再生成のケースでは、トリガーされた時点よりも新しい編集内容を拾うため）。
+    """
     with _CARDMAKER_CACHE_REGEN_LOCK:
         if deck_filename in _CARDMAKER_CACHE_REGEN_INFLIGHT:
             return
@@ -7081,9 +7123,13 @@ def _cardmaker_trigger_cache_regen(guild_id, deck_filename):
 
     def _run():
         try:
-            data, _ = get_card_file_for_guild(deck_filename, guild_id)
-            if data is not None and not data.get("choice_mode"):
-                _cardmaker_generate_choice_cache(guild_id, deck_filename, data.get("cards", []))
+            target_cards = cards
+            if target_cards is None:
+                data, _ = get_card_file_for_guild(deck_filename, guild_id)
+                if data is None or data.get("choice_mode"):
+                    return
+                target_cards = data.get("cards", [])
+            _cardmaker_generate_choice_cache(guild_id, deck_filename, target_cards)
         finally:
             with _CARDMAKER_CACHE_REGEN_LOCK:
                 _CARDMAKER_CACHE_REGEN_INFLIGHT.discard(deck_filename)
@@ -7112,17 +7158,30 @@ def cardmaker_choice_cache():
     data, sha = local_get(cache_filename)
     if not isinstance(data, dict) or not isinstance(data.get("cards"), dict):
         return jsonify({"ok": True, "cards": {}})
+    response_cards = data["cards"]
 
     if not data.get("used"):
-        try:
-            data["used"] = True
-            local_put(cache_filename, data, sha)
-        except DataWriteError as e:
-            print(f"[WARN] four_choice_cache の使用済みマークに失敗しました: {e}")
+        # ★ 修正：以前はlocal_put（競合時に無条件で強制上書き）を使っていたため、
+        #   AI強化の進行中の書き込みとこの「使用済みマーク」がほぼ同時に起きると、
+        #   読み直さずに古い内容で上書きしてしまい、その回のAI強化分が失われる
+        #   ことがあった。local_put_casで競合を検知し、最新を読み直してから
+        #   「usedをTrueにする」変更だけを再適用する。
+        for _ in range(4):
+            try:
+                data["used"] = True
+                local_put_cas(cache_filename, data, sha)
+                _cardmaker_start_cache_generation(guild_id, filename)
+                break
+            except DataWriteError:
+                data, sha = local_get(cache_filename)
+                if not isinstance(data, dict) or not isinstance(data.get("cards"), dict):
+                    break  # 生成中に削除された等（稀）。usedマークは諦める
+                if data.get("used"):
+                    break  # 読み直したら既に他のリクエストがマーク済みだった
         else:
-            _cardmaker_trigger_cache_regen(guild_id, filename)
+            print(f"[WARN] four_choice_cache の使用済みマークに失敗しました（リトライ上限）: {cache_filename}")
 
-    return jsonify({"ok": True, "cards": data["cards"]})
+    return jsonify({"ok": True, "cards": response_cards})
 
 # ================================
 #  ★ クイズ過去問（CardMaker内の一人用4択モード）のランキング
@@ -7146,7 +7205,7 @@ def _update_quiz_leaderboard(deck_filename, mutate_fn, max_attempts=4):
         data = data or {}
         mutate_fn(data)
         try:
-            local_put(lb_filename, data, sha)
+            local_put_cas(lb_filename, data, sha)  # ★ 修正：local_putだと競合時に無条件で強制上書きしてしまい再試行にならない
             return
         except DataWriteError as e:
             last_err = e
@@ -7807,8 +7866,12 @@ def upload_notice():
                 old_content = f.read()
         except OSError:
             old_content = None
+    # ★ 修正（不具合修正、2026/08/26）：_local_write_once と全く同じ理由で、
+    #   固定名の一時ファイル（f"{path}.tmp"）だと、同じお知らせへほぼ同時に
+    #   届いた2つの投稿リクエストが一時ファイルを共有し、内容が混ざった
+    #   壊れたファイルになりうる。呼び出しごとに一意な一時ファイル名にする。
+    tmp_path = f"{path}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
     try:
-        tmp_path = f"{path}.tmp"
         with open(tmp_path, "w", encoding="utf-8") as f:
             f.write(content)
         os.replace(tmp_path, path)
@@ -7817,6 +7880,11 @@ def upload_notice():
             "ok": False,
             "error": f"local_write_failed: {e}"
         })
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
 
     # --- 投稿者メタ情報を notices_meta_{guild_id}.json に保存 ---
     meta_change = None
@@ -8098,6 +8166,19 @@ def _is_in_archive_scope(folders, folder_id):
         return True
     return any(f["id"] == folder_id for f in _folder_descendants(folders, QUIZ_ARCHIVE_FOLDER_ID))
 
+def _folder_subtree_has_non_archive_deck(guild_id, folders, folder_id):
+    """★ 追加（不具合修正、2026/08/26）：folder_id自身、またはその子孫フォルダの
+    中に、quiz_archiveでない（＝みんなでクイズの結果から自動保存されたもの
+    ではない）デッキが1つでも含まれるかどうか。save_folderがフォルダを
+    「クイズ過去問」フォルダの中へ移動しようとしたときの事前チェックに使う
+    （save_cards側のデッキ単体の制限を、フォルダごと移動することで
+    すり抜けられてしまう抜け道の対策）。"""
+    scope_ids = {folder_id} | {f["id"] for f in _folder_descendants(folders, folder_id)}
+    index, _ = load_cards_index(guild_id)
+    if index is None:
+        index = rebuild_cards_index(guild_id)
+    return any(entry.get("folder_id") in scope_ids and not entry.get("quiz_archive") for entry in (index or []))
+
 def _migrate_legacy_quiz_archive_decks():
     """★ 追加（2026/08/21）：quiz_archiveフラグが導入される前に保存された
     クイズ過去問デッキへ、起動時に一度だけこのフラグを補って書き込む。
@@ -8185,6 +8266,20 @@ def save_folder():
                 # ★「クイズ過去問」フォルダの中身は、その外へ移動できない
                 if _is_in_archive_scope(folders, folder_id) and not _is_in_archive_scope(folders, parent_id):
                     return jsonify({"ok": False, "error": "クイズ過去問フォルダの外には移動できません"})
+                # ★ 追加（不具合修正、2026/08/26）：逆方向（外→クイズ過去問フォルダの中）の抜け道対策。
+                #   save_cardsは「quiz_archiveでないデッキをクイズ過去問フォルダへは
+                #   入れられない」を強制しているが、それはデッキ単体の保存経路だけ
+                #   だった。通常デッキを含むフォルダを丸ごとクイズ過去問フォルダの
+                #   中へ移動する（save_folderでparent_idを変えるだけ、中の各デッキは
+                #   save_cardsを経由しない）と、この制限を素通りしてしまっていた
+                #   （フォルダの場所だけクイズ過去問配下になり、中身は通常デッキの
+                #   まま＝以後は編集不可になってしまう不整合な状態が生まれる）。
+                if not _is_in_archive_scope(folders, folder_id) and _is_in_archive_scope(folders, parent_id) \
+                        and _folder_subtree_has_non_archive_deck(guild_id, folders, folder_id):
+                    return jsonify({
+                        "ok": False,
+                        "error": "クイズ過去問フォルダには、みんなでクイズの結果から自動保存されたデッキしか入れられません",
+                    })
                 target["parent_id"] = parent_id
             target["name"] = name
         else:
@@ -8391,7 +8486,9 @@ def load_student_study_data(guild_id: int, student_id: str):
     }, sha
 
 def save_student_study_data(guild_id: int, student_id: str, data: dict, sha=None):
-    local_put(_study_data_filename(guild_id, student_id), data, sha)
+    # ★ 修正：唯一の呼び出し元 update_student_study_data がsha競合時の
+    #   再試行ループを前提にしているため、local_put_casで真の競合検知を行う。
+    local_put_cas(_study_data_filename(guild_id, student_id), data, sha)
 
 # ★ 追加：読み込み→一部だけ書き換え→保存、を「保存直前に必ず最新内容を
 #   読み直してから変更を適用する」形でやり直す安全な更新処理。
