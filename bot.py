@@ -6764,6 +6764,62 @@ def quiz_create():
         Thread(target=_ai_enhance_quiz_room_choices, args=(code, guild_id, deck_filenames), daemon=True).start()
     return jsonify({"ok": True, "code": code})
 
+CARDMAKER_AI_MAX_ITEMS = 10  # ★ 追加：/cardmaker_ai_distractors 1回のリクエストで受け付ける問題数の上限
+CARDMAKER_AI_MAX_TEXT_LEN = 200  # ★ 追加：question/correct/candidates各文字列の上限（暴走プロンプト対策）
+
+@app.route("/cardmaker_ai_distractors", methods=["POST"])
+def cardmaker_ai_distractors():
+    """
+    ★ 追加：CardMakerの通常デッキ学習で「自動採点する」＋「4択にする」を有効にしたとき、
+      各カードの誤答をローカルAIでより紛らわしいものに差し替えるための汎用エンドポイント。
+      「みんなでクイズ」のAI強化（_ai_pick_quiz_distractors）と考え方は同じだが、
+      CardMaker側は既にカードデータをクライアントが持っている（デッキ全体を都度サーバーから
+      読み直す必要が無い）ため、ここでは「問題・正解・候補」をクライアントから直接受け取り、
+      Ollamaへの問い合わせと応答の検証だけを行う（ファイルの読み込みは行わない）。
+      ★ クライアント側は学習開始直後、まず綴り類似度ベースの即座に使える4択を自前で
+      表示しておき、その裏でこのAPIを（デッキ全体ではなく数問ずつに分割して）呼び出し、
+      返ってきた分から順に選択肢を差し替えていく設計（AIの応答を待たずに学習を始められる）。
+    """
+    data = request.get_json(silent=True) or {}
+    guild_id, student_id, nickname, err = require_login_json(data)
+    if err:
+        return err
+    if not OLLAMA_HOST:
+        return jsonify({"ok": False, "error": "ai_unavailable"})
+
+    raw_items = data.get("items")
+    if not isinstance(raw_items, list) or not raw_items or len(raw_items) > CARDMAKER_AI_MAX_ITEMS:
+        return jsonify({"ok": False, "error": "invalid_items"})
+
+    items = []
+    for it in raw_items:
+        if not isinstance(it, dict) or not isinstance(it.get("i"), int) or isinstance(it.get("i"), bool):
+            return jsonify({"ok": False, "error": "invalid_items"})
+        question = str(it.get("question") or "").strip()[:CARDMAKER_AI_MAX_TEXT_LEN]
+        correct = str(it.get("correct") or "").strip()[:CARDMAKER_AI_MAX_TEXT_LEN]
+        candidates = it.get("candidates")
+        if not question or not correct or not isinstance(candidates, list):
+            return jsonify({"ok": False, "error": "invalid_items"})
+        candidates = [str(c or "").strip()[:CARDMAKER_AI_MAX_TEXT_LEN] for c in candidates if str(c or "").strip()]
+        candidates = candidates[:QUIZ_AI_SHORTLIST_SIZE]
+        items.append({"i": it["i"], "question": question, "correct": correct, "candidates": candidates})
+
+    timeout = max(QUIZ_AI_TIMEOUT_SEC, 20 * len(items))
+    result = _ollama_generate_json(_build_quiz_distractor_prompt(items), timeout=timeout)
+    if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
+        return jsonify({"ok": False, "error": "ai_failed"})
+    picks_by_i = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
+
+    out = []
+    for it in items:
+        pick = picks_by_i.get(it["i"])
+        if not pick:
+            continue
+        distractors = _sanitize_ai_distractors(pick.get("distractors"), it["correct"])
+        if distractors:
+            out.append({"i": it["i"], "distractors": distractors})
+    return jsonify({"ok": True, "questions": out})
+
 # ================================
 #  ★ クイズ過去問（CardMaker内の一人用4択モード）のランキング
 #  ─────────────────────────────
