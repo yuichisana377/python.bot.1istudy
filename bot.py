@@ -6453,7 +6453,11 @@ def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
         )
         items.append({"i": i, "question": q["question"], "correct": correct, "candidates": candidates})
 
-    result = _ollama_generate_json(_build_quiz_distractor_prompt(items))
+    # ★ 実測（qwen2.5-coder:7b・CPU動作）で3問あたり約35秒かかったため、問題数に応じて
+    #   タイムアウトを伸ばす（固定45秒だと出題数が多いクイズで確実に間に合わない）。
+    #   バックグラウンドスレッドでの実行なのでWeb側の応答をブロックする心配は無い。
+    timeout = max(QUIZ_AI_TIMEOUT_SEC, 20 * len(items))
+    result = _ollama_generate_json(_build_quiz_distractor_prompt(items), timeout=timeout)
     if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
         return None
     picks_by_i = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
