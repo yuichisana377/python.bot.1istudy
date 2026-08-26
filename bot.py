@@ -5241,6 +5241,14 @@ def save_cards():
         # 次回 list_cards アクセス時に再構築されるので実害は小さい。
         print(f"[WARN] cards_index の更新に失敗しました: {e}")
 
+    # ★ 追加（2026/08/26）：CardMaker「4択にする」の選択肢を、デッキを「公開」保存
+    #   したタイミングでバックグラウンドで事前生成しておく（下書き中の自動保存
+    #   ＝incomplete=Trueの間は発火させない。作成中に触るたびAIへ無駄な問い合わせが
+    #   走ってしまうため）。選択式デッキ（choice_mode）・クイズ過去問は対象外
+    #   （既に選択肢を持っている／編集不可のため）。
+    if not card_payload["choice_mode"] and not is_quiz_archive and not incomplete:
+        Thread(target=_cardmaker_generate_choice_cache, args=(guild_id, filename, cards), daemon=True).start()
+
     # --- Discord通知（silentがtrueならスキップ） ---
     if guild_id and not silent:
         try:
@@ -5329,6 +5337,14 @@ def _delete_card_deck_file(guild_id, filename, actor_nickname, approval_note=Non
         os.remove(path)
     except OSError as e:
         return jsonify({"ok": False, "error": f"local_delete_failed: {e}"})
+
+    # ★ 追加：4択キャッシュ（four_choice_cache_<filename>.json）が残っていれば
+    #   一緒に消す（無くても実害は無いが、削除済みデッキ分のファイルが
+    #   溜まり続けるのを防ぐ）。
+    try:
+        os.remove(_data_path(cardmaker_choice_cache_filename(filename)))
+    except OSError:
+        pass
 
     # ★ 索引ファイルからも削除する
     index_change = None
@@ -6876,6 +6892,217 @@ def cardmaker_ai_distractors():
         if distractors:
             out.append({"i": it["i"], "distractors": distractors})
     return jsonify({"ok": True, "questions": out})
+
+# ================================
+#  ★ 追加（2026/08/26）：CardMaker「4択にする」の事前生成キャッシュ
+#  ─────────────────────────────
+#  以前は各生徒が学習を始めるたびに、その場でAIへ問い合わせていた（同じデッキを
+#  何人が学習しても、AIの計算がその都度捨てられて無駄になっていた）。
+#  デッキを「公開」保存したタイミングでバックグラウンドで先に選択肢一式を
+#  作っておき、four_choice_cache_<filename>.json に保存しておくことで、
+#  実際に学習する生徒は（間に合っていれば）AI強化済みの選択肢を即座に使える。
+#  「誰か1人が使ったら、裏でもう一度作り直す」というローテーション式にしており、
+#  複雑なキャッシュ無効化（カード編集のたびに何がどう変わったか判定する等）を
+#  実装せずに済ませている。
+# ================================
+FOUR_CHOICE_POOL_MIN_SIZE = 10  # ★ Cardmaker.js側と同じ基準（答えの異なりが10件を超える＝11件以上）
+_CARDMAKER_CACHE_REGEN_LOCK = Lock()
+_CARDMAKER_CACHE_REGEN_INFLIGHT = set()  # ★ 二重にバックグラウンド再生成が走らないようにする（filename単位）
+
+
+def cardmaker_choice_cache_filename(deck_filename):
+    return f"four_choice_cache_{deck_filename}"
+
+
+def _cardmaker_deck_answer_pool(cards):
+    """cardsのanswerを重複除去して集める（順序維持）。Cardmaker.js側のpoolFor()と同じ考え方。"""
+    seen = set()
+    pool = []
+    for c in cards:
+        if not isinstance(c, dict):
+            continue
+        a = str(c.get("answer") or "").strip()
+        if a and a not in seen:
+            seen.add(a)
+            pool.append(a)
+    return pool
+
+
+_CARDMAKER_DESCRIPTIVE_PUNCT_RE = re.compile(r"[。、．，,.!?！？]")
+
+
+def _is_descriptive_answer_text(s):
+    """Cardmaker.js側 isDescriptiveAnswerText() のPython版。"""
+    if not s:
+        return False
+    if len(s) >= 20:
+        return True
+    if _CARDMAKER_DESCRIPTIVE_PUNCT_RE.search(s):
+        return True
+    if re.search(r"\s", s.strip()):
+        return True
+    return False
+
+
+def _build_cardmaker_fallback_choices(cards):
+    """各カードの即席4択（綴り類似度ベース、_pick_distractors）を組み立てる。
+    戻り値: {card_id: {"distractors": [...], "correct": "..."}}
+    （答えの異なりがFOUR_CHOICE_POOL_MIN_SIZE以下、idが無い、答えが空、のいずれかの
+    カードは含まれない＝そのカードは4択にできない）。"""
+    pool_all = _cardmaker_deck_answer_pool(cards)
+    result = {}
+    for c in cards:
+        if not isinstance(c, dict):
+            continue
+        cid = c.get("id")
+        correct = str(c.get("answer") or "").strip()
+        if not cid or not correct:
+            continue
+        pool = [a for a in pool_all if a != correct]
+        if len(pool) <= FOUR_CHOICE_POOL_MIN_SIZE:
+            continue
+        result[cid] = {"distractors": _pick_distractors(correct, pool, 3), "correct": correct}
+    return result
+
+
+def _cardmaker_cache_write(deck_filename, cards_map):
+    """four_choice_cache_<filename>.json を丸ごと書き込む（used=Falseにリセット）。
+    cards_mapが空ならキャッシュファイル自体を削除する（4択にできるカードが無いデッキ）。"""
+    cache_filename = cardmaker_choice_cache_filename(deck_filename)
+    if not cards_map:
+        try:
+            os.remove(_data_path(cache_filename))
+        except OSError:
+            pass
+        return
+    _, sha = local_get(cache_filename)
+    local_put(cache_filename, {
+        "generated_at": time.time(),
+        "used": False,
+        "cards": {cid: {"distractors": v["distractors"]} for cid, v in cards_map.items()},
+    }, sha)
+
+
+def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
+    """
+    ★ デッキ公開時（save_cards、incomplete=False）、およびキャッシュの
+      ローテーション（GET /cardmaker_choice_cache参照）のたびにバックグラウンド
+      スレッドから呼ばれる。
+      1. まず綴り類似度ベースの即席4択を即座に計算してファイルに書く
+         （学習側はAIを待たずにこの時点でもう使える）。
+      2. OLLAMA_HOST設定時のみ、続けてローカルAIに数問ずつ（記述系優先・最初の
+         1問だけバッチ1、以降3問ずつ）問い合わせ、返ってきたカードから順に
+         ファイルを更新していく（Cardmaker.js側と全く同じ考え方）。
+      失敗・タイムアウトしても例外を握りつぶし、既に書いた即席4択のまま残す
+      （ベストエフォート。呼び出し元はこのスレッドの完了を待たない）。
+    """
+    try:
+        fallback = _build_cardmaker_fallback_choices(cards)
+        _cardmaker_cache_write(deck_filename, fallback)
+        if not fallback or not OLLAMA_HOST:
+            return
+
+        pool_all = _cardmaker_deck_answer_pool(cards)
+        by_id = {c.get("id"): c for c in cards if isinstance(c, dict) and c.get("id")}
+        entries = []
+        for cid, v in fallback.items():
+            card = by_id.get(cid)
+            question = str((card or {}).get("question") or "").strip()
+            candidates = _distractor_shortlist(
+                v["correct"], [a for a in pool_all if a != v["correct"]], CARDMAKER_AI_SHORTLIST_SIZE
+            )
+            entries.append({"id": cid, "question": question, "correct": v["correct"], "candidates": candidates})
+        # ★ 記述系カードを先に（Cardmaker.js側と同じ理由：AI強化の価値が大きいため）
+        entries.sort(key=lambda e: 0 if _is_descriptive_answer_text(e["correct"]) else 1)
+
+        idx, first_batch = 0, True
+        while idx < len(entries):
+            batch_size = 1 if first_batch else 3
+            batch = entries[idx: idx + batch_size]
+            idx += batch_size
+            first_batch = False
+            items = [
+                {"i": i, "question": e["question"], "correct": e["correct"], "candidates": e["candidates"]}
+                for i, e in enumerate(batch)
+            ]
+            timeout = max(QUIZ_AI_TIMEOUT_SEC, 25 * len(items))
+            result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout)
+            if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
+                return  # 失敗したら以降も見込みが薄いので打ち切る（既存の即席4択のまま残る）
+            picks_by_i = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
+
+            cache_filename = cardmaker_choice_cache_filename(deck_filename)
+            current, sha = local_get(cache_filename)
+            if not isinstance(current, dict):
+                return  # 生成中にデッキが削除された等で消えていたら諦める
+            changed = False
+            for i, e in enumerate(batch):
+                pick = picks_by_i.get(i)
+                if not pick:
+                    continue
+                distractors = _sanitize_ai_distractors(pick.get("distractors"), e["correct"])
+                if not distractors:
+                    continue
+                current.setdefault("cards", {})[e["id"]] = {"distractors": distractors}
+                changed = True
+            if changed:
+                local_put(cache_filename, current, sha)
+    except Exception as ex:
+        print(f"[WARN] CardMaker「4択にする」のキャッシュ生成に失敗しました（guild={guild_id}, filename={deck_filename}）: {ex}")
+
+
+def _cardmaker_trigger_cache_regen(guild_id, deck_filename):
+    """GET /cardmaker_choice_cache が「used」を初めてTrueにした直後に呼ぶ。
+    同じデッキに対する再生成が既に進行中なら何もしない（二重生成防止）。"""
+    with _CARDMAKER_CACHE_REGEN_LOCK:
+        if deck_filename in _CARDMAKER_CACHE_REGEN_INFLIGHT:
+            return
+        _CARDMAKER_CACHE_REGEN_INFLIGHT.add(deck_filename)
+
+    def _run():
+        try:
+            data, _ = get_card_file_for_guild(deck_filename, guild_id)
+            if data is not None and not data.get("choice_mode"):
+                _cardmaker_generate_choice_cache(guild_id, deck_filename, data.get("cards", []))
+        finally:
+            with _CARDMAKER_CACHE_REGEN_LOCK:
+                _CARDMAKER_CACHE_REGEN_INFLIGHT.discard(deck_filename)
+
+    Thread(target=_run, daemon=True).start()
+
+
+@app.route("/cardmaker_choice_cache", methods=["GET"])
+def cardmaker_choice_cache():
+    """
+    ★ 追加：CardMakerの学習開始時、事前生成済みの4択（あれば）を取得する。
+      ログイン必須（AIの再生成をトリガーしうるエンドポイントのため、
+      /cardmaker_ai_distractorsと同じ理由）。
+      キャッシュが「まだ誰にも使われていない」状態なら、この呼び出しで
+      使用済みにマークし、次に誰かが使うまでの間に裏で新しい4択を
+      もう一度作り直しておく（ローテーション。詳細は上のセクション冒頭コメント参照）。
+    """
+    guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
+    filename = request.args.get("filename")
+    if not _is_safe_deck_filename(filename):
+        return jsonify({"ok": False, "error": "invalid_filename"})
+
+    cache_filename = cardmaker_choice_cache_filename(filename)
+    data, sha = local_get(cache_filename)
+    if not isinstance(data, dict) or not isinstance(data.get("cards"), dict):
+        return jsonify({"ok": True, "cards": {}})
+
+    if not data.get("used"):
+        try:
+            data["used"] = True
+            local_put(cache_filename, data, sha)
+        except DataWriteError as e:
+            print(f"[WARN] four_choice_cache の使用済みマークに失敗しました: {e}")
+        else:
+            _cardmaker_trigger_cache_regen(guild_id, filename)
+
+    return jsonify({"ok": True, "cards": data["cards"]})
 
 # ================================
 #  ★ クイズ過去問（CardMaker内の一人用4択モード）のランキング
