@@ -6766,6 +6766,12 @@ def quiz_create():
 
 CARDMAKER_AI_MAX_ITEMS = 10  # ★ 追加：/cardmaker_ai_distractors 1回のリクエストで受け付ける問題数の上限
 CARDMAKER_AI_MAX_TEXT_LEN = 200  # ★ 追加：question/correct/candidates各文字列の上限（暴走プロンプト対策）
+# ★ 追加（2026/08/26）：CardMaker側は「4択にする」の対象デッキを答えの異なり10問超に
+#   厳格化した（Cardmaker.js側のsetupFourChoiceIfNeeded）ため、候補プール自体が
+#   元々大きい。AIに渡す候補数もQUIZ_AI_SHORTLIST_SIZE（みんなでクイズ用、12件）とは
+#   別に、CardMaker用として少し広めに確保する（Quiz側のAI強化の挙動には影響させない
+#   ため、あえて別定数にしてある）。
+CARDMAKER_AI_SHORTLIST_SIZE = 16
 
 @app.route("/cardmaker_ai_distractors", methods=["POST"])
 def cardmaker_ai_distractors():
@@ -6801,7 +6807,7 @@ def cardmaker_ai_distractors():
         if not question or not correct or not isinstance(candidates, list):
             return jsonify({"ok": False, "error": "invalid_items"})
         candidates = [str(c or "").strip()[:CARDMAKER_AI_MAX_TEXT_LEN] for c in candidates if str(c or "").strip()]
-        candidates = candidates[:QUIZ_AI_SHORTLIST_SIZE]
+        candidates = candidates[:CARDMAKER_AI_SHORTLIST_SIZE]
         items.append({"i": it["i"], "question": question, "correct": correct, "candidates": candidates})
 
     timeout = max(QUIZ_AI_TIMEOUT_SEC, 20 * len(items))
