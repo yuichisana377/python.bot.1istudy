@@ -5407,6 +5407,10 @@ def _delete_card_deck_file(guild_id, filename, actor_nickname, approval_note=Non
     # ★ 並び順（list_order.json）からも、このデッキのキーを取り除いておく
     cleanup_list_order(guild_id, remove_keys={f"deck:{filename}"})
 
+    # ★ 追加：全生徒の学習データ（わからない／学習済み／進捗／完了）からも
+    #   このデッキの記録を取り除く（「わかる率」に亡霊データが残るのを防ぐ）
+    purge_deck_from_all_study_data(guild_id, filename)
+
     change = deck_file_diff(guild_id, f"{CARDS_DIR}/{filename}", deleted_data, None)
     detail = [c for c in (change, index_change) if c]
     summary = f"カードデッキ「{deleted_name}」を削除しました。" if deleted_name else "カードデッキを削除しました。"
@@ -8516,6 +8520,59 @@ def update_student_study_data(guild_id: int, student_id: str, mutate_fn, max_att
             last_err = e
             continue  # 最新のsha・内容を読み直してもう一度やり直す
     raise last_err or DataWriteError("保存に失敗しました（リトライ上限）")
+
+# ★ 追加（不具合修正）：デッキ削除（非公開に戻す場合を含む）時に、全生徒の
+#   学習データ（わからない／学習済み／続きから進捗／完了記録）から、その
+#   デッキ分の記録を取り除く。
+#   ─────────────────────────────────────────────
+#   以前はデッキを削除・非公開化しても各生徒の study_data ファイルに
+#   記録が残り続けていたため、「わかる率」（/deck_understanding）の
+#   分母（studied）にもう存在しないデッキ・カードの記録が亡霊として
+#   混ざり続けてしまっていた（同じfilenameで別内容のデッキが再公開
+#   されると、無関係な過去の記録が誤って引き継がれてしまう恐れもある）。
+def _purge_deck_from_study_data_file(study_filename: str, deck_filename: str, max_attempts: int = 4):
+    """1人分の学習データファイルから、指定デッキの記録を取り除く。
+    記録が無ければ何もしない（sha競合の再試行対象にもならない）。"""
+    for _ in range(max_attempts):
+        data, sha = local_get(study_filename)
+        if not data:
+            return
+        changed = False
+        for key in ("unsure", "seen"):
+            bucket = data.get(key)
+            if isinstance(bucket, dict) and deck_filename in bucket:
+                bucket.pop(deck_filename, None)
+                changed = True
+        item_key = f"deck:{deck_filename}"
+        for key in ("progress", "completed"):
+            bucket = data.get(key)
+            if isinstance(bucket, dict) and item_key in bucket:
+                bucket.pop(item_key, None)
+                changed = True
+        if not changed:
+            return
+        try:
+            local_put_cas(study_filename, data, sha)
+            return
+        except DataWriteError:
+            continue  # 誰かと競合した→最新を読み直してもう一度やり直す
+
+def purge_deck_from_all_study_data(guild_id: int, deck_filename: str):
+    """対象ギルドの全生徒分の学習データファイルを走査し、指定デッキの記録を
+    取り除く。ベストエフォート（1人分の書き込みが失敗しても他の生徒の分は
+    続行し、デッキ削除自体は呼び出し側で既に完了している前提）。"""
+    prefix = f"study_data_{guild_id}_"
+    try:
+        names = os.listdir(DATA_DIR)
+    except OSError:
+        return
+    for name in names:
+        if not (name.startswith(prefix) and name.endswith(".json")):
+            continue
+        try:
+            _purge_deck_from_study_data_file(name, deck_filename)
+        except Exception as e:
+            print(f"[WARN] {name} からのデッキ削除に伴う学習データの除去に失敗しました: {e}")
 
 @app.route("/get_study_data", methods=["GET"])
 def get_study_data():
