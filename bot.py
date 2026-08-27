@@ -6823,6 +6823,11 @@ def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
             "question": q["question"],
             "choices": choices,
             "correct_index": choices.index(correct),
+            # ★ 追加：誤答をAIで差し替えても、元デッキ・カードの参照は引き継ぐ
+            #   （引き継がないと、AI強化が効いた問題だけquiz_answer()の「わからない」
+            #   裏付けができなくなってしまう）。
+            "source_deck_filename": q.get("source_deck_filename"),
+            "source_card_id": q.get("source_card_id"),
         }
         changed = True
     return new_questions if changed else None
@@ -6885,10 +6890,17 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
         data, _ = get_card_file_for_guild(deck_filename, guild_id)
         if data is None:
             return None, "deck_not_found"
-        cards.extend(
-            c for c in data.get("cards", [])
-            if isinstance(c, dict) and str(c.get("question") or "").strip() and str(c.get("answer") or "").strip()
-        )
+        for c in data.get("cards", []):
+            if not (isinstance(c, dict) and str(c.get("question") or "").strip() and str(c.get("answer") or "").strip()):
+                continue
+            # ★ 追加：どのデッキ・どのカード由来かを覚えておく（クライアントには一切送らない、
+            #   quiz_answer()が不正解時に元デッキへ「わからない」を裏で付けるためだけに使う）。
+            #   idの無い古いカードは対象外にする（CardMaker側のcardKey()のハッシュ
+            #   フォールバックをPython側で厳密に再現するのは割に合わないため）。
+            c = dict(c)
+            c["_src_deck_filename"] = deck_filename
+            c["_src_card_id"] = c.get("id")
+            cards.append(c)
     unique_answers = {c["answer"].strip() for c in cards}
     # ★ 4択（正解1つ＋不正解3つ）を作るには、答えの異なり（ユニークな値）が
     #   最低4つ必要。html側の注意書き（「答えの種類が4つ以上あるデッキが必要」）と対応。
@@ -6917,6 +6929,10 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
             "question": card["question"].strip(),
             "choices": choices,
             "correct_index": choices.index(correct),
+            # ★ 追加：quiz_answer()が不正解時に元デッキへ裏で「わからない」を付けるための
+            #   参照（クライアントには送らない。question_payload等には含めていない）。
+            "source_deck_filename": card.get("_src_deck_filename"),
+            "source_card_id": card.get("_src_card_id"),
         })
     return questions, None
 
@@ -7741,10 +7757,35 @@ def quiz_answer():
         # ★ この回答で全員が回答し終わった場合、次のポーリングを待たずに
         #   その場で正解発表(reveal)へ進める（体感の速さのため）。
         _quiz_autoadvance_locked(room, now)
+        # ★ 追加：「デッキから自動作成」の問題（source_deck_filename/source_card_idが
+        #   ある問題）を不正解だった場合、元のCardMakerデッキへ裏で「わからない」を
+        #   付けておく（表面上はQuiz.js側に一切表示しない、内部の記録だけ）。
+        #   ロック内ではファイルI/Oをしない（他プレイヤーを待たせないため）ので、
+        #   ここでは対象だけ控えておき、実際の書き込みはロックを抜けてから行う。
+        mark_unsure_target = None
+        if not correct and q.get("source_deck_filename") and q.get("source_card_id"):
+            mark_unsure_target = (q["source_deck_filename"], q["source_card_id"])
+    if mark_unsure_target:
+        _silently_mark_unsure(guild_id, student_id, *mark_unsure_target)
     # ★ 遅延低減：回答数の増加・reveal切り替わりを、他の端末のポーリング待ちなしで
     #   即座に知らせる（answer自体は毎秒送られるものではないので通知頻度も問題ない）。
     notify_change(guild_id)
     return jsonify({"ok": True})
+
+def _silently_mark_unsure(guild_id, student_id, deck_filename, card_id):
+    """★ 追加：みんなでクイズ（デッキから自動作成）で不正解だった問題を、元のCardMaker
+    デッキの「わからない」マークとして裏で付ける（Quiz.js側の画面には一切表示しない）。
+    deck_filename/card_idは、CardMaker側のcardKey()（id優先）・studyDataDeckKey()
+    （公開デッキはfilenameそのもの）と同じキー形式になるよう揃えてある。
+    ベストエフォート：失敗してもクイズの進行自体は止めない。"""
+    try:
+        def _mutate(my_data):
+            arr = my_data["unsure"].get(deck_filename, [])
+            if card_id not in arr:
+                my_data["unsure"][deck_filename] = arr + [card_id]
+        update_student_study_data(guild_id, student_id, _mutate)
+    except Exception as e:
+        print(f"[WARN] みんなでクイズの不正解を「わからない」へ反映できませんでした（進行は継続）: {e}")
 
 @app.route("/quiz_end", methods=["POST"])
 def quiz_end():
