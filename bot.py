@@ -6656,10 +6656,13 @@ def _distractor_shortlist(correct: str, pool: list, k: int) -> list:
     return sorted(pool, key=_score, reverse=True)[:k]
 
 
-def _ollama_generate_json(prompt: str, timeout=QUIZ_AI_TIMEOUT_SEC):
+def _ollama_generate_json(prompt: str, timeout=QUIZ_AI_TIMEOUT_SEC, temperature=0.7):
     """ローカルAI（Ollama）にプロンプトを送り、応答をJSONとしてパースして返す。
     OLLAMA_HOST未設定・接続不可・タイムアウト・JSON解析失敗など、何かあれば
-    Noneを返す（呼び出し元は必ず「AIが使えなかった場合」のフォールバックを持つこと）。"""
+    Noneを返す（呼び出し元は必ず「AIが使えなかった場合」のフォールバックを持つこと）。
+    ★ 追加：temperatureは省略時0.7（みんなでクイズ側は現状維持のためこのまま）。
+    CardMaker「4択にする」側は「明らかな間違いが多い」との指摘を受け、もう少し
+    低い値（慎重・一貫性重視）で呼び出す。"""
     if not OLLAMA_HOST:
         return None
     try:
@@ -6670,7 +6673,7 @@ def _ollama_generate_json(prompt: str, timeout=QUIZ_AI_TIMEOUT_SEC):
                 "prompt": prompt,
                 "stream": False,
                 "format": "json",
-                "options": {"temperature": 0.7, "num_predict": 4096},
+                "options": {"temperature": temperature, "num_predict": 4096},
                 # ★ 追加：既定（5分）だとクイズ/CardMakerの利用間隔が空くたびにモデルが
                 #   アンロードされ、次回問い合わせ時にモデル再ロード（数秒）が生成時間に
                 #   上乗せされてしまう。常駐時間を延ばし、体感の「最初の1問が出るまでの
@@ -6751,12 +6754,21 @@ def _build_cardmaker_distractor_prompt(items):
         "本当に紛らわしい（きちんと覚えていないと確実に迷う）レベルまで作り込んでください。",
         "各問題に question（問題文）・correct（正解）・candidates（誤答の候補。"
         "同じデッキの他のカードの正解として使われている値のリスト）を与えます。",
-        "candidatesは実在するデッキの中身なので、まずはこの中を広く探し、correctと"
-        "意味・カテゴリが近く紛らわしいものを3つ選んでください。candidatesの中に"
-        "本当に紛らわしいと言えるものが3つ無い場合は、無理に妥協せず、correctと"
-        "同じ分野・形式でもっともらしい誤答を新しく考えて補ってください（正解と"
-        "同じ値、明らかに無関係な内容、長い説明文は避け、correctと同程度の"
-        "短さ・文体にすること）。",
+        "厳守事項：",
+        "1. candidatesは実在するデッキの中身なので、必ずこの中を一つ一つ検討し、"
+        "correctと意味・カテゴリ・粒度が近く紛らわしいものを優先的に3つ選ぶこと。"
+        "『とりあえず候補から3つ』ではなく『本当に間違えそうなものだけ』を選ぶこと。",
+        "2. candidatesの中に本当に紛らわしいと言えるものが3つ無い場合に限り、"
+        "correctと同じ分野・同じ粒度・同じ形式（数値なら数値、固有名詞なら固有名詞、"
+        "年号なら年号）のもっともらしい誤答を新しく考えて補ってよい。ただしこれは"
+        "最後の手段であり、candidatesに使えるものがあるなら必ずそちらを優先すること。",
+        "3. 悪い例（絶対に避けること）：correctと全く違う分野・話題・文脈の値を選ぶ／"
+        "作る（例：correctが化学用語なのに歴史上の人物名を選ぶ、correctが日付なのに"
+        "地名を選ぶ、など）。学習者が一目で『これは違う』と分かってしまう選択肢は失格。",
+        "4. 良い例：correctと同じ単元・同じテーマの中で、意味や数値が近い・"
+        "混同しやすいものを選ぶ（例：似た化学用語同士、近い年号同士、似た人物同士）。",
+        "5. 正解と同じ値、明らかに無関係な内容、長い説明文は避け、correctと"
+        "同程度の短さ・文体にすること。",
         "出力は次の形式のJSONオブジェクトのみ。説明文やコードブロックは書かないこと。",
         '{"questions": [{"i": <問題番号>, "distractors": ["誤答1", "誤答2", "誤答3"]}, ...]}',
         "",
@@ -7210,6 +7222,9 @@ def quiz_create():
 
 CARDMAKER_AI_MAX_ITEMS = 10  # ★ 追加：/cardmaker_ai_distractors 1回のリクエストで受け付ける問題数の上限
 CARDMAKER_AI_MAX_TEXT_LEN = 200  # ★ 追加：question/correct/candidates各文字列の上限（暴走プロンプト対策）
+# ★ 追加：「明らかな間違いが多い」との指摘を受け、みんなでクイズ側（0.7、現状維持）より
+#   低いtemperatureにして、より慎重・一貫性重視の（突飛な誤答を作りにくい）出力にする。
+CARDMAKER_AI_TEMPERATURE = 0.35
 # ★ 追加（2026/08/26）：CardMaker側は「4択にする」の対象デッキを答えの異なり10問超に
 #   厳格化した（Cardmaker.js側のsetupFourChoiceIfNeeded）ため、候補プール自体が
 #   元々大きい。AIに渡す候補数もQUIZ_AI_SHORTLIST_SIZE（みんなでクイズ用、12件）とは
@@ -7261,7 +7276,7 @@ def cardmaker_ai_distractors():
     # ★ 候補数がクイズ側より多い（最大40件/問）ぶん、1問あたりの時間見積もりも
     #   少し余裕を持たせている（25秒/問）。
     timeout = max(QUIZ_AI_TIMEOUT_SEC, 25 * len(items))
-    result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout)
+    result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout, temperature=CARDMAKER_AI_TEMPERATURE)
     if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
         return jsonify({"ok": False, "error": "ai_failed"})
     picks_by_i = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
@@ -7409,7 +7424,7 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
                 for i, e in enumerate(batch)
             ]
             timeout = max(QUIZ_AI_TIMEOUT_SEC, 25 * len(items))
-            result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout)
+            result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout, temperature=CARDMAKER_AI_TEMPERATURE)
             if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
                 return  # 失敗したら以降も見込みが薄いので打ち切る（既存の即席4択のまま残る）
             picks_by_i = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
