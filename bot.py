@@ -6233,20 +6233,36 @@ def respond_deck_share_request():
 #  ・code（5桁の招待コード）でルームを引く。
 #  ・state は "lobby"（開始待ち）→ "countdown"（開始直後の5秒カウントダウン、
 #    最初の問題の前だけ）→ "intro"（「第N問」を大きく見せる区間、毎問の前）
-#    → "question"（出題中）→ "reveal"（正解発表）→ （次の問題があれば
-#    "intro" に戻る／無ければ "ended"）と遷移する。
+#    → "question"（出題中）→ "reveal"（正解発表）→ "ranking"（スコア順の
+#    途中経過。次の問題がある場合のみ挟む。前回の"ranking"からの順位変動を
+#    Kahoot風にアニメーションさせる演出はフロント側で行う）→ （次の問題が
+#    あれば"intro"に戻る／最終問題の発表後は"ranking"を挟まず直接"ended"）
+#    と遷移する。
 #    ホストの操作待ちにはせず、すべて自動で進行する：
 #      "countdown" → "intro" … QUIZ_COUNTDOWN_DURATION_SEC秒経ったら。
 #      "intro"     → "question" … QUIZ_INTRO_DURATION_SEC秒経ったら。
-#      "question"  → "reveal" … 全員が回答し終わった、または制限時間
-#                    （QUIZ_TIME_LIMIT_SEC）が経過したら自動的に切り替わる。
-#      "reveal"    → 次の問題("intro") / "ended" … 発表から
-#                    QUIZ_REVEAL_DURATION_SEC秒経ったら自動的に進む。
+#      "question"  → "reveal" … 全員（途中参加でまだ見学中の人を除く）が
+#                    回答し終わった、または制限時間（QUIZ_TIME_LIMIT_SEC）
+#                    が経過したら自動的に切り替わる。
+#      "reveal"    → "ranking" / "ended" … 発表からQUIZ_REVEAL_DURATION_SEC秒
+#                    経ったら、次の問題があれば"ranking"へ、最終問題なら
+#                    "ranking"を挟まず直接"ended"へ自動的に進む。
+#      "ranking"   → 次の問題("intro") … QUIZ_RANKING_DURATION_SEC秒経ったら。
 #    この判定は各APIリクエストのたびに _quiz_autoadvance_locked() で
 #    その場評価する（study_timers の自動休憩判定と同じ「アクセスの
 #    たびに評価する」方式。専用のバックグラウンドジョブは持たない）。
 #    フロントは1秒ごとにポーリングしているので、実際の進行から
 #    最大でも1秒程度の遅れで反映される。
+#  ・途中参加（allow_late_join）でロビー・カウントダウン・イントロ以外の
+#    状態（question/reveal/ranking）で参加した人は、参加した時点の問題には
+#    混ざらず、次の問題から（active_from_q）アクティブになる。それまでは
+#    出題中でも「見学中」（quiz_stateのspectating）として扱われ、全員回答済み
+#    判定（total/answered）にも回答受付にも含まれない。
+#  ・得点が同点の場合の順位（"ranking"画面・最終結果の並び順）は、それまでに
+#    回答にかかった時間の合計（total_answer_time。押すのが早いほど小さい値）
+#    が短い方を上位とする。一方、正解発表(reveal)中のミニ順位表だけは例外で、
+#    スコア順ではなく「その問題に回答したのが早い順（正誤にかかわらず）」で
+#    並べる（Kahoot風の演出。全体順位は"ranking"画面・最終結果で見せる）。
 #  ・ホスト（作成者）も1人のプレイヤーとして最初から参加者に含まれ、
 #    他の参加者と同じように回答してスコアを競える。そのため、正解番号は
 #    ホストにも「発表(reveal)されるまでは」一切渡さない（渡すとホストだけ
@@ -6265,6 +6281,7 @@ QUIZ_TIME_LIMIT_SEC = 20        # 1問あたりの制限時間（固定）
 QUIZ_REVEAL_DURATION_SEC = 5    # 正解発表から次の問題に自動で進むまでの待ち時間
 QUIZ_COUNTDOWN_DURATION_SEC = 5 # ★ 追加：スタート直後の「5,4,3,2,1」カウントダウン（最初の問題の前だけ）
 QUIZ_INTRO_DURATION_SEC = 2     # ★ 追加：各問題の直前に「第N問」を大きく表示しておく時間
+QUIZ_RANKING_DURATION_SEC = 4   # ★ 追加：正解発表後、次の問題までの間に見せる途中経過（順位変動アニメーション）の表示時間
 QUIZ_MAX_QUESTIONS = 30
 QUIZ_MAX_SOURCE_DECKS = 30  # ★ 追加：「デッキから自動作成」で一度に選べるデッキ数の上限（フォルダ選択で一気に増えうるため）
 QUIZ_ANSWER_BASE_POINTS = 10
@@ -6323,9 +6340,11 @@ def _quiz_autoadvance_locked(room, now):
     stateを自動的に1段階（必要なら複数段階）進める。
       ・"countdown" → QUIZ_COUNTDOWN_DURATION_SEC秒経ったら → "intro"
       ・"intro"     → QUIZ_INTRO_DURATION_SEC秒経ったら → "question"
-      ・"question"  → 全員が回答し終わった、または制限時間が過ぎたら → "reveal"
+      ・"question"  → 全員（見学中の途中参加者を除く）が回答し終わった、
+                      または制限時間が過ぎたら → "reveal"
       ・"reveal"    → 発表からQUIZ_REVEAL_DURATION_SEC秒経ったら
-                      → 次の問題("intro")（無ければ "ended"）
+                      → 次の問題があれば"ranking"（無ければ直接"ended"）
+      ・"ranking"   → QUIZ_RANKING_DURATION_SEC秒経ったら → 次の問題("intro")
     """
     while True:
         if room["state"] == "countdown":
@@ -6342,8 +6361,11 @@ def _quiz_autoadvance_locked(room, now):
             room["question_started_at"] = now
             room["intro_started_at"] = None
         elif room["state"] == "question":
-            total = len(room["players"])
-            answered = sum(1 for p in room["players"].values() if p["cur_answer"] is not None)
+            # ★ 途中参加でまだ「見学中」（active_from_q未到達）の人は、全員回答済み
+            #   判定の分母・分子どちらからも除外する（回答できないため待たせ続けてしまう）。
+            active_players = [p for p in room["players"].values() if p.get("active_from_q", 0) <= room["current_q"]]
+            total = len(active_players)
+            answered = sum(1 for p in active_players if p["cur_answer"] is not None)
             time_up = (now - room["question_started_at"]) >= room["time_limit_sec"]
             all_answered = total > 0 and answered >= total
             if not (time_up or all_answered):
@@ -6353,22 +6375,32 @@ def _quiz_autoadvance_locked(room, now):
         elif room["state"] == "reveal":
             if now - room["reveal_started_at"] < QUIZ_REVEAL_DURATION_SEC:
                 return
-            if room["current_q"] + 1 >= len(room["questions"]):
-                room["state"] = "ended"
-                room["ended_at"] = now
-                _archive_room_if_needed(room)
-                return
-            room["current_q"] += 1
-            # ★ 変更：次の問題にすぐ切り替えず、まず"intro"（「第N問」表示）を挟む。
-            room["state"] = "intro"
-            room["intro_started_at"] = now
-            room["question_started_at"] = None
+            is_last_question = room["current_q"] + 1 >= len(room["questions"])
             room["reveal_started_at"] = None
             room["first_correct_id"] = None
             room["first_correct_nickname"] = None
             for p in room["players"].values():
                 p["cur_answer"] = None
                 p["cur_correct"] = None
+                p["cur_answered_at"] = None
+            if is_last_question:
+                room["state"] = "ended"
+                room["ended_at"] = now
+                _archive_room_if_needed(room)
+                return
+            # ★ 追加：最終問題でなければ、次の問題に進む前に途中経過
+            #   （スコア順の"ranking"画面。フロントで順位変動をアニメーションさせる）を挟む。
+            room["state"] = "ranking"
+            room["ranking_started_at"] = now
+        elif room["state"] == "ranking":
+            if now - room["ranking_started_at"] < QUIZ_RANKING_DURATION_SEC:
+                return
+            room["ranking_started_at"] = None
+            room["current_q"] += 1
+            # ★ 次の問題にすぐ切り替えず、まず"intro"（「第N問」表示）を挟む。
+            room["state"] = "intro"
+            room["intro_started_at"] = now
+            room["question_started_at"] = None
             # ★ 次の問題もすぐ制限時間切れ…という極端なケースは無いはずだが、
             #   万一に備えてループで再評価する（whileで継続）。
         else:
@@ -6446,25 +6478,47 @@ def _quiz_get_room_or_error(code, guild_id):
         return None, jsonify({"ok": False, "error": "room_not_found"})
     return room, None
 
-def _quiz_room_players_json(room, include_correct=False):
-    players = sorted(room["players"].values(), key=lambda p: -p["score"])
-    result = []
-    for p in players:
-        entry = {
+def _quiz_room_players_json(room):
+    """スコア順（全体順位）の一覧。同点の場合は、それまでの回答時間の合計
+    （total_answer_time）が短い方＝素早く押せていた方を上位にする。
+    ロビー・"ranking"（途中経過）画面・最終結果("ended")で使う共通の並び順。"""
+    players = sorted(room["players"].values(), key=lambda p: (-p["score"], p.get("total_answer_time", 0.0)))
+    return [
+        {
             "id": p["id"],
             "nickname": p["nickname"],
             "color": p["color"],
             "text_color": p["text_color"],
             "score": p["score"],
         }
-        if include_correct:
-            # ★ 正解発表(reveal)中だけ、他の参加者の今回の問題への正誤も見せる。
-            #   出題中(question)にこれを渡すと、まだ発表前の正解がバレてしまうため、
-            #   include_correct=True は reveal のときにしか呼ばない。
-            answered = p["cur_answer"] is not None
-            entry["answered"] = answered
-            entry["correct"] = bool(p["cur_correct"]) if answered else None
-        result.append(entry)
+        for p in players
+    ]
+
+def _quiz_room_players_json_press_order(room):
+    """正解発表(reveal)中のミニ順位表専用：全体スコア順ではなく、
+    「今回の問題に回答したのが早い順（正誤にかかわらず）」で並べる
+    （Kahoot風の演出。全体順位は"ranking"画面・最終結果の方で見せる）。
+    時間切れで未回答の人は末尾にまとめ、その中はスコア順で安定させる。"""
+    def sort_key(p):
+        answered_at = p.get("cur_answered_at")
+        if answered_at is not None:
+            return (0, answered_at)
+        return (1, -p["score"])
+    players = sorted(room["players"].values(), key=sort_key)
+    result = []
+    for p in players:
+        # ★ 出題中(question)にこれを渡すと、まだ発表前の正誤がバレてしまうため、
+        #   この関数自体をrevealのときにしか呼ばない設計にしてある。
+        answered = p["cur_answer"] is not None
+        result.append({
+            "id": p["id"],
+            "nickname": p["nickname"],
+            "color": p["color"],
+            "text_color": p["text_color"],
+            "score": p["score"],
+            "answered": answered,
+            "correct": bool(p["cur_correct"]) if answered else None,
+        })
     return result
 
 def _quiz_room_snapshot(room, student_id):
@@ -6491,6 +6545,16 @@ def _quiz_room_snapshot(room, student_id):
             "intro_started_at": room["intro_started_at"],
             "intro_duration_sec": QUIZ_INTRO_DURATION_SEC,
         })
+    elif room["state"] == "ranking":
+        # ★ 追加：正解発表の後、次の問題に進む前に見せる「途中経過」。
+        #   playersは常にスコア順（tie-breakは回答時間の合計）で入っているので、
+        #   そのままフロントで一覧表示・順位変動アニメーションに使える。
+        snap.update({
+            "current_q": room["current_q"],
+            "total_questions": len(room["questions"]),
+            "ranking_started_at": room["ranking_started_at"],
+            "ranking_duration_sec": QUIZ_RANKING_DURATION_SEC,
+        })
     elif room["state"] in ("question", "reveal"):
         q = room["questions"][room["current_q"]]
         revealed = room["state"] == "reveal"
@@ -6500,26 +6564,34 @@ def _quiz_room_snapshot(room, student_id):
         #   1プレイヤーとして参加するため、ホストだけ特別扱いはしない。
         if revealed:
             question_payload["correct_index"] = q["correct_index"]
+        # ★ 途中参加でまだ「見学中」（active_from_q未到達）の人は、回答受付数・
+        #   合計人数のどちらにもカウントしない（自分では回答できないため）。
+        active_players = [p for p in room["players"].values() if p.get("active_from_q", 0) <= room["current_q"]]
         snap.update({
             "current_q": room["current_q"],
             "total_questions": len(room["questions"]),
             "question": question_payload,
             "question_started_at": room["question_started_at"],
             "time_limit_sec": room["time_limit_sec"],
-            "answered_count": sum(1 for p in room["players"].values() if p["cur_answer"] is not None),
-            "total_players": len(room["players"]),
+            "answered_count": sum(1 for p in active_players if p["cur_answer"] is not None),
+            "total_players": len(active_players),
         })
         if revealed:
             snap["first_correct_nickname"] = room.get("first_correct_nickname")
             snap["reveal_started_at"] = room.get("reveal_started_at")
             snap["reveal_duration_sec"] = QUIZ_REVEAL_DURATION_SEC
-            # ★ 発表中だけ、全員分の正誤(◯×)を含めて players を上書きする
-            snap["players"] = _quiz_room_players_json(room, include_correct=True)
+            # ★ 発表中だけ、押した順（正誤にかかわらず）のミニ順位表に players を上書きする
+            snap["players"] = _quiz_room_players_json_press_order(room)
         player = room["players"].get(student_id)
-        if player is not None and player["cur_answer"] is not None:
-            snap["your_answer"] = player["cur_answer"]
-            if revealed:
-                snap["your_correct"] = bool(player["cur_correct"])
+        if player is not None:
+            if player.get("active_from_q", 0) > room["current_q"]:
+                # ★ 追加：途中参加で今の問題にはまだ混ざれない「見学中」の状態。
+                #   フロントはこれを見て、回答UIの代わりに待機画面を出す。
+                snap["spectating"] = True
+            elif player["cur_answer"] is not None:
+                snap["your_answer"] = player["cur_answer"]
+                if revealed:
+                    snap["your_correct"] = bool(player["cur_correct"])
     return snap
 
 def _pick_distractors(correct: str, pool: list, k: int) -> list:
@@ -7007,6 +7079,9 @@ def quiz_create():
                     "score": 0,
                     "cur_answer": None,
                     "cur_correct": None,
+                    "cur_answered_at": None,
+                    "total_answer_time": 0.0,  # ★ 追加：同点タイブレーク用、回答にかかった時間の合計
+                    "active_from_q": 0,  # ★ 追加：途中参加者の見学期間の判定用（ホストは最初からアクティブ）
                 },
             },
             "state": "lobby",
@@ -7015,6 +7090,7 @@ def quiz_create():
             "intro_started_at": None,
             "question_started_at": None,
             "reveal_started_at": None,
+            "ranking_started_at": None,
             "first_correct_id": None,
             "first_correct_nickname": None,
             "created_at": now,
@@ -7516,6 +7592,13 @@ def quiz_join():
             if room["state"] != "lobby" and not room.get("allow_late_join"):
                 return jsonify({"ok": False, "error": "quiz_already_started"})
             color, text_color = _quiz_palette_for(student_id)
+            # ★ 追加：途中参加は「今まさに出題・発表中の問題」には混ぜず、次の問題から
+            #   アクティブにする（countdown/introの間はまだ制限時間が始まっていないので、
+            #   今の問題からそのまま参加できる）。
+            if room["state"] in ("question", "reveal", "ranking"):
+                active_from_q = room["current_q"] + 1
+            else:
+                active_from_q = room["current_q"]
             room["players"][student_id] = {
                 "id": student_id,
                 "nickname": nickname,
@@ -7524,6 +7607,9 @@ def quiz_join():
                 "score": 0,
                 "cur_answer": None,
                 "cur_correct": None,
+                "cur_answered_at": None,
+                "total_answer_time": 0.0,
+                "active_from_q": active_from_q,
             }
         room["last_activity"] = now
         _quiz_autoadvance_locked(room, now)
@@ -7584,11 +7670,13 @@ def quiz_start():
         room["intro_started_at"] = None
         room["question_started_at"] = None
         room["reveal_started_at"] = None
+        room["ranking_started_at"] = None
         room["first_correct_id"] = None
         room["first_correct_nickname"] = None
         for p in room["players"].values():
             p["cur_answer"] = None
             p["cur_correct"] = None
+            p["cur_answered_at"] = None
         room["last_activity"] = now
         snap = _quiz_room_snapshot(room, student_id)
     # ★ 遅延低減：カウントダウン開始を、他の端末のポーリング待ちなしで即座に知らせる
@@ -7615,6 +7703,10 @@ def quiz_answer():
         player = room["players"].get(student_id)
         if player is None:
             return jsonify({"ok": False, "error": "not_in_room"})
+        if player.get("active_from_q", 0) > room["current_q"]:
+            # ★ 追加：途中参加でこの問題はまだ「見学中」の人からの回答は受け付けない
+            #   （フロント側は元々選択肢を出さない設計だが、APIを直接叩かれた場合の保険）。
+            return jsonify({"ok": False, "error": "spectating"})
         if player["cur_answer"] is not None:
             return jsonify({"ok": False, "error": "already_answered"})
 
@@ -7622,6 +7714,9 @@ def quiz_answer():
         correct = (choice_index == q["correct_index"])
         player["cur_answer"] = choice_index
         player["cur_correct"] = correct
+        player["cur_answered_at"] = now
+        # ★ 追加：同点タイブレーク用に、回答にかかった時間（正誤にかかわらず）を積算する
+        player["total_answer_time"] = player.get("total_answer_time", 0.0) + (now - room["question_started_at"])
         if correct:
             points = QUIZ_ANSWER_BASE_POINTS
             if room["first_correct_id"] is None:
