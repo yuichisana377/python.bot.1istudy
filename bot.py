@@ -6962,7 +6962,7 @@ def _validate_manual_questions(raw_questions):
         questions.append({"question": question_text, "choices": choices, "correct_index": correct_index})
     return (questions, check_fields), None
 
-def _archive_manual_quiz(guild_id, title, questions, student_id, nickname):
+def _archive_manual_quiz(guild_id, title, questions, student_id, nickname, players=None):
     """
     ★ ホストが「自分で問題を作る」（オリジナル4択）で作成したクイズを、
       CardMakerの「クイズ過去問」フォルダにデッキとして自動保存する。
@@ -6978,6 +6978,11 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname):
       作成済みリストなど、「answerは文字列である」という前提の既存コードを
       一切変更せずに動かせる（choices/correct_indices は選択式UIだけが見る）。
     ・アーカイブに失敗しても、クイズ自体の進行は失敗させない（ベストエフォート）。
+    ・players（room["players"]、任意）を渡すと、各プレイヤーがゲーム中に
+      不正解だった問題（player["wrong_indices"]、quiz_answer参照）を、
+      今まさに作成したこの過去問デッキへ裏で「わからない」として記録する。
+      「デッキから自動作成」と違い元デッキが存在しないため、ゲーム終了で
+      この過去問デッキ自体が生まれた今がその唯一の機会になる。
     """
     try:
         _ensure_quiz_archive_folder(guild_id)
@@ -7021,6 +7026,14 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname):
             actor=nickname,
             detail=detail if detail else None,
         )
+        # ★ 追加：各プレイヤーが不正解だった問題を、今作った過去問デッキへ裏で「わからない」
+        #   として記録する（表面上はQuiz.js側に一切表示しない）。デッキ作成自体が失敗した
+        #   場合はこのブロックへ来ない＝過去問デッキが無いのでマークのしようがなく、正しい。
+        if players:
+            for pid, p in players.items():
+                for i in p.get("wrong_indices") or []:
+                    if 0 <= i < len(cards):
+                        _silently_mark_unsure(guild_id, pid, filename, cards[i]["id"])
     except Exception as e:
         print(f"[WARN] クイズ過去問の保存に失敗しました（クイズの進行自体は続行）: {e}")
 
@@ -7035,7 +7048,7 @@ def _archive_room_if_needed(room):
     if room.get("source") != "manual" or room.get("archived"):
         return
     room["archived"] = True
-    _archive_manual_quiz(room["guild_id"], room["title"], room["questions"], room["host_id"], room["host_nickname"])
+    _archive_manual_quiz(room["guild_id"], room["title"], room["questions"], room["host_id"], room["host_nickname"], room["players"])
 
 @app.route("/quiz_create", methods=["POST"])
 def quiz_create():
@@ -7111,6 +7124,9 @@ def quiz_create():
                     "cur_answered_at": None,
                     "total_answer_time": 0.0,  # ★ 追加：同点タイブレーク用、回答にかかった時間の合計
                     "active_from_q": 0,  # ★ 追加：途中参加者の見学期間の判定用（ホストは最初からアクティブ）
+                    "wrong_indices": [],  # ★ 追加：不正解だった問題のインデックス（クイズ終了時、
+                                          #   オリジナル4択がクイズ過去問へアーカイブされた際に
+                                          #   「わからない」を裏で付けるために使う。_archive_manual_quiz参照）
                 },
             },
             "state": "lobby",
@@ -7639,6 +7655,7 @@ def quiz_join():
                 "cur_answered_at": None,
                 "total_answer_time": 0.0,
                 "active_from_q": active_from_q,
+                "wrong_indices": [],
             }
         room["last_activity"] = now
         _quiz_autoadvance_locked(room, now)
@@ -7746,6 +7763,12 @@ def quiz_answer():
         player["cur_answered_at"] = now
         # ★ 追加：同点タイブレーク用に、回答にかかった時間（正誤にかかわらず）を積算する
         player["total_answer_time"] = player.get("total_answer_time", 0.0) + (now - room["question_started_at"])
+        if not correct:
+            # ★ 追加：オリジナル4択（source=="manual"）は、クイズ終了時にクイズ過去問へ
+            #   アーカイブされる（_archive_room_if_needed → _archive_manual_quiz）。
+            #   その時点でこのプレイヤーの不正解だった問題を、新しくできた過去問デッキへ
+            #   裏で「わからない」として記録するために、問題インデックスだけ控えておく。
+            player.setdefault("wrong_indices", []).append(room["current_q"])
         if correct:
             points = QUIZ_ANSWER_BASE_POINTS
             if room["first_correct_id"] is None:
