@@ -6376,7 +6376,8 @@ def _quiz_autoadvance_locked(room, now):
             room["state"] = "reveal"
             room["reveal_started_at"] = now
         elif room["state"] == "reveal":
-            if now - room["reveal_started_at"] < QUIZ_REVEAL_DURATION_SEC:
+            # ★ 追加：詳細設定「正解発表の表示時間」。省略時は従来通りQUIZ_REVEAL_DURATION_SEC。
+            if now - room["reveal_started_at"] < room.get("reveal_duration_sec", QUIZ_REVEAL_DURATION_SEC):
                 return
             is_last_question = room["current_q"] + 1 >= len(room["questions"])
             room["reveal_started_at"] = None
@@ -6597,7 +6598,7 @@ def _quiz_room_snapshot(room, student_id):
         if revealed:
             snap["first_correct_nickname"] = room.get("first_correct_nickname")
             snap["reveal_started_at"] = room.get("reveal_started_at")
-            snap["reveal_duration_sec"] = QUIZ_REVEAL_DURATION_SEC
+            snap["reveal_duration_sec"] = room.get("reveal_duration_sec", QUIZ_REVEAL_DURATION_SEC)
             # ★ 発表中だけ、押した順（正誤にかかわらず）のミニ順位表に players を上書きする
             snap["players"] = _quiz_room_players_json_press_order(room)
         player = room["players"].get(student_id)
@@ -7121,6 +7122,27 @@ def quiz_create():
     elif bonus_mode not in (None, "", "none"):
         return jsonify({"ok": False, "error": "invalid_bonus_mode"})
 
+    # ★ 追加：詳細設定「問題の出題時間」「正解発表の表示時間」。どちらも省略時は
+    #   従来通りの固定値（QUIZ_TIME_LIMIT_SEC/QUIZ_REVEAL_DURATION_SEC）のまま。
+    def _parse_duration_sec(key, default, lo, hi, error_code):
+        raw = data.get(key)
+        if raw is None or raw == "":
+            return default, None
+        try:
+            v = int(raw)
+        except (TypeError, ValueError):
+            return None, jsonify({"ok": False, "error": error_code})
+        if not (lo <= v <= hi):
+            return None, jsonify({"ok": False, "error": error_code})
+        return v, None
+
+    time_limit_sec, err = _parse_duration_sec("time_limit_sec", QUIZ_TIME_LIMIT_SEC, 5, 120, "invalid_time_limit_sec")
+    if err:
+        return err
+    reveal_duration_sec, err = _parse_duration_sec("reveal_duration_sec", QUIZ_REVEAL_DURATION_SEC, 2, 30, "invalid_reveal_duration_sec")
+    if err:
+        return err
+
     now = time.time()
     with QUIZ_ROOMS_LOCK:
         _quiz_gc_locked(now)
@@ -7132,7 +7154,8 @@ def quiz_create():
             "code": code,
             "guild_id": guild_id,
             "title": title,
-            "time_limit_sec": QUIZ_TIME_LIMIT_SEC,
+            "time_limit_sec": time_limit_sec,
+            "reveal_duration_sec": reveal_duration_sec,  # ★ 追加：詳細設定で変更可能に
             "questions": questions,
             "source": source,  # ★ "manual"のクイズだけ、終了時にCardMakerへアーカイブする
             "bonus_indices": bonus_indices,  # ★ 追加：得点が2倍になる問題（0-indexed）の集合
