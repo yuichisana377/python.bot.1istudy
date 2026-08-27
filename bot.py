@@ -138,7 +138,6 @@ NO_CACHE_PATHS = {
     "/list_study_logs",
     "/get_points",
     "/get_completed_tasks",
-    "/quiz_archive_leaderboard",
     # ★ 追加（不具合修正、2026/08/26）：/cardmaker_choice_cache もログイン必須の
     #   GET APIで、応答内容が時間とともに変わる（usedフラグの反転・バックグラウンド
     #   生成による中身の更新）ため、追加が漏れていた。上の/list_schedule等と
@@ -386,8 +385,8 @@ def local_put_cas(filename, content_obj, sha=None):
     ★ 追加（不具合修正、2026/08/26）：local_put の「本当の」CAS（Compare-And-Swap）版。
       ─────────────────────────────────────────────
       local_put は sha が競合していても「無条件で1回だけ再試行」＝渡された
-      content_obj でそのまま強制上書きしてしまう。update_student_study_data や
-      _update_quiz_leaderboard のように「読み込み→mutate_fn で書き換え→保存、
+      content_obj でそのまま強制上書きしてしまう。update_student_study_data
+      のように「読み込み→mutate_fn で書き換え→保存、
       競合したら最新を読み直してもう一度 mutate_fn を適用し直す」という
       リトライループを書いていても、local_put 自身が競合時に例外を送出せず
       常に成功したことにしてしまうため、このリトライループは実質的に
@@ -7457,113 +7456,9 @@ def cardmaker_choice_cache():
 
     return jsonify({"ok": True, "cards": response_cards})
 
-# ================================
-#  ★ クイズ過去問（CardMaker内の一人用4択モード）のランキング
-#  ─────────────────────────────
-#  「クイズ過去問」フォルダにアーカイブされたデッキ1つにつき1ファイル
-#  （quiz_leaderboard_<デッキのfilename>.json）に、{student_id: {...}} の形で
-#  各生徒のベストスコアだけを保持する。QUIZ_ROOMS（ライブルーム）とは異なり、
-#  こちらはディスクに永続化する（いつ・誰が挑戦しても記録が残るランキングのため）。
-# ================================
 def _is_safe_deck_filename(filename):
     return bool(filename) and filename.endswith(".json") \
         and "/" not in filename and "\\" not in filename and ".." not in filename
-
-def _update_quiz_leaderboard(deck_filename, mutate_fn, max_attempts=4):
-    """mutate_fn(leaderboard_dict) は dict を直接書き換える関数。
-    保存に失敗（sha競合）した場合は最新データを読み直して再適用する。"""
-    lb_filename = f"quiz_leaderboard_{deck_filename}"
-    last_err = None
-    for _ in range(max_attempts):
-        data, sha = local_get(lb_filename)
-        data = data or {}
-        mutate_fn(data)
-        try:
-            local_put_cas(lb_filename, data, sha)  # ★ 修正：local_putだと競合時に無条件で強制上書きしてしまい再試行にならない
-            return
-        except DataWriteError as e:
-            last_err = e
-            continue
-    raise last_err or DataWriteError("保存に失敗しました（リトライ上限）")
-
-@app.route("/quiz_archive_submit_score", methods=["POST"])
-def quiz_archive_submit_score():
-    """一人用4択モードのスコアを記録する。ベストスコアだけを保持する。"""
-    data = request.json or {}
-    guild_id = data.get("guild_id")
-    if not guild_id:
-        return jsonify({"ok": False, "error": "missing guild_id"})
-    guild_id = int(guild_id)
-    student_id, err = require_member_session(data.get("session_token"), guild_id)
-    if err:
-        return err
-
-    filename = data.get("filename") or ""
-    if not _is_safe_deck_filename(filename):
-        return jsonify({"ok": False, "error": "invalid filename"})
-
-    try:
-        score = int(data.get("score"))
-        total = int(data.get("total"))
-    except (TypeError, ValueError):
-        return jsonify({"ok": False, "error": "invalid score/total"})
-    if score < 0 or total <= 0 or score > total:
-        return jsonify({"ok": False, "error": "invalid score/total"})
-
-    # ★ このデッキが実際に「クイズ過去問」フォルダの中にあるか確認する
-    #   （でたらめなfilenameを指定してスコアを偽造されるのを防ぐ）
-    #   ★ 以前は「クイズ過去問フォルダ内かどうか」で判定していたが、選択式
-    #     デッキが汎用機能になったため、choice_modeの有無で判定するよう変更。
-    #   ★ choice_modeはtruthyチェックにする（真偽値trueの新形式だけでなく、
-    #     移行前に保存された旧形式の文字列"single"/"multi"も引き続き通す）。
-    card_data, _ = get_card_file_for_guild(filename, guild_id)
-    if card_data is None:
-        return jsonify({"ok": False, "error": "deck_not_found"})
-    if not card_data.get("choice_mode"):
-        return jsonify({"ok": False, "error": "not_a_choice_deck"})
-
-    user = find_user(guild_id, student_id)
-    nickname = (user or {}).get("nickname") or str(student_id)
-
-    try:
-        def _mutate(lb):
-            existing = lb.get(student_id)
-            if existing is None or score > existing.get("score", -1):
-                lb[student_id] = {
-                    "nickname": nickname,
-                    "score": score,
-                    "total": total,
-                    "played_at": datetime.now(JST).strftime("%Y-%m-%d %H:%M"),
-                }
-        _update_quiz_leaderboard(filename, _mutate)
-    except DataWriteError as e:
-        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
-
-    return jsonify({"ok": True})
-
-@app.route("/quiz_archive_leaderboard", methods=["GET"])
-def quiz_archive_leaderboard():
-    """指定デッキ（クイズ過去問）のランキングをスコア降順で返す。"""
-    _guild_id, _student_id, err = require_member_session_get()
-    if err:
-        return err
-    filename = request.args.get("filename") or ""
-    if not _is_safe_deck_filename(filename):
-        return jsonify({"ok": False, "error": "invalid filename"})
-    data, _ = local_get(f"quiz_leaderboard_{filename}")
-    data = data or {}
-    rows = [
-        {
-            "student_id": sid,
-            "nickname": e.get("nickname"),
-            "score": e.get("score"),
-            "total": e.get("total"),
-            "played_at": e.get("played_at"),
-        }
-        for sid, e in data.items()
-    ]
-    rows.sort(key=lambda r: (-(r["score"] or 0), r["played_at"] or ""))
-    return jsonify({"ok": True, "leaderboard": rows})
 
 @app.route("/quiz_list_rooms", methods=["GET"])
 def quiz_list_rooms():
