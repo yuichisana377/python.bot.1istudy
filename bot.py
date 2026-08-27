@@ -6387,6 +6387,7 @@ def _quiz_autoadvance_locked(room, now):
                 p["cur_answer"] = None
                 p["cur_correct"] = None
                 p["cur_answered_at"] = None
+                p["cur_points"] = None
             if is_last_question:
                 room["state"] = "ended"
                 room["ended_at"] = now
@@ -6611,6 +6612,11 @@ def _quiz_room_snapshot(room, student_id):
                 snap["your_answer"] = player["cur_answer"]
                 if revealed:
                     snap["your_correct"] = bool(player["cur_correct"])
+                    # ★ 追加：ボーナス問題（得点2倍）だと固定の「+10点」「+12点」表示が
+                    #   実際の加点と食い違うため、quiz_answer()で確定した実際の加点を
+                    #   そのままフロントに渡す（表示側で倍率を再計算させない）。
+                    if player.get("cur_points"):
+                        snap["your_points"] = player["cur_points"]
     return snap
 
 def _pick_distractors(correct: str, pool: list, k: int) -> list:
@@ -7172,6 +7178,7 @@ def quiz_create():
                     "score": 0,
                     "cur_answer": None,
                     "cur_correct": None,
+                    "cur_points": None,  # ★ 追加：この問題で実際に加点された点数（正解発表の表示用）
                     "cur_answered_at": None,
                     "total_answer_time": 0.0,  # ★ 追加：同点タイブレーク用、回答にかかった時間の合計
                     "active_from_q": 0,  # ★ 追加：途中参加者の見学期間の判定用（ホストは最初からアクティブ）
@@ -7599,6 +7606,7 @@ def quiz_join():
                 "score": 0,
                 "cur_answer": None,
                 "cur_correct": None,
+                "cur_points": None,  # ★ 追加：この問題で実際に加点された点数（正解発表の表示用）
                 "cur_answered_at": None,
                 "total_answer_time": 0.0,
                 "active_from_q": active_from_q,
@@ -7669,6 +7677,7 @@ def quiz_start():
         for p in room["players"].values():
             p["cur_answer"] = None
             p["cur_correct"] = None
+            p["cur_points"] = None
             p["cur_answered_at"] = None
         room["last_activity"] = now
         snap = _quiz_room_snapshot(room, student_id)
@@ -7727,6 +7736,7 @@ def quiz_answer():
             if room["current_q"] in room.get("bonus_indices", set()):
                 points *= 2
             player["score"] += points
+            player["cur_points"] = points  # ★ 追加：正解発表の「+○点」表示に実際の加点をそのまま使うため
         room["last_activity"] = now
         # ★ この回答で全員が回答し終わった場合、次のポーリングを待たずに
         #   その場で正解発表(reveal)へ進める（体感の速さのため）。
