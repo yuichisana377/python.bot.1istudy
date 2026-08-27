@@ -6556,6 +6556,8 @@ def _quiz_room_snapshot(room, student_id):
             "total_questions": len(room["questions"]),
             "intro_started_at": room["intro_started_at"],
             "intro_duration_sec": QUIZ_INTRO_DURATION_SEC,
+            # ★ 追加：ボーナス問題なら「第N問」の時点から予告する（盛り上げるため）
+            "is_bonus": room["current_q"] in room.get("bonus_indices", set()),
         })
     elif room["state"] == "ranking":
         # ★ 追加：正解発表の後、次の問題に進む前に見せる「途中経過」。
@@ -6571,6 +6573,10 @@ def _quiz_room_snapshot(room, student_id):
         q = room["questions"][room["current_q"]]
         revealed = room["state"] == "reveal"
         question_payload = {"question": q["question"], "choices": q["choices"]}
+        # ★ 追加：ボーナス問題（正解時の得点2倍）かどうかをクライアントにも知らせる
+        #   （画面に「ボーナス問題！2倍！」等を表示するため。得点計算自体はquiz_answer側）。
+        if room["current_q"] in room.get("bonus_indices", set()):
+            question_payload["is_bonus"] = True
         # ★ 正解番号は、発表(reveal)されるまでは誰にも渡さない（レスポンスを
         #   devtools等で覗かれてカンニングされるのを防ぐ）。ホストも今は
         #   1プレイヤーとして参加するため、ホストだけ特別扱いはしない。
@@ -7093,6 +7099,28 @@ def quiz_create():
     #   一覧から実質参加不可になる（表示はされるが参加はできない）。
     allow_late_join = bool(data.get("allow_late_join"))
 
+    # ★ 追加：詳細設定「ボーナス問題」。対象の問題（0-indexedの集合）を作成時に
+    #   一度だけ決めて room["bonus_indices"] に固定する（進行中に再抽選しない。
+    #   「ランダムは作成時に抽選して決まり、途中で入れ替わらない」という
+    #   Web側の案内文とも整合させるため）。正解時の得点は quiz_answer() 側で
+    #   このインデックス集合を見て2倍にする。
+    bonus_mode = data.get("bonus_mode")
+    bonus_indices = set()
+    if bonus_mode in ("random", "last"):
+        try:
+            bonus_count = int(data.get("bonus_count"))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "invalid_bonus_count"})
+        if bonus_count < 1:
+            return jsonify({"ok": False, "error": "invalid_bonus_count"})
+        bonus_count = min(bonus_count, len(questions))  # ★ 問題数を超えて指定されても全問までに丸める
+        if bonus_mode == "random":
+            bonus_indices = set(random.sample(range(len(questions)), bonus_count))
+        else:  # "last"
+            bonus_indices = set(range(len(questions) - bonus_count, len(questions)))
+    elif bonus_mode not in (None, "", "none"):
+        return jsonify({"ok": False, "error": "invalid_bonus_mode"})
+
     now = time.time()
     with QUIZ_ROOMS_LOCK:
         _quiz_gc_locked(now)
@@ -7107,6 +7135,7 @@ def quiz_create():
             "time_limit_sec": QUIZ_TIME_LIMIT_SEC,
             "questions": questions,
             "source": source,  # ★ "manual"のクイズだけ、終了時にCardMakerへアーカイブする
+            "bonus_indices": bonus_indices,  # ★ 追加：得点が2倍になる問題（0-indexed）の集合
             "archived": False,
             "host_id": student_id,
             "host_nickname": nickname,
@@ -7670,6 +7699,10 @@ def quiz_answer():
                 room["first_correct_id"] = student_id
                 room["first_correct_nickname"] = player["nickname"]
                 points += QUIZ_FIRST_CORRECT_BONUS
+            # ★ 追加：ホストの詳細設定「ボーナス問題」。対象の問題（room["bonus_indices"]、
+            #   quiz_create参照）なら、一番乗りボーナスも含めて得点をまるごと2倍にする。
+            if room["current_q"] in room.get("bonus_indices", set()):
+                points *= 2
             player["score"] += points
         room["last_activity"] = now
         # ★ この回答で全員が回答し終わった場合、次のポーリングを待たずに
