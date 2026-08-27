@@ -6234,19 +6234,22 @@ def respond_deck_share_request():
 #  ・state は "lobby"（開始待ち）→ "countdown"（開始直後の5秒カウントダウン、
 #    最初の問題の前だけ）→ "intro"（「第N問」を大きく見せる区間、毎問の前）
 #    → "question"（出題中）→ "reveal"（正解発表）→ "ranking"（スコア順の
-#    途中経過。次の問題がある場合のみ挟む。前回の"ranking"からの順位変動を
-#    Kahoot風にアニメーションさせる演出はフロント側で行う）→ （次の問題が
-#    あれば"intro"に戻る／最終問題の発表後は"ranking"を挟まず直接"ended"）
-#    と遷移する。
+#    途中経過。QUIZ_RANKING_INTERVAL問に1度だけ、次の問題がある場合に挟む。
+#    前回の"ranking"からの順位変動をKahoot風にアニメーションさせる演出は
+#    フロント側で行う）→ （次の問題があれば"intro"に戻る／最終問題の発表後、
+#    および間隔に満たない問題の発表後は"ranking"を挟まず直接"ended"／
+#    "intro"へ進む）と遷移する。
 #    ホストの操作待ちにはせず、すべて自動で進行する：
 #      "countdown" → "intro" … QUIZ_COUNTDOWN_DURATION_SEC秒経ったら。
 #      "intro"     → "question" … QUIZ_INTRO_DURATION_SEC秒経ったら。
 #      "question"  → "reveal" … 全員（途中参加でまだ見学中の人を除く）が
 #                    回答し終わった、または制限時間（QUIZ_TIME_LIMIT_SEC）
 #                    が経過したら自動的に切り替わる。
-#      "reveal"    → "ranking" / "ended" … 発表からQUIZ_REVEAL_DURATION_SEC秒
-#                    経ったら、次の問題があれば"ranking"へ、最終問題なら
-#                    "ranking"を挟まず直接"ended"へ自動的に進む。
+#      "reveal"    → "ranking" / "intro" / "ended" … 発表からQUIZ_REVEAL_DURATION_SEC秒
+#                    経ったら、最終問題なら直接"ended"へ、そうでなければ
+#                    QUIZ_RANKING_INTERVAL問に1度（例：5問目・10問目…）だけ
+#                    "ranking"へ、それ以外の問題後は"ranking"を挟まず直接
+#                    次の問題の"intro"へ自動的に進む。
 #      "ranking"   → 次の問題("intro") … QUIZ_RANKING_DURATION_SEC秒経ったら。
 #    この判定は各APIリクエストのたびに _quiz_autoadvance_locked() で
 #    その場評価する（study_timers の自動休憩判定と同じ「アクセスの
@@ -6282,6 +6285,7 @@ QUIZ_REVEAL_DURATION_SEC = 5    # 正解発表から次の問題に自動で進�
 QUIZ_COUNTDOWN_DURATION_SEC = 5 # ★ 追加：スタート直後の「5,4,3,2,1」カウントダウン（最初の問題の前だけ）
 QUIZ_INTRO_DURATION_SEC = 2     # ★ 追加：各問題の直前に「第N問」を大きく表示しておく時間
 QUIZ_RANKING_DURATION_SEC = 4   # ★ 追加：正解発表後、次の問題までの間に見せる途中経過（順位変動アニメーション）の表示時間
+QUIZ_RANKING_INTERVAL = 5       # ★ 追加：途中経過を挟む間隔（問）。5問に1度だけ挟み、それ以外の問題後は挟まず直接次の問題へ進む
 QUIZ_MAX_QUESTIONS = 30
 QUIZ_MAX_SOURCE_DECKS = 30  # ★ 追加：「デッキから自動作成」で一度に選べるデッキ数の上限（フォルダ選択で一気に増えうるため）
 QUIZ_ANSWER_BASE_POINTS = 10
@@ -6388,10 +6392,19 @@ def _quiz_autoadvance_locked(room, now):
                 room["ended_at"] = now
                 _archive_room_if_needed(room)
                 return
-            # ★ 追加：最終問題でなければ、次の問題に進む前に途中経過
-            #   （スコア順の"ranking"画面。フロントで順位変動をアニメーションさせる）を挟む。
-            room["state"] = "ranking"
-            room["ranking_started_at"] = now
+            # ★ 追加：最終問題でなければ、QUIZ_RANKING_INTERVAL問に1度だけ、次の問題に
+            #   進む前に途中経過（スコア順の"ranking"画面。フロントで順位変動を
+            #   アニメーションさせる）を挟む。それ以外の問題後はrankingを飛ばし、
+            #   reveal→intro（次の問題）へ直接進む（下記whileループが継続して評価する）。
+            question_number = room["current_q"] + 1  # 1-indexed：今revealし終えた問題の番号
+            if question_number % QUIZ_RANKING_INTERVAL == 0:
+                room["state"] = "ranking"
+                room["ranking_started_at"] = now
+            else:
+                room["current_q"] += 1
+                room["state"] = "intro"
+                room["intro_started_at"] = now
+                room["question_started_at"] = None
         elif room["state"] == "ranking":
             if now - room["ranking_started_at"] < QUIZ_RANKING_DURATION_SEC:
                 return
