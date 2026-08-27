@@ -24,7 +24,7 @@ import queue
 import subprocess
 import shutil
 import html
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 
 # ================================
 #  設定
@@ -5229,12 +5229,51 @@ def save_cards():
         #   サーバー側でも強制する。
         if existing_data is not None:
             is_quiz_archive = bool(existing_data.get("quiz_archive"))
-            if is_quiz_archive and existing_data.get("cards") != cards:
-                return jsonify({
-                    "ok": False,
-                    "error": "クイズ過去問のデッキは問題を編集できません（フォルダの移動・デッキ名の変更・非公開に戻す・削除は可能です）",
-                })
+            if is_quiz_archive:
+                # ★ 修正：以前はクライアントが送ってきたcardsと既存データの
+                #   cardsを厳密一致比較し、不一致なら丸ごとエラーにしていた。
+                #   カードに created_by_id 等サーバー側だけの付随情報を
+                #   追加するようになったため、cardToServerPayload()経由の
+                #   （ホワイトリストの基本フィールドしか持たない）クライアント
+                #   送信分と比べると常に不一致になってしまう。クイズ過去問は
+                #   そもそも問題を編集できない仕様（Web側UIも編集画面自体を
+                #   表示しない）なので、比較して弾くのではなく常にサーバー
+                #   保存済みの内容をそのまま使う（クライアントがcardsに
+                #   何を送ってきても無視する）ことで、直接APIを叩かれた
+                #   場合の改ざんも防ぎつつ、フォルダ移動・名前変更などの
+                #   正当な保存は問題なく通す。
+                cards = existing_data.get("cards") or []
             existing_published_by = existing_data.get("published_by")
+
+    # ★ 追加：カードごとの「作成者」（question等を実際に増やした本人）を記録する。
+    #   ─────────────────────────────────────────────
+    #   「デッキの作成者」＝published_byは最初に公開した人のまま固定されるが、
+    #   共同編集デッキでは「実際に一番多く問題を作っている人」と一致しなく
+    #   なることがある。CSVダウンロード・削除依頼等の通知先は「問題を増やした
+    #   人」（＝カードを新しく追加した本人。既存カードの中身を編集しただけでは
+    #   変わらない）を基準にしたいという要望のため、カード単位で誰が追加した
+    #   かを記録しておく。クライアントの自己申告は信用せず（cardToServerPayload()
+    #   はそもそもこのフィールドを送ってこない設計だが、直接APIを叩かれた場合に
+    #   備えて）、必ずサーバー側で決定する：
+    #   ・既存デッキに同じidのカードが既にあり、既に作成者が記録済み →
+    #     その元々の作成者を維持する（内容の編集だけでは作成者は変わらない）。
+    #   ・新しく追加されたカード（idが一致しない、または作成者が未記録の
+    #     古いカード）→ 今回保存した本人（ログインセッション）を作成者とする。
+    existing_cards_by_id = {}
+    if is_update and existing_data:
+        for c in existing_data.get("cards") or []:
+            if isinstance(c, dict) and c.get("id"):
+                existing_cards_by_id[c["id"]] = c
+    for c in cards:
+        if not isinstance(c, dict):
+            continue
+        old_c = existing_cards_by_id.get(c.get("id")) if c.get("id") else None
+        if old_c and old_c.get("created_by_id"):
+            c["created_by_id"] = old_c.get("created_by_id")
+            c["created_by_nickname"] = old_c.get("created_by_nickname")
+        else:
+            c["created_by_id"] = _student_id
+            c["created_by_nickname"] = _nickname
 
     # ★ 追加：「クイズ過去問」フォルダ（またはその配下）には、みんなでクイズの
     #   結果から自動保存されたデッキ（quiz_archive: true）以外を入れられない
@@ -5356,20 +5395,125 @@ def save_cards():
     )
     return jsonify({"ok": True, "filename": filename, "is_update": is_update})
 
+def _deck_top_contributor(data):
+    """デッキの現在のcards配列から、「一番多く問題を作成した人」
+    （created_by_idの出現数が最大の人）の (id, nickname) を返す。
+    ★ 2026/08/27、ユーザーの要望で「デッキの作成者」の定義を、最初に
+    公開した人（published_by）固定から、実際に一番多く問題を追加した人
+    （既存カードの中身を編集しただけでは変わらない）へ変更した。
+    ・created_by_id が1件も記録されていない（この機能より前に作られた
+      古いデッキ、または全カードが削除されて0枚になったデッキ）場合は、
+      従来通りpublished_byにフォールバックする。
+    ・同数タイの場合は、その中にpublished_by.idが含まれていればそちらを
+      優先する（挙動の安定のため）。それも無ければ最初に見つかった人。"""
+    counts = {}
+    nick_by_id = {}
+    for c in (data.get("cards") or []):
+        if not isinstance(c, dict):
+            continue
+        cid = c.get("created_by_id")
+        if not cid:
+            continue
+        counts[cid] = counts.get(cid, 0) + 1
+        if c.get("created_by_nickname"):
+            nick_by_id[cid] = c["created_by_nickname"]
+    if not counts:
+        pub = data.get("published_by") or {}
+        return pub.get("id"), pub.get("nickname")
+    pub_id = (data.get("published_by") or {}).get("id")
+    best_id, best_count = None, -1
+    for cid, cnt in counts.items():
+        if cnt > best_count or (cnt == best_count and cid == pub_id):
+            best_id, best_count = cid, cnt
+    return best_id, nick_by_id.get(best_id)
+
 def _deck_owner(guild_id, filename):
-    """デッキの作成者 (owner_id, owner_nickname) を返す。
-    読めない／記録が無い（作成者確認機能より前に公開された古いデッキ等）
-    ／他サーバーのデッキだった場合は (None, None)。owner_id が None のときは
-    「作成者不明」として従来通り誰でも削除できる扱いにする（過去のデッキを
-    誰も削除できなくなる事態を避けるため）。★ 複数サーバー対応：他サーバーの
-    デッキも同じ(None, None)にすることで、結果的に「見つからない」のと
-    同じ扱いになる（＝作成者確認を求められた上で、実際には対象が存在しない
-    ため何も起きない）。"""
+    """デッキの「作成者」(owner_id, owner_nickname) を返す（実体は
+    _deck_top_contributor、詳細はそちらのdocstring参照）。
+    読めない／他サーバーのデッキだった場合は (None, None)。owner_id が
+    None のときは「作成者不明」として従来通り誰でも削除できる扱いにする
+    （過去のデッキを誰も削除できなくなる事態を避けるため）。★ 複数サーバー
+    対応：他サーバーのデッキも同じ(None, None)にすることで、結果的に
+    「見つからない」のと同じ扱いになる（＝作成者確認を求められた上で、
+    実際には対象が存在しないため何も起きない）。"""
     data, _ = get_card_file_for_guild(filename, guild_id)
     if not data:
         return None, None
-    pub = data.get("published_by") or {}
-    return pub.get("id"), pub.get("nickname")
+    return _deck_top_contributor(data)
+
+def _csv_field(v):
+    """CSVの1フィールドをRFC4180風にエスケープする（Cardmaker-csvimport.js
+    のparseCSV()と対になる、こちら側は生成専用）。カンマ・ダブルクォート・
+    改行を含む場合だけダブルクォートで囲む。"""
+    s = "" if v is None else str(v)
+    if any(ch in s for ch in (",", '"', "\n", "\r")):
+        s = '"' + s.replace('"', '""') + '"'
+    return s
+
+def _deck_to_csv_text(data):
+    """デッキのcardsを、Cardmaker-csvimport.jsが読み込める形式のCSV文字列に
+    変換する（通常デッキ＝「問題,解答,解説」／選択式デッキ＝
+    「問題,選択肢1〜5,正解」。画像はCSV取り込み自体が対応していないため
+    含めない）。先頭にBOMを付け、Excelで開いても文字化けしないようにする。"""
+    cards = data.get("cards") or []
+    lines = []
+    if data.get("choice_mode"):
+        lines.append(",".join(["問題", "選択肢1", "選択肢2", "選択肢3", "選択肢4", "選択肢5", "正解"]))
+        for c in cards:
+            if not isinstance(c, dict):
+                continue
+            choices = c.get("choices") or []
+            row = [c.get("question") or ""]
+            row.extend(choices[i] if i < len(choices) else "" for i in range(5))
+            correct = sorted(c.get("correct_indices") or [])
+            row.append(",".join(str(i + 1) for i in correct))
+            lines.append(",".join(_csv_field(v) for v in row))
+    else:
+        lines.append(",".join(["問題", "解答", "解説"]))
+        for c in cards:
+            if not isinstance(c, dict):
+                continue
+            row = [c.get("question") or "", c.get("answer") or "", c.get("explanation") or ""]
+            lines.append(",".join(_csv_field(v) for v in row))
+    return chr(0xFEFF) + "\r\n".join(lines) + "\r\n"  # 先頭にBOM（Excelでの文字化け対策）
+
+@app.route("/export_cards_csv", methods=["GET"])
+def export_cards_csv():
+    """デッキをCSVとしてダウンロードする。★ 2026/08/27、ユーザーの要望で
+    「自分が作成したデッキのみ」に限定：ここでの「作成者」は
+    _deck_top_contributor()（このデッキで一番多く問題を作成した人。
+    既存カードを編集しただけの人は対象にならない）と一致する本人だけを許可する。"""
+    guild_id = request.args.get("guild_id")
+    filename = request.args.get("filename")
+    if not guild_id or not filename:
+        return jsonify({"ok": False, "error": "missing params"})
+    try:
+        guild_id = int(guild_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid guild_id"})
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return jsonify({"ok": False, "error": "invalid filename"})
+    student_id, err = require_member_session(session_token_from_request(), guild_id)
+    if err:
+        return err
+    data, _ = get_card_file_for_guild(filename, guild_id)
+    if not data:
+        return jsonify({"ok": False, "error": "ファイルが見つかりません"})
+    owner_id, owner_nickname = _deck_top_contributor(data)
+    if not owner_id or str(owner_id) != str(student_id):
+        return jsonify({
+            "ok": False,
+            "error": "not_creator",
+            "owner_nickname": owner_nickname or "作成者",
+        })
+    csv_text = _deck_to_csv_text(data)
+    resp = Response(csv_text, mimetype="text/csv; charset=utf-8")
+    safe_ascii = re.sub(r'[^A-Za-z0-9_.-]', "_", data.get("name") or filename) or "cards"
+    encoded_name = quote((data.get("name") or filename) + ".csv")
+    resp.headers["Content-Disposition"] = (
+        f'attachment; filename="{safe_ascii}.csv"; filename*=UTF-8\'\'{encoded_name}'
+    )
+    return resp
 
 def _delete_card_deck_file(guild_id, filename, actor_nickname, approval_note=None):
     """デッキファイル削除の実処理（本人による直接削除・削除依頼の承認の
@@ -6744,6 +6888,11 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname):
             "correct_indices": [q["correct_index"]],
             "explanation": "",
             "imgs_q": [], "imgs_a": [], "imgs_e": [],
+            # ★ 追加：カード単位の作成者記録（ホストが全問を作ったのでホスト本人）。
+            #   「作成した問題数が多い人」を基準にする各種機能（CSVダウンロード・
+            #   削除依頼の通知先等）で使う。
+            "created_by_id": student_id,
+            "created_by_nickname": nickname,
         } for q in questions]
         filename = generate_card_filename(guild_id)
         card_payload = {
