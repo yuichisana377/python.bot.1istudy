@@ -4423,6 +4423,8 @@ def request_delete():
                 "category": category,
                 "target_name": target_name,
                 "owner_id": owner_id,
+                "owner_nickname": owner_nickname,  # ★ 追加：宛先表示用（誤って別人のセッションに
+                                                    #   紛れ込んだ場合に本人が気づけるようにする）
                 "requester_nickname": requester_nickname,
                 "reason": reason,
                 "created_at": int(time.time()),
@@ -4469,6 +4471,7 @@ def pending_delete_requests():
             "token": it.get("token"),
             "category": it.get("category"),
             "target_name": it.get("target_name"),
+            "owner_nickname": it.get("owner_nickname"),  # ★ 追加：宛先表示用（PendingDeleteCheck.js参照）
             "requester_nickname": it.get("requester_nickname"),
             "reason": it.get("reason"),
         }
