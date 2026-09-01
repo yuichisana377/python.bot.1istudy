@@ -7217,6 +7217,11 @@ def quiz_create():
         }
     # ★ クイズの開始は予定管理などと違い頻繁に行われる一時的な操作なので、
     #   write_log（予定の追加・編集・削除ログ）には残さない。
+    # ★ 追加：他ページで待機中の全端末に「クイズ部屋ができた」ことを即座に知らせる
+    #   （QuizRoomNotify.js）。中身は含めない合図だけなので、受け取った側は
+    #   いつも通り /quiz_list_rooms を取りに行くだけで、既存のSSE設計（notify_change）
+    #   の使い方から外れない。
+    notify_change(guild_id)
     if source == "deck" and OLLAMA_HOST:
         # ★ ローカルAIによる誤答強化はロビー中に裏で行う（quiz_create自体はブロックしない）。
         #   OLLAMA_HOST未設定（開発機など）なら従来通りスレッドすら起動しない。
