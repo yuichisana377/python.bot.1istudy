@@ -145,6 +145,11 @@ NO_CACHE_PATHS = {
     #   反映されなくなる（または誰も使っていない前の応答がキャッシュされたまま
     #   になる）おそれがある。
     "/cardmaker_choice_cache",
+    # ★ 追加（勉強ログの「現在学習中」表示、2026/09/03）：/studying_now は
+    #   誰かがタイマーを開始/停止するたびに中身が変わるログイン必須GET APIのため、
+    #   上と同じ理由でキャッシュされると誰かが学習を終えた後もずっと
+    #   「学習中」のまま表示され続けてしまう。
+    "/studying_now",
 }
 
 @app.after_request
@@ -1156,6 +1161,34 @@ def timer_stop():
         except DataWriteError as e:
             return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
     return jsonify({"ok": True})
+
+@app.route("/studying_now", methods=["GET"])
+def studying_now():
+    """
+    「現在学習中」の一覧（StudyLog.jsの「みんなの記録」に表示する）。
+    study_timers_{guild_id}.json は元々全員分のタイマーを1ファイルに持っているため、
+    state=="running" のものだけ抜き出せばよい。
+    ★ 自分以外の分は _sync_timer_entry のような保存を伴う正規化はせず、
+      _finalize_study_timer（副作用なしの純粋関数）で「今この瞬間」の状態だけを
+      計算する（他人のタイマーをこの一覧取得のためだけに書き換えたくないため。
+      3時間経過の自動休憩への実際の遷移・保存は従来通り check_study_timers に任せる）。
+    ニックネームはクライアント自己申告ではなく users_{guild_id}.json から引く。
+    """
+    guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
+
+    timers = load_study_timers(guild_id)
+    nickname_map = {u.get("id"): u.get("nickname") for u in load_users(guild_id)}
+    now_ms = int(time.time() * 1000)
+
+    studying = []
+    for sid, entry in timers.items():
+        current, _notify_kind = _finalize_study_timer(entry, now_ms)
+        if current and current.get("state") == "running":
+            studying.append({"student_id": sid, "nickname": nickname_map.get(sid, sid)})
+
+    return jsonify({"ok": True, "studying": studying})
 
 # ================================
 #  ポイント データ
