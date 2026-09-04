@@ -4966,6 +4966,7 @@ def _deck_meta_text(data, folder_names=None):
     lines = []
     lines.append(f"デッキ名: {data.get('name') or ''}")
     lines.append(f"科目: {data.get('subject') or '(未設定)'}")
+    lines.append(f"説明: {_clip_text(data.get('description')) or '(未設定)'}")
     lines.append(f"状態: {'未完成（作成中）' if data.get('incomplete') else '完成'}")
     lines.append(f"形式: {'選択式デッキ' if data.get('choice_mode') else '暗記カード（通常デッキ）'}")
     lines.append(f"由来: {'クイズ過去問（問題の編集不可）' if data.get('quiz_archive') else '通常'}")
@@ -5028,6 +5029,7 @@ def _meta_from_card_data(filename, data):
         "name":     data.get("name", filename),
         "count":    len(cards),
         "subject":  data.get("subject"),
+        "description": data.get("description"),  # ★ 追加：デッキの説明欄（一覧表示用にも索引へ含める）
         "folder_id": data.get("folder_id"),
         "has_folder_id": "folder_id" in data,
         "published_by": (data.get("published_by") or {}).get("nickname"),
@@ -5051,6 +5053,7 @@ def _card_index_entry_lines(entry, folder_names=None):
         ("デッキ名", entry.get("name") or ""),
         ("問題数", f"{entry.get('count', 0)}問"),
         ("科目", entry.get("subject") or "(未設定)"),
+        ("説明", _clip_text(entry.get("description")) or "(未設定)"),
         ("フォルダ", folder_names.get(folder_id, folder_id) if folder_id else "(フォルダなし)"),
         ("公開者", entry.get("published_by") or "(不明)"),
         ("状態", "未完成（作成中）" if entry.get("incomplete") else "完成"),
@@ -5199,6 +5202,8 @@ def save_cards():
     filename = data.get("filename")
     subject  = data.get("subject")
     folder_id = data.get("folder_id")
+    # ★ 追加：デッキの説明欄（任意）。空文字は「未設定」としてNoneに揃える。
+    description = (data.get("description") or "").strip() or None
     # ★ 注意：publisher_id/publisher_nicknameはあえてクライアント自己申告のまま
     #   信用している（ここをログインセッションの値で強制的に上書きすると、
     #   「他の人が公開したデッキに自分がカードを追加/編集しても、公開者表示は
@@ -5225,7 +5230,7 @@ def save_cards():
         return jsonify({"ok": False, "error": "name と cards は必須です"})
 
     # --- ★ 制御文字・不可視文字・壊れた符号位置を弾く（デッキ名・各カードの本文） ---
-    check_fields = {"デッキ名": name, "公開者ニックネーム": publisher_nickname}
+    check_fields = {"デッキ名": name, "公開者ニックネーム": publisher_nickname, "デッキの説明": description}
     for i, c in enumerate(cards):
         if not isinstance(c, dict):
             continue
@@ -5339,6 +5344,7 @@ def save_cards():
         "name": name,
         "cards": cards,
         "subject": subject,
+        "description": description,  # ★ 追加：デッキの説明欄（任意）
         "folder_id": folder_id,
         "published_by": {
             "id": final_publisher_id,
@@ -6014,6 +6020,7 @@ def deck_share_info():
         "ok": True,
         "name": data.get("name", entry.get("deck_name")),
         "subject": data.get("subject"),
+        "description": data.get("description"),  # ★ 追加：デッキの説明欄（任意、閲覧専用ビューアにも見せてよい情報）
         "cards": data.get("cards", []),
         "choice_mode": data.get("choice_mode"),
         "incomplete": bool(data.get("incomplete", False)),
@@ -8427,6 +8434,7 @@ def _folders_text(folders):
         parent_id = f.get("parent_id")
         fields = [
             ("フォルダ名", f.get('name')),
+            ("説明", _clip_text(f.get('description')) or "(未設定)"),
             ("親フォルダ", by_id.get(parent_id, parent_id) if parent_id else "(なし・最上位)"),
         ]
         lines.extend(_json_block(fields))
@@ -8573,8 +8581,8 @@ def list_folders():
 @app.route("/save_folder", methods=["POST"])
 def save_folder():
     """
-    新規作成: { name, parent_id }
-    改名／移動: { id, name, parent_id }
+    新規作成: { name, parent_id, description }
+    改名／移動: { id, name, parent_id, description }
     """
     data      = request.json or {}
     guild_id, _student_id, nickname, err = require_login_json(data)  # ★ 変更にはログイン必須
@@ -8583,11 +8591,13 @@ def save_folder():
     folder_id = data.get("id")
     name      = (data.get("name") or "").strip()
     parent_id = data.get("parent_id")
+    # ★ 追加：フォルダの説明欄（任意）。空文字は「未設定」としてNoneに揃える。
+    description = (data.get("description") or "").strip() or None
 
     if not name:
         return jsonify({"ok": False, "error": "name は必須です"})
 
-    err = reject_if_bug_chars({"フォルダ名": name})
+    err = reject_if_bug_chars({"フォルダ名": name, "フォルダの説明": description})
     if err:
         return err
 
@@ -8624,11 +8634,12 @@ def save_folder():
                     })
                 target["parent_id"] = parent_id
             target["name"] = name
+            target["description"] = description
         else:
             if _folder_level(folders, parent_id) >= MAX_FOLDER_DEPTH:
                 return jsonify({"ok": False, "error": f"フォルダは{MAX_FOLDER_DEPTH}階層までしか作成できません"})
             folder_id = generate_folder_id()
-            folders.append({"id": folder_id, "name": name, "parent_id": parent_id})
+            folders.append({"id": folder_id, "name": name, "parent_id": parent_id, "description": description})
 
         save_card_folders(guild_id, folders, sha)
         change = file_diff(folders_file(guild_id), old_folders_text, _folders_text(folders))
