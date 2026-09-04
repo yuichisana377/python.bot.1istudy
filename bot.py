@@ -8985,10 +8985,16 @@ def save_seen():
 @app.route("/deck_understanding", methods=["GET"])
 def deck_understanding():
     """指定デッキ（複数可、カンマ区切り）について、自分だけでなく全生徒分を
-    合算した「わかる率」を返す。
-    ・「学習した（seen）カードのうち、今わからないマークが付いていない」割合。
+    集計した「わかる率」を、カード1枚ごとに返す。
+    ・「そのカードを学習した（seen）生徒のうち、今わからないマークが付いていない人数」
+      をカードごとに数える（＝人数ベース。1人が同じカードを何度学習しても1人分にしか
+      数えない。studyDataの`seen`側が生徒ごとに重複無しで保存されているため）。
+    ・★ 以前はデッキ全体で合算した1つの数値（studied/understood）を返していたが、
+      デッキ内の複数カード分を合算すると「実際の生徒数よりずっと大きい延べ数」に
+      なってしまい、人数として誤解を招く指摘を受けたため、カードごとの内訳を
+      そのまま返す方式に変更した（合算はフロント側で行わない＝１枚ごとの表示に使う）。
     ・生徒ごとに別ファイル（study_data_{guild_id}_*.json）に分かれているため、
-      対象ギルドの全ファイルを読んで合算する。ローカルディスクの読み込みなので
+      対象ギルドの全ファイルを読んで集計する。ローカルディスクの読み込みなので
       生徒数が多くても軽い（GitHub API等を叩きに行くわけではない）。
     """
     guild_id = request.args.get("guild_id")
@@ -9004,8 +9010,8 @@ def deck_understanding():
         return jsonify({"ok": False, "error": "missing filenames"})
 
     prefix = f"study_data_{guild_id}_"
-    studied = 0
-    understood = 0
+    # カードごとの内訳：キーは "<デッキのfilename>:<カードキー>"、値は [わかる人数, 学習した人数]
+    cards = {}
     try:
         names = os.listdir(DATA_DIR)
     except OSError:
@@ -9023,10 +9029,13 @@ def deck_understanding():
             if not seen_keys:
                 continue
             unsure_keys = set(unsure_map.get(fn) or [])
-            studied += len(seen_keys)
-            understood += sum(1 for k in seen_keys if k not in unsure_keys)
+            for k in seen_keys:
+                stat = cards.setdefault(f"{fn}:{k}", [0, 0])
+                stat[1] += 1  # このカードを学習した人数
+                if k not in unsure_keys:
+                    stat[0] += 1  # そのうち「わからない」が付いていない人数
 
-    return jsonify({"ok": True, "studied": studied, "understood": understood})
+    return jsonify({"ok": True, "cards": cards})
 
 @app.route("/save_study_progress", methods=["POST"])
 def save_study_progress_api():
