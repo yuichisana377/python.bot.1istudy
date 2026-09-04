@@ -4749,9 +4749,13 @@ def complete_task():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    # ★ 2026/08/19：課題の達成状況はStudyLog.js上「自分のみ」にしか表示され
-    #   ない個人的な記録（他の生徒には見えない）なので、運用ログには残さない
+    # ★ 2026/08/19：課題の達成状況は当時StudyLog.js上「自分のみ」にしか表示
+    #   されない個人的な記録だったため、運用ログには残さない方針にした
     #   （運用ログはログインなしでも閲覧できる＝実質公開の場のため）。
+    #   2026/09/04追記：StudyLog.js側で「何人中何人が達成したか」＋達成者名を
+    #   全員に表示する機能を追加したが（get_completed_tasksが元々全ユーザー分を
+    #   返せる設計だったため、既存データをそのまま集計するだけで実現できた）、
+    #   運用ログへ個々の達成イベントを記録する方針自体は変えていない。
     return jsonify({"ok": True, "total": pts[student_id]})
 
 
@@ -4801,8 +4805,7 @@ def uncomplete_task():
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
 
-    # ★ 2026/08/19：課題の達成状況は「自分のみ」にしか表示されない個人的な
-    #   記録なので、運用ログには残さない（complete_task側と同じ理由）。
+    # ★ 運用ログには残さない（complete_task側のコメント参照）。
     return jsonify({"ok": True, "total": pts[student_id]})
 
 # ================================
