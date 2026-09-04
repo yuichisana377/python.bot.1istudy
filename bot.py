@@ -4467,13 +4467,16 @@ def request_delete():
             return jsonify({"ok": False, "error": f"local_write_failed: {write_err}"})
         notified_via = "web_pending"
 
-    log_event(
-        guild_id,
-        "card" if category == "deck" else "notice",
-        f"「{target_name}」の削除を{requester_nickname}さんが{owner_nickname or '作成者'}さんに依頼しました（承認待ち）。",
-        actor=requester_nickname,
-        detail=[{"file": None, "diff": f"理由: {reason}"}],
-    )
+    # ★ デッキの削除依頼は運用ログに出さない（ユーザーの指定：「デッキの
+    #   依頼関係は表示しなくて良い」）。お知らせの削除依頼は従来通り記録する。
+    if category != "deck":
+        log_event(
+            guild_id,
+            "notice",
+            f"「{target_name}」の削除を{requester_nickname}さんが{owner_nickname or '作成者'}さんに依頼しました（承認待ち）。",
+            actor=requester_nickname,
+            detail=[{"file": None, "diff": f"理由: {reason}"}],
+        )
     return jsonify({"ok": True, "owner_nickname": owner_nickname, "notified_via": notified_via})
 
 @app.route("/pending_delete_requests", methods=["GET"])
@@ -4562,12 +4565,14 @@ def respond_delete_request():
     target_name, _lines = _delete_target_summary(guild_id, category, filename)
 
     if action == "reject":
-        log_event(
-            guild_id,
-            "card" if category == "deck" else "notice",
-            f"「{target_name}」の削除依頼を{owner_nickname}さんが却下しました。",
-            actor=owner_nickname,
-        )
+        # ★ デッキの削除依頼は運用ログに出さない（お知らせは従来通り記録する）。
+        if category != "deck":
+            log_event(
+                guild_id,
+                "notice",
+                f"「{target_name}」の削除依頼を{owner_nickname}さんが却下しました。",
+                actor=owner_nickname,
+            )
         result = jsonify({"ok": True, "action": "reject"})
     else:
         note = f"（{requester_nickname}さんの削除依頼を{owner_nickname}さんが承認）"
@@ -6114,13 +6119,8 @@ def request_deck_share():
             return jsonify({"ok": False, "error": f"local_write_failed: {write_err}"})
         notified_via = "web_pending"
 
-    log_event(
-        guild_id,
-        "card",
-        f"「{deck_name}」の共有リンク発行を{requester_nickname}さんが{owner_nickname or '作成者'}さんに依頼しました（承認待ち）。",
-        actor=requester_nickname,
-        detail=[{"file": None, "diff": f"理由: {reason}"}],
-    )
+    # ★ デッキの共有リンク発行依頼は運用ログに出さない（ユーザーの指定：
+    #   「デッキの依頼関係は表示しなくて良い」）。
     return jsonify({"ok": True, "owner_nickname": owner_nickname, "notified_via": notified_via})
 
 @app.route("/pending_share_requests", methods=["GET"])
@@ -6222,20 +6222,9 @@ def respond_deck_share_request():
             "used_at": None,
         })
         save_share_grants(guild_id, items, sha)
-        log_event(
-            guild_id,
-            "card",
-            f"「{deck_name}」の共有リンク発行依頼を{owner_nickname}さんが承認しました（{requester_nickname}さんが発行可能に）。",
-            actor=owner_nickname,
-        )
+        # ★ デッキの共有リンク発行依頼は運用ログに出さない（承認/却下とも対象外）。
         result_message = "承認しました。依頼者が共有リンクを発行できるようになりました。"
     else:
-        log_event(
-            guild_id,
-            "card",
-            f"「{deck_name}」の共有リンク発行依頼を{owner_nickname}さんが却下しました。",
-            actor=owner_nickname,
-        )
         result_message = "却下しました。依頼者にはその旨が伝わります。"
 
     # pending_share_requests（Discord未連携でWeb確認待ちになっていた控え）から、
