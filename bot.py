@@ -63,18 +63,18 @@ JST = timezone("Asia/Tokyo")
 #  ・DISCORD_OAUTH_REDIRECT_URI : Discord Developer Portal の
 #                            OAuth2 → Redirects に登録したURLと
 #                            1文字違わず完全一致している必要がある。
-#                            ★ Ubuntuサーバーに移行する場合は、実際に
-#                              このサーバーへアクセスできるURL（独自ドメイン
-#                              やサーバーのグローバルIPなど）を環境変数
-#                              DISCORD_OAUTH_REDIRECT_URI に設定し、
-#                              Discord Developer Portal 側のRedirect URLも
-#                              同じ値に変更すること。
+#                            ★ 本番用の独自ドメイン（study-web.chiro377.com）
+#                              を使用中。変更する場合は環境変数
+#                              DISCORD_OAUTH_REDIRECT_URI と、Discord
+#                              Developer Portal 側のRedirect URLの両方を
+#                              同じ値に変更すること（bot.1istudy.web側の
+#                              functions/discord_oauth_callback.jsも要確認）。
 # ================================
-DISCORD_CLIENT_ID     = os.getenv("DISCORD_CLIENT_ID", "1515358957542047975")
+DISCORD_CLIENT_ID     = os.getenv("DISCORD_CLIENT_ID", "1518551360055021650")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DISCORD_OAUTH_REDIRECT_URI = os.getenv(
     "DISCORD_OAUTH_REDIRECT_URI",
-    "https://chiro-ubuntuserver.tail1130ba.ts.net/discord_oauth_callback"
+    "https://study-web.chiro377.com/discord_oauth_callback"
 )
 if not DISCORD_CLIENT_SECRET:
     print("[WARN] 環境変数 DISCORD_CLIENT_SECRET が未設定です。"
@@ -2105,7 +2105,7 @@ async def start_command(interaction: discord.Interaction):
         "2️⃣ **/set_subject_category** — 科目チャンネルをまとめているカテゴリ内のどれかのチャンネルで実行し、CardMakerの公開通知先などを設定する（任意）\n"
         "3️⃣ **/setup_roles** — 通生/寮生の振り分けパネルを投稿する（任意）\n"
         "4️⃣ **/name** — Bot・Webサイトの表示名を設定する（任意。未設定ならこのDiscordサーバーの名前がそのまま使われます）\n\n"
-        "🌐 **Webサイト**\nhttps://1istudyweb.pages.dev/\n"
+        "🌐 **Webサイト**\nhttps://study-web.chiro377.com/\n"
         "「Discordでログイン」から、このサーバーのメンバーなら誰でも使えます（学籍番号の登録は初回のみ）。\n\n"
         "コマンド一覧は **/help** を見てください。"
     )
@@ -2391,7 +2391,7 @@ async def help_command(interaction: discord.Interaction):
         "**/setup_roles** — 通生/寮生 振り分けパネルを投稿する\n"
         "**/name** — Bot・Webサイトの表示名を設定する\n"
         "**/id連携** — StudyLogにログインして発行した連携コードを使い、DiscordアカウントをStudyLogと連携する（DM通知を受け取れるようになる）\n"
-        "**webページ** - https://1istudyweb.pages.dev/\n"
+        "**webページ** - https://study-web.chiro377.com/\n"
     )
     await interaction.response.send_message(msg, ephemeral=True)
 
@@ -3609,7 +3609,7 @@ def _oauth_result_page(success: bool, message: str) -> str:
     <div style="font-size:15px;color:#334155;line-height:1.6;">{message}</div>
     <div style="font-size:12px;color:#94a3b8;margin-top:16px;">3秒後にStudyLogへ戻ります…</div>
   </div>
-  <script>setTimeout(function() {{ location.href = "https://1istudyweb.pages.dev/StudyLog"; }}, 3000);</script>
+  <script>setTimeout(function() {{ location.href = "https://study-web.chiro377.com/StudyLog"; }}, 3000);</script>
 </body></html>"""
 
 
@@ -3779,7 +3779,7 @@ def _handle_discord_login_callback(discord_user_id: int, discord_username: str) 
 
     ★ このエンドポイント自体はAPIドメイン（python-bot-1istudy.onrender.com）
       で動いているため、ここで直接localStorageにセッションを書き込んでも
-      フロントエンド（1istudyweb.pages.dev）からは見えない（ドメインが違うと
+      フロントエンド（study-web.chiro377.com）からは見えない（ドメインが違うと
       localStorageは共有されない）。そのため、セッション情報はURLの
       クエリパラメータとしてフロントエンドへ渡し、フロントエンド自身の
       JS（Login.js）がそちらのドメイン上でlocalStorageに保存する。
@@ -3834,10 +3834,10 @@ def _handle_discord_login_callback(discord_user_id: int, discord_username: str) 
                 "guild_name": gname,
                 "multi_guild": "0",
             })
-            return redirect(f"https://1istudyweb.pages.dev/Login?{qs}")
+            return redirect(f"https://study-web.chiro377.com/Login?{qs}")
         # 初回、またはデータ不整合 → 学籍番号入力（登録）ステップへ
         reg_token = issue_discord_reg_token(candidates, discord_user_id, discord_username)
-        return redirect(f"https://1istudyweb.pages.dev/Login?discord_reg={reg_token}")
+        return redirect(f"https://study-web.chiro377.com/Login?discord_reg={reg_token}")
 
     # ★ 修正：候補（Botが参加していて、かつ本人がメンバーであるサーバー）が
     #   2件以上ある場合は、登録済みかどうかに関わらず必ず選択させる。
@@ -3869,7 +3869,7 @@ def _handle_discord_login_callback(discord_user_id: int, discord_username: str) 
         ensure_ascii=False, separators=(",", ":"),
     )
     qs = urlencode({"guild_choice": pending, "candidates": display_candidates})
-    return redirect(f"https://1istudyweb.pages.dev/Login?{qs}")
+    return redirect(f"https://study-web.chiro377.com/Login?{qs}")
 
 
 @app.route("/finalize_login", methods=["POST"])
@@ -4346,7 +4346,7 @@ def report_problem():
 #    公開されたもの）は、従来通り誰でも直接削除できる（_deck_owner /
 #    _notice_owner が (None, None) を返すため）。
 # ================================
-DELETE_APPROVAL_URL = "https://1istudyweb.pages.dev/DeleteApproval.html"
+DELETE_APPROVAL_URL = "https://study-web.chiro377.com/DeleteApproval.html"
 DELETE_REQUEST_TOKEN_TTL_SEC = 60 * 60 * 24 * 14  # 14日間有効
 
 def create_delete_request_token(payload: dict) -> str:
@@ -4873,7 +4873,7 @@ LEGACY_GUILD_ID = 1509880344806162544  # ★ 移行専用定数（1I勉強会）
 # （CardMaker/お知らせ/運用ログの各migrate_*_to_guild()が参照する）。
 # ★ 追加：CardMakerのフロントエンドURL。Discord通知に「該当デッキへ飛ぶリンク」を
 #   付けるために使う（Cardmaker.js 側で ?deck=<filename> を見て自動で移動する）。
-CARDMAKER_URL = "https://1istudyweb.pages.dev/Cardmaker.html"
+CARDMAKER_URL = "https://study-web.chiro377.com/Cardmaker.html"
 
 def cards_index_file(guild_id: int) -> str:
     return f"cards_index_{guild_id}.json"
@@ -5729,8 +5729,8 @@ DECK_SHARE_DAILY_LIMIT = 3                  # 1人が1日に作成できる件�
 DECK_SHARE_KEEP_SEC = 60 * 60 * 24 * 35     # ファイル掃除までの保持期間（期限＋当日判定に余裕を持たせる）
 SHARE_GRANT_TTL_SEC = 60 * 60 * 24 * 14     # 承認後、依頼者が実際にリンクを発行できる猶予期間
 SHARE_REQUEST_TOKEN_TTL_SEC = 60 * 60 * 24 * 14  # 依頼DMのリンク自体の有効期限（削除確認依頼と同じ長さ）
-SHARE_APPROVAL_URL = "https://1istudyweb.pages.dev/ShareApproval.html"
-DECK_SHARE_VIEW_URL = "https://1istudyweb.pages.dev/DeckShare.html"
+SHARE_APPROVAL_URL = "https://study-web.chiro377.com/ShareApproval.html"
+DECK_SHARE_VIEW_URL = "https://study-web.chiro377.com/DeckShare.html"
 
 def _new_share_token(guild_id):
     """DeckShare.htmlのURLに載る合言葉。トークンだけから対象guildを
