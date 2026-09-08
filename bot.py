@@ -2198,19 +2198,35 @@ async def setup_roles_error(interaction: discord.Interaction, error: app_command
             await interaction.response.send_message(f"エラー: {error}", ephemeral=True)
 
 
+# 通生/寮生パネルのリアクション処理を、同一ユーザーについて同時に2つ以上
+# 走らせないためのロック。パネルを複数枚投稿した状態で立て続けに別々の
+# パネルへリアクションされると、ロール付与のREST呼び出しが完了する前に
+# 次のイベントが処理され、双方が「まだ相手のロールが付いていない」と
+# 判断して両方のロールを付けてしまう競合が起こり得るため。
+_role_reaction_locks: dict[tuple[int, int], asyncio.Lock] = {}
+
+
+def _get_role_reaction_lock(guild_id: int, user_id: int) -> asyncio.Lock:
+    key = (guild_id, user_id)
+    lock = _role_reaction_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _role_reaction_locks[key] = lock
+    return lock
+
+
 async def _handle_role_reaction(payload: discord.RawReactionActionEvent, add: bool):
     if payload.guild_id is None:
+        return
+
+    emoji = str(payload.emoji)
+    if emoji not in (EMOJI_COMMUTER, EMOJI_DORM):
         return
 
     config = await async_load_config(payload.guild_id)
     panels = _migrate_role_panels(config)
     panel = next((p for p in panels if p.get("message_id") == payload.message_id), None)
     if panel is None:
-        return
-    panel_message_id = panel["message_id"]
-
-    emoji = str(payload.emoji)
-    if emoji not in (EMOJI_COMMUTER, EMOJI_DORM):
         return
 
     guild = bot.get_guild(payload.guild_id)
@@ -2223,32 +2239,62 @@ async def _handle_role_reaction(payload: discord.RawReactionActionEvent, add: bo
 
     commuter_role = guild.get_role(panel.get("commuter_role_id"))
     dorm_role = guild.get_role(panel.get("dorm_role_id"))
-    channel_id = panel.get("channel_id")
-    channel = guild.get_channel(channel_id) if channel_id else None
 
-    try:
-        if add:
-            if emoji == EMOJI_COMMUTER and commuter_role:
-                await member.add_roles(commuter_role, reason="通生登録")
-                if dorm_role and dorm_role in member.roles:
-                    await member.remove_roles(dorm_role, reason="通生に変更のため")
-                    if channel:
-                        msg = await channel.fetch_message(panel_message_id)
-                        await msg.remove_reaction(EMOJI_DORM, member)
-            elif emoji == EMOJI_DORM and dorm_role:
-                await member.add_roles(dorm_role, reason="寮生登録")
-                if commuter_role and commuter_role in member.roles:
-                    await member.remove_roles(commuter_role, reason="寮生に変更のため")
-                    if channel:
-                        msg = await channel.fetch_message(panel_message_id)
-                        await msg.remove_reaction(EMOJI_COMMUTER, member)
-        else:
-            if emoji == EMOJI_COMMUTER and commuter_role:
-                await member.remove_roles(commuter_role, reason="通生リアクション解除")
-            elif emoji == EMOJI_DORM and dorm_role:
-                await member.remove_roles(dorm_role, reason="寮生リアクション解除")
-    except discord.Forbidden:
-        pass
+    # 通生ロール/寮生ロールの組み合わせが同じ他のパネル（同じ振り分けを
+    # 別チャンネルに複数枚投稿した場合など）を洗い出す。ロール自体は
+    # 共有なので、そのパネル群すべてでリアクションの見た目も揃える
+    # （＝あるパネルで選び直したら、他のパネルに残っていた古い選択の
+    # リアクションも取り消す）。これをしないと、片方のパネルのロールは
+    # 正しく付け替わっても別パネル上には古いリアクションが残り続け、
+    # ユーザーがそれを見てまた反応するとロールの状態がロールバック
+    # してしまう（結果的に通生・寮生どちらのロールも付く/消えるが
+    # 起こりうる）ことがあった。
+    sibling_panels = [
+        p for p in panels
+        if p.get("commuter_role_id") == panel.get("commuter_role_id")
+        and p.get("dorm_role_id") == panel.get("dorm_role_id")
+    ]
+
+    async def _remove_reaction_everywhere(target_emoji: str):
+        for p in sibling_panels:
+            ch_id = p.get("channel_id")
+            msg_id = p.get("message_id")
+            if not ch_id or not msg_id:
+                continue
+            channel = guild.get_channel(ch_id)
+            if channel is None:
+                continue
+            try:
+                msg = await channel.fetch_message(msg_id)
+                await msg.remove_reaction(target_emoji, member)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                pass
+
+    async with _get_role_reaction_lock(payload.guild_id, payload.user_id):
+        try:
+            if add:
+                if emoji == EMOJI_COMMUTER and commuter_role:
+                    await member.add_roles(commuter_role, reason="通生登録")
+                    if dorm_role:
+                        # メンバーが実際に寮生ロールを持っているかを
+                        # キャッシュで判定せず、常に解除を試みる
+                        # （discord.pyのremove_rolesは持っていなくても
+                        # 何もしないため安全。キャッシュのズレによる
+                        # 解除漏れ＝両方のロールが残る事故を防ぐ）。
+                        await member.remove_roles(dorm_role, reason="通生に変更のため")
+                        await _remove_reaction_everywhere(EMOJI_DORM)
+                elif emoji == EMOJI_DORM and dorm_role:
+                    await member.add_roles(dorm_role, reason="寮生登録")
+                    if commuter_role:
+                        await member.remove_roles(commuter_role, reason="寮生に変更のため")
+                        await _remove_reaction_everywhere(EMOJI_COMMUTER)
+            else:
+                if emoji == EMOJI_COMMUTER and commuter_role:
+                    await member.remove_roles(commuter_role, reason="通生リアクション解除")
+                elif emoji == EMOJI_DORM and dorm_role:
+                    await member.remove_roles(dorm_role, reason="寮生リアクション解除")
+        except discord.Forbidden:
+            pass
 
 
 @bot.event
