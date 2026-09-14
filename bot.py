@@ -1597,17 +1597,27 @@ def _generate_guild_invite_code() -> str:
 OAUTH_STATE_TTL_SEC = 5 * 60
 OAUTH_STATES = {}  # state(str) -> {"guild_id", "student_id", "purpose", "expires"}
 
-def issue_oauth_state(guild_id: int, student_id, purpose: str) -> str:
+def issue_oauth_state(guild_id: int, student_id, purpose: str, platform: str = None) -> str:
     """
     purpose:
       "link"  … 既にログイン中の本人が、追加でDiscordを連携する（従来の /discord_oauth_start）
       "login" … まだログインしていない状態で、Discordそのものでログインしようとしている
                 （student_id はこの時点ではまだ分からないので None）
+    platform:
+      ★ 追加：ネイティブアプリ（1istudy.web.andriod）からの/discord_login_startか
+        どうかを覚えておくためのフラグ（"app" or None）。埋め込みWebViewでの
+        描画不具合（Discordの重いSPAがGPUタイル予算を超過し真っ暗になる既知の
+        バグ）を避けるため、アプリはChrome Custom Tabs（本物のChromeプロセス）
+        でこのURLを開く。最終的なコールバックはWebフロント（study-web.chiro377.com）
+        ではなく、アプリのカスタムURLスキーム（istudyapp://login）へ返す必要が
+        あるため、stateにこの情報を積んでおき、_handle_discord_login_callbackで
+        リダイレクト先の切り替えに使う。
     """
     state = secrets.token_urlsafe(24)
     OAUTH_STATES[state] = {
         "guild_id": guild_id,
         "student_id": student_id,
+        "platform": platform,
         "purpose": purpose,
         "expires": time.time() + OAUTH_STATE_TTL_SEC,
     }
@@ -3546,7 +3556,13 @@ def discord_login_start():
     if not DISCORD_CLIENT_SECRET:
         return _oauth_result_page(False, "現在Discordログインは準備中です。時間をおいてもう一度お試しください。")
 
-    state = issue_oauth_state(None, None, purpose="login")
+    # ★ 追加：ネイティブアプリがChrome Custom Tabsからこのエンドポイントを開くときは
+    #   ?platform=app を付けて呼ぶ（DiscordAuthLauncher.kt参照）。これをstateに積んでおき、
+    #   最終リダイレクト先をWebフロントではなくアプリのカスタムURLスキームに切り替える。
+    platform = request.args.get("platform")
+    if platform not in ("app", None):
+        platform = None
+    state = issue_oauth_state(None, None, purpose="login", platform=platform)
     authorize_url = "https://discord.com/oauth2/authorize?" + urlencode({
         "client_id":     DISCORD_CLIENT_ID,
         "redirect_uri":  DISCORD_OAUTH_REDIRECT_URI,
@@ -3673,7 +3689,7 @@ def discord_oauth_callback():
         return _oauth_result_page(False, "Discordのユーザー情報取得に失敗しました。時間をおいてもう一度お試しください。")
 
     if purpose == "login":
-        return _handle_discord_login_callback(discord_user_id, discord_username)
+        return _handle_discord_login_callback(discord_user_id, discord_username, platform=entry.get("platform"))
     else:
         return _handle_discord_link_callback(guild_id, entry["student_id"], discord_user_id)
 
@@ -3769,7 +3785,19 @@ def resolve_login_choice_token(token: str):
         return None
 
 
-def _handle_discord_login_callback(discord_user_id: int, discord_username: str) -> str:
+def _login_redirect_base(platform: str = None) -> str:
+    """
+    ★ 追加：Discordログイン成功後のリダイレクト先。通常（ブラウザ）はWebフロント、
+      ネイティブアプリ（platform=="app"）はアプリのカスタムURLスキームへ返す。
+      クエリパラメータの組み立て方（urlencode(...)）自体はどちらも同じなので、
+      呼び出し側はこのベースURLだけ差し替えれば良い。
+    """
+    if platform == "app":
+        return "istudyapp://login"
+    return "https://study-web.chiro377.com/Login"
+
+
+def _handle_discord_login_callback(discord_user_id: int, discord_username: str, platform: str = None) -> str:
     """
     Discordそのものでログインしようとしている（まだ未ログイン）。
     ★「全員に登録し直してもらう」方針のため、既存の discord_links
@@ -3834,10 +3862,10 @@ def _handle_discord_login_callback(discord_user_id: int, discord_username: str) 
                 "guild_name": gname,
                 "multi_guild": "0",
             })
-            return redirect(f"https://study-web.chiro377.com/Login?{qs}")
+            return redirect(f"{_login_redirect_base(platform)}?{qs}")
         # 初回、またはデータ不整合 → 学籍番号入力（登録）ステップへ
         reg_token = issue_discord_reg_token(candidates, discord_user_id, discord_username)
-        return redirect(f"https://study-web.chiro377.com/Login?discord_reg={reg_token}")
+        return redirect(f"{_login_redirect_base(platform)}?discord_reg={reg_token}")
 
     # ★ 修正：候補（Botが参加していて、かつ本人がメンバーであるサーバー）が
     #   2件以上ある場合は、登録済みかどうかに関わらず必ず選択させる。
@@ -3869,7 +3897,7 @@ def _handle_discord_login_callback(discord_user_id: int, discord_username: str) 
         ensure_ascii=False, separators=(",", ":"),
     )
     qs = urlencode({"guild_choice": pending, "candidates": display_candidates})
-    return redirect(f"https://study-web.chiro377.com/Login?{qs}")
+    return redirect(f"{_login_redirect_base(platform)}?{qs}")
 
 
 @app.route("/finalize_login", methods=["POST"])
