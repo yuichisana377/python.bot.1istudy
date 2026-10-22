@@ -74,7 +74,7 @@ JST = timezone("Asia/Tokyo")
 DISCORD_CLIENT_ID     = os.getenv("DISCORD_CLIENT_ID", "1518551360055021650")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DISCORD_OAUTH_REDIRECT_URI = "https://f5e9c4e8.1istudyweb.pages.dev/discord_oauth_callback"
-)
+
 if not DISCORD_CLIENT_SECRET:
     print("[WARN] 環境変数 DISCORD_CLIENT_SECRET が未設定です。"
           "Discord OAuth連携（/discord_oauth_start, /discord_oauth_callback）は無効化されます。"
