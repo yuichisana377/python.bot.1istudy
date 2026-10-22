@@ -33,7 +33,7 @@ from urllib.parse import urlencode, quote
 #   使っていたが、Ubuntuサーバー上で常時稼働させる構成に合わせて、
 #   すべてサーバーのローカルディスク（DATA_DIR配下）に保存する方式に変更した。
 #   ・DATA_DIR は環境変数で変更可能（未設定時はこのスクリプトと同じ場所の
-#     "data" フォルダを使う）。
+#     "data" フォルダを使う）
 #   ・systemd等で再起動してもデータが消えないよう、DATA_DIRは外部ボリュームや
 #     永続的なディスク上のパスを指定することを推奨する。
 DATA_DIR            = os.getenv("DATA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
