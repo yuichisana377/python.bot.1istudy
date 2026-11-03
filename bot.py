@@ -4274,23 +4274,67 @@ def _load_problem_reports(guild_id):
     return (data or []), sha
 
 
-def _save_problem_report(guild_id, page: str, message: str):
-    """報告内容をDMとは別にサーバー上へ確実に残す。
-    ★ 追加：以前はDiscord DM（send_discord_dm）が失敗する
-      （管理者がDiscord未連携／サーバー未参加／一時的な通信エラー等）と、
-      報告内容がそのまま失われていた（記録が一切残らない）。この機能は
-      「サイトのJSが完全に壊れている」という最悪の状況からの唯一の
-      連絡手段なので、DMの成否によらずまずファイルへ保存し、
-      報告そのものが消えないようにする。300件を超えたら古い順に切り捨てる
-      （system_log.jsonと同じ考え方）。"""
-    items, sha = _load_problem_reports(guild_id)
-    items.append({
-        "time": datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S"),
-        "page": page,
-        "message": message,
-    })
-    items = items[-300:]
-    local_put(f"problem_reports_{guild_id}.json", items, sha)
+# ★ 2026/11/04 追加：報告の連打・大量送信対策と報告番号。
+#   JSが壊れたとき、各ページの「読み込み中」画面から何度も送信されて管理者のDMが
+#   埋まる事故が実際に起きたため、①報告に連番を振る、②同じ人（IP）が同じページに
+#   短時間で再送しても新しい報告にせず既存の番号を返す、③全体でもDM通知の回数に
+#   上限を設ける（上限を超えた分はファイルには保存するがDMは送らない）。
+#   IPはメモリ上の重複判定にだけ使い、ファイルには保存しない。
+_REPORT_LOCK = Lock()
+_REPORT_DEDUPE_WINDOW_SEC = 10 * 60   # 同じIP×ページの再送は10分間まとめる
+_REPORT_DM_WINDOW_SEC = 10 * 60
+_REPORT_DM_MAX = 5                     # 10分間にDMで通知する報告の最大件数（全体）
+_report_recent: dict = {}              # (ip, page) -> (時刻, 報告番号)
+_report_dm_times: list = []
+
+
+def _register_problem_report(guild_id, page: str, message: str, diag: str, ua: str, ip: str):
+    """報告を保存し、(報告番号, 重複か, DMを送るべきか, 保存できたか) を返す。
+    採番と保存は同じロックの中で行う（Flaskはマルチスレッドのため）。"""
+    now = time.time()
+    with _REPORT_LOCK:
+        key = (ip, page)
+        prev = _report_recent.get(key)
+        items, sha = _load_problem_reports(guild_id)
+        if prev and now - prev[0] < _REPORT_DEDUPE_WINDOW_SEC:
+            number = prev[1]
+            for it in items:
+                if it.get("number") == number:
+                    it["count"] = it.get("count", 1) + 1
+                    if message and message not in (it.get("message") or ""):
+                        it["message"] = ((it.get("message") or "") + "\n" + message)[:500]
+                    break
+            try:
+                local_put(f"problem_reports_{guild_id}.json", items, sha)
+            except DataWriteError:
+                pass
+            return number, True, False, True
+
+        number = max([it.get("number", 0) for it in items] + [0]) + 1
+        items.append({
+            "number": number,
+            "time": datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S"),
+            "page": page,
+            "message": message,
+            "diag": diag,
+            "ua": ua,
+            "count": 1,
+        })
+        items = items[-300:]
+        try:
+            local_put(f"problem_reports_{guild_id}.json", items, sha)
+            saved = True
+        except DataWriteError:
+            saved = False
+        _report_recent[key] = (now, number)
+        # メモリが際限なく増えないよう、古い重複判定は捨てる
+        for k in [k for k, v in _report_recent.items() if now - v[0] > _REPORT_DEDUPE_WINDOW_SEC]:
+            _report_recent.pop(k, None)
+        _report_dm_times[:] = [t for t in _report_dm_times if now - t < _REPORT_DM_WINDOW_SEC]
+        should_dm = len(_report_dm_times) < _REPORT_DM_MAX
+        if should_dm:
+            _report_dm_times.append(now)
+        return number, False, should_dm, saved
 
 
 @app.route("/report_problem", methods=["POST"])
@@ -4304,10 +4348,14 @@ def report_problem():
       ブラウザの標準機能だけで送信できることが目的。
       ログイン中かどうかも問わない（JSが動かない前提のため、localStorageの
       セッション情報を読み出せるとは限らない）＝匿名の報告として扱う。
+    ★ 2026/11/04：報告番号の採番・連打の重複まとめ・DM通知の全体上限を追加。
+      フォームの hidden 欄 diag（最初のJSエラー）と User-Agent も記録する。
     """
     guild_id_raw = request.form.get("guild_id")
     page       = (request.form.get("page") or "不明なページ").strip()[:80]
     message    = (request.form.get("message") or "").strip()[:500]
+    diag       = (request.form.get("diag") or "").strip()[:300]
+    ua         = (request.headers.get("User-Agent") or "").strip()[:200]
     return_url = _sanitize_return_url(request.form.get("return_url"))
 
     try:
@@ -4315,28 +4363,38 @@ def report_problem():
     except (TypeError, ValueError):
         return _report_problem_result_page(False, "不正なリクエストです。", return_url)
 
-    # ★ まずファイルへの保存を試みる（DMの成否によらず報告を残すため）。
-    #   これ自体が失敗した場合（ディスク書き込みエラー等）だけは、
-    #   従来通りDMの結果だけで成功/失敗を判定する（フォールバックのそのまた
-    #   フォールバック）。
-    saved = True
-    try:
-        _save_problem_report(guild_id, page, message)
-    except DataWriteError:
-        saved = False
+    number, duplicate, should_dm, saved = _register_problem_report(
+        guild_id, page, message, diag, ua, _client_ip()
+    )
+    label = f"#{number:04d}"
 
-    body = f"ページ: {page}\n" + (f"内容: {message}" if message else "（内容の記入なし）")
+    if duplicate:
+        return _report_problem_result_page(
+            True, f"この問題はすでに報告を受け付けています（報告番号 {label}）。何度も送る必要はありません。", return_url
+        )
+
+    body = f"報告番号: {label}\nページ: {page}\n" + (f"内容: {message}" if message else "（内容の記入なし）")
+    if diag:
+        body += f"\nエラー: {diag}"
+    if ua:
+        body += f"\n端末: {ua}"
     body += "\n※JSが動かない状態からの送信のため、送信者は匿名です。"
+
+    if not should_dm:
+        # DM通知の全体上限を超えた分。ファイルには保存済みなので消えない。
+        return _report_problem_result_page(
+            True, f"報告を記録しました（報告番号 {label}）。報告が集中しているため、内容は保存して後ほど確認されます。", return_url
+        )
 
     try:
         send_discord_dm(guild_id, REPORT_PROBLEM_ADMIN_STUDENT_ID, "サイトの問題報告", body)
-        return _report_problem_result_page(True, "報告を送信しました。ありがとうございます。", return_url)
+        return _report_problem_result_page(True, f"報告を送信しました（報告番号 {label}）。ありがとうございます。", return_url)
     except Exception:
         if saved:
             # DMが届かなくても、報告自体はサーバーに保存済みなので消えていない旨を伝える。
             return _report_problem_result_page(
                 True,
-                "報告を記録しました。管理者への即時通知は届きませんでしたが、"
+                f"報告を記録しました（報告番号 {label}）。管理者への即時通知は届きませんでしたが、"
                 "内容は保存されているので後ほど確認されます。",
                 return_url,
             )
