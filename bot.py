@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from datetime import date as _date
 from flask import Flask, request, jsonify, make_response, redirect, Response
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 from threading import Thread, Lock
 from pytz import timezone
 import json
@@ -2692,9 +2693,12 @@ def add_schedule():
     if ok and guild:
         target_channel = get_subject_channel_by_name(guild, subject)
         if target_channel:
-            asyncio.run_coroutine_threadsafe(
-                target_channel.send(msg), bot.loop
-            ).result(timeout=10)
+            try:  # ★ 保存済みなので、チャンネル通知の失敗で全体を失敗扱いにしない
+                asyncio.run_coroutine_threadsafe(
+                    target_channel.send(msg), bot.loop
+                ).result(timeout=10)
+            except Exception as e:
+                print(f"[WARN] 予定追加のDiscord通知に失敗: {e}")
     return jsonify({"ok": ok, "message": msg})
 
 BASE_MAX_LOG_MINUTES = 180  # ★ タイマーを使っていない場合（手入力等）の上限。タイマー使用時は自動休憩を挟むたびに+3時間される
@@ -3061,9 +3065,12 @@ def edit_schedule():
             msg = f"編集しました！\n\n【編集前】\n{before_str}\n\n【編集後】\n{after_str}"
             if "points" in found:
                 msg += f"\n⭐ {found['points']}pt"
-            asyncio.run_coroutine_threadsafe(
-                target_channel.send(msg), bot.loop
-            ).result(timeout=10)
+            try:  # ★ 保存済みなので、チャンネル通知の失敗で全体を失敗扱いにしない
+                asyncio.run_coroutine_threadsafe(
+                    target_channel.send(msg), bot.loop
+                ).result(timeout=10)
+            except Exception as e:
+                print(f"[WARN] 予定編集のDiscord通知に失敗: {e}")
     return jsonify({"ok": True, "message": f"編集しました！\n{before_str} → {after_str}"})
 
 @app.route("/delete_schedule", methods=["POST"])
@@ -3104,9 +3111,12 @@ def delete_schedule():
     if guild:
         target_channel = get_subject_channel_by_name(guild, deleted["subject"])
         if target_channel:
-            asyncio.run_coroutine_threadsafe(
-                target_channel.send(f"削除しました！\n{target}"), bot.loop
-            ).result(timeout=10)
+            try:  # ★ 保存済みなので、チャンネル通知の失敗で全体を失敗扱いにしない
+                asyncio.run_coroutine_threadsafe(
+                    target_channel.send(f"削除しました！\n{target}"), bot.loop
+                ).result(timeout=10)
+            except Exception as e:
+                print(f"[WARN] 予定削除のDiscord通知に失敗: {e}")
     return jsonify({"ok": True, "message": "削除しました！"})
 
 @app.route("/list_logs", methods=["GET"])
@@ -4399,6 +4409,144 @@ def report_problem():
                 return_url,
             )
         return _report_problem_result_page(False, "送信に失敗しました。時間を置いてもう一度お試しください。", return_url)
+
+
+# ================================
+#  ★ 2026/11/08 追加：エラーの自動通知（管理者へDM＋ファイル保存）
+#  ─────────────────────────────
+#  「予定の編集で『エラーが発生しました』としか出ず、原因が利用者にも管理者にも
+#  分からなかった」ことをきっかけに追加。次の2経路で、想定外の失敗を管理者へ届ける。
+#  ① サーバー内で捕まえられなかった例外（500）→ 下の errorhandler が自動で通知。
+#  ② 画面側で「失敗応答」「通信不能」を検知したとき → /report_error（Common.js の
+#     reportApiError）が、失敗したAPI・エラーコード・直近のJSエラー等を送ってくる。
+#  既存の報告（/report_problem）と同じ仕組み（連番・同じ報告のまとめ・DM通知の全体上限・
+#  problem_reports_*.json への保存）を使う。重複判定のキーは「[auto:種別]…」にして、
+#  JSが壊れたときの手動報告とは混ざらないようにしている。
+#  ・パスワード・セッショントークン・Cookieは一切保存・通知しない。
+#  ・DMは別スレッドで送る（Discord側が不調でもAPIの応答を待たせない）。
+#  ・DMは2000文字制限があるため本文を1800字までに切り詰める。
+# ================================
+_AUTO_REPORT_HTML_PATHS = ("/report_problem", "/discord_oauth")
+
+
+def _recent_ops_log_lines(guild_id, limit=5) -> str:
+    """運用ログの直近数件を1行ずつの文字列にする（失敗しても空文字）。"""
+    try:
+        entries, _ = local_get(system_log_file(guild_id))
+        if not isinstance(entries, list):
+            return ""
+        lines = []
+        for e in entries[-limit:]:
+            mark = "!" if e.get("level") == "error" else "-"
+            who = f"[{e.get('actor')}] " if e.get("actor") else ""
+            lines.append(f"{mark} {str(e.get('time', ''))[5:16]} {who}{str(e.get('summary', ''))[:70]}")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def _session_who(token, gid) -> str:
+    """セッションから「ニックネーム（生徒ID）」を引く（失敗しても空文字）。トークン自体は返さない。"""
+    try:
+        sid = resolve_session(token, int(gid))
+        if sid:
+            u = find_user(int(gid), sid)
+            return f"{(u or {}).get('nickname', '?')}（{sid}）"
+    except Exception:
+        pass
+    return ""
+
+
+def _auto_report_error(kind: str, guild_id, page: str, message: str, diag: str = "",
+                       who: str = "") -> int:
+    """エラーを保存し、必要なら管理者へDMする。戻り値は報告番号（失敗時0）。絶対に例外を投げない。"""
+    try:
+        try:
+            gid = int(guild_id)
+        except (TypeError, ValueError):
+            gid = LEGACY_GUILD_ID
+        ua = (request.headers.get("User-Agent") or "").strip()[:200]
+        key = f"[auto:{kind}]{page}"[:80]
+        number, duplicate, should_dm, _saved = _register_problem_report(
+            gid, key, (message or "")[:500], (diag or "")[:1500], ua, _client_ip()
+        )
+        if duplicate or not should_dm:
+            return number
+        body = f"種別: {kind}\n場所: {page}\n内容: {message}"[:600]
+        if who:
+            body += f"\n利用者: {who}"
+        if diag:
+            body += f"\n詳細: {diag}"[:700]
+        if ua:
+            body += f"\n端末: {ua[:80]}"
+        recent = _recent_ops_log_lines(gid)
+        if recent:
+            body += f"\n--- 直近の運用ログ ---\n{recent}"
+        title = f"自動エラー通知 #{number:04d}"
+        body = body[:1800]
+
+        def _send():
+            try:
+                send_discord_dm(gid, REPORT_PROBLEM_ADMIN_STUDENT_ID, title, body)
+            except Exception as e:
+                print(f"[WARN] 自動エラー通知のDMに失敗しました: {e}")
+        Thread(target=_send, daemon=True).start()
+        return number
+    except Exception as e:
+        print(f"[WARN] 自動エラー通知に失敗しました: {e}")
+        return 0
+
+
+@app.errorhandler(Exception)
+def _handle_unexpected_error(e):
+    # 404/405などの通常のHTTPエラーは今まで通り（スキャン等で通知が溢れないように）
+    if isinstance(e, HTTPException):
+        return e
+    import traceback
+    tb = traceback.format_exc()
+    print(f"[ERROR] {request.method} {request.path}: {tb}")
+    try:
+        j = request.get_json(silent=True)
+        j = j if isinstance(j, dict) else {}
+        gid = request.args.get("guild_id") or j.get("guild_id")
+        token = session_token_from_request() or j.get("session_token")
+        _auto_report_error(
+            "サーバー内エラー", gid, f"{request.method} {request.path}",
+            f"{type(e).__name__}: {e}"[:300], tb[-600:], _session_who(token, gid),
+        )
+    except Exception:
+        pass
+    if request.path.startswith(_AUTO_REPORT_HTML_PATHS):
+        return "サーバーでエラーが発生しました。時間を置いてもう一度お試しください。", 500
+    return jsonify({"ok": False, "error": "server_error"}), 500
+
+
+@app.route("/report_error", methods=["POST"])
+def report_error():
+    """画面側が検知したAPI失敗・通信不能を管理者へ通知する（Common.js の reportApiError から呼ばれる）。
+    未ログインでも送れる（JSが動いている前提の自動送信）。連打対策は rate_limited（IP単位）＋
+    _register_problem_report の同一報告まとめ＋DM全体上限。入力は全項目で長さを制限する。"""
+    if rate_limited("report_error"):
+        return rate_limit_response()
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    try:
+        gid = int(data.get("guild_id"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid guild_id"}), 400
+    err_code = str(data.get("error") or "unknown")[:80]
+    if err_code == "not_logged_in":
+        return jsonify({"ok": True, "skipped": True})
+    api_path = str(data.get("api") or "?")[:60]
+    page = str(data.get("page") or "?")[:40]
+    status = str(data.get("status") or "")[:10]
+    diag = str(data.get("diag") or "")[:1000]
+    who = _session_who(data.get("session_token") or session_token_from_request(), gid)
+    number = _auto_report_error(
+        "画面で検知した失敗", gid, f"{page} → {api_path}",
+        f"エラーコード={err_code} HTTP={status or '-'}", diag, who,
+    )
+    return jsonify({"ok": True, "number": number})
 
 
 # ================================
