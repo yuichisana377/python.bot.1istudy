@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from datetime import date as _date
 from flask import Flask, request, jsonify, make_response, redirect, Response, g
 from flask_cors import CORS
-from werkzeug.exceptions import HTTPException
 from threading import Thread, Lock
 from pytz import timezone
 import json
@@ -4577,6 +4576,7 @@ def _auto_report_failed_api(resp):
 
 @app.errorhandler(Exception)
 def _handle_unexpected_error(e):
+    from werkzeug.exceptions import HTTPException  # 上部の行番号をずらさないよう関数内でimport
     # 404/405などの通常のHTTPエラーは今まで通り（スキャン等で通知が溢れないように）
     if isinstance(e, HTTPException):
         return e
