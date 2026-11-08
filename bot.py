@@ -4,7 +4,7 @@ from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timedelta
 from datetime import date as _date
-from flask import Flask, request, jsonify, make_response, redirect, Response
+from flask import Flask, request, jsonify, make_response, redirect, Response, g
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 from threading import Thread, Lock
@@ -718,6 +718,7 @@ def reject_if_bug_chars(fields: dict):
             continue
         bad = find_bug_chars(value)
         if bad:
+            g.error_hint = f"フィールド「{field_name}」に禁止文字: " + ", ".join(f"U+{ord(c):04X}" for c in bad) + f"（値の先頭: {ascii(str(value)[:60])}）"
             return jsonify({
                 "ok": False,
                 "error": f"{field_name} に使用できない文字が含まれています（制御文字・不可視文字など）: "
@@ -2983,6 +2984,23 @@ def list_schedule():
 
 
 
+
+def _plan_not_found_hint(plans, target) -> str:
+    """edit/delete_schedule で対象が見つからなかった理由の手がかり。
+    送られてきたラベルと、保存済みの予定のうち一番近いものとの文字単位の差分を返す。"""
+    try:
+        labels = [f"{p.get('date')}/{p.get('subject')}{p.get('content')}" for p in plans]
+        best = difflib.get_close_matches(str(target), labels, n=1, cutoff=0.5)
+        if not best:
+            return f"保存済み{len(labels)}件のどれとも似ていない（送られたラベル先頭: {ascii(str(target)[:80])}）"
+        sm = difflib.SequenceMatcher(None, str(target), best[0])
+        diffs = [f"{tag}: 送信{ascii(str(target)[i1:i2])}→保存{ascii(best[0][j1:j2])}"
+                 for tag, i1, i2, j1, j2 in sm.get_opcodes() if tag != "equal"][:4]
+        return ("最も近い保存済み予定との差: " + " / ".join(diffs)) if diffs else "ラベルは一致（同時更新による競合の可能性）"
+    except Exception as e:
+        return f"差分の算出に失敗: {e}"
+
+
 @app.route("/edit_schedule", methods=["POST"])
 def edit_schedule():
     data         = request.json
@@ -3013,6 +3031,7 @@ def edit_schedule():
             found = p
             break
     if not found:
+        g.error_hint = _plan_not_found_hint(plans, target)
         return jsonify({"ok": False, "error": "plan not found"})
     before_str = f"{found['date']} / {found['subject']} / {found['content']}"
     if new_date:
@@ -3093,6 +3112,7 @@ def delete_schedule():
         else:
             new_plans.append(p)
     if not deleted:
+        g.error_hint = _plan_not_found_hint(plans, target)
         return jsonify({"ok": False, "error": "plan not found"})
     try:
         save_plans(guild_id, new_plans)
@@ -4472,11 +4492,11 @@ def _auto_report_error(kind: str, guild_id, page: str, message: str, diag: str =
         )
         if duplicate or not should_dm:
             return number
-        body = f"種別: {kind}\n場所: {page}\n内容: {message}"[:600]
+        body = f"種別: {kind}\n場所: {page}\n内容: {message}"[:500]
         if who:
             body += f"\n利用者: {who}"
         if diag:
-            body += f"\n詳細: {diag}"[:700]
+            body += f"\n詳細: {diag}"[:1100]
         if ua:
             body += f"\n端末: {ua[:80]}"
         recent = _recent_ops_log_lines(gid)
@@ -4495,6 +4515,64 @@ def _auto_report_error(kind: str, guild_id, page: str, message: str, diag: str =
     except Exception as e:
         print(f"[WARN] 自動エラー通知に失敗しました: {e}")
         return 0
+
+
+
+_AUTO_SKIP_ERRORS = {"not_logged_in", "too_many_attempts", "guild_membership_required", "invalid guild_id", "missing guild_id"}
+_AUTO_SKIP_PATH_PREFIXES = ("/quiz_", "/timer_", "/report_", "/discord", "/request_", "/respond_")
+_AUTO_SKIP_KEYS = {"session_token", "token", "password"}
+
+
+def _redacted_request_summary() -> str:
+    """失敗したリクエストの中身を「キー=値(先頭60字)」で要約する。トークン・パスワード類は載せない。"""
+    try:
+        j = request.get_json(silent=True)
+        if not isinstance(j, dict):
+            return ""
+        parts = []
+        for k, v in j.items():
+            if k in _AUTO_SKIP_KEYS:
+                continue
+            sv = v if isinstance(v, (int, float, bool)) or v is None else str(v)
+            if isinstance(sv, str) and len(sv) > 60:
+                sv = sv[:60] + f"…(全{len(str(v))}字)"
+            parts.append(f"{k}={ascii(sv)}")
+        return ", ".join(parts)[:600]
+    except Exception:
+        return ""
+
+
+@app.after_request
+def _auto_report_failed_api(resp):
+    """POSTのAPIが {ok:false, error:…} を返したとき、その場で原因の手がかり
+    （送られた内容・サーバーの応答・g.error_hint）を添えて管理者へ通知する。
+    利用者が「エラーが発生しました」としか見えなくても、管理者には理由が残る。"""
+    try:
+        if request.method != "POST" or request.path.startswith(_AUTO_SKIP_PATH_PREFIXES):
+            return resp
+        if resp.mimetype != "application/json" or resp.direct_passthrough:
+            return resp
+        body = resp.get_json(silent=True)
+        if not isinstance(body, dict) or body.get("ok") is not False:
+            return resp
+        err = str(body.get("error") or body.get("message") or "unknown")
+        if body.get("error") in _AUTO_SKIP_ERRORS:
+            return resp
+        j = request.get_json(silent=True)
+        j = j if isinstance(j, dict) else {}
+        gid = j.get("guild_id")
+        who = _session_who(session_token_from_request() or j.get("session_token"), gid)
+        diag = f"サーバーの応答: {err[:200]}\n送られた内容: {_redacted_request_summary()}"
+        hint = getattr(g, "error_hint", "")
+        if hint:
+            diag += f"\n原因メモ: {hint}"
+        _auto_report_error(
+            "操作の失敗", gid, f"{request.path} [{err[:30]}]",
+            f"HTTP {resp.status_code}: {err[:150]}", diag, who,
+        )
+    except Exception as e:
+        print(f"[WARN] 失敗応答の自動通知に失敗: {e}")
+    return resp
 
 
 @app.errorhandler(Exception)
