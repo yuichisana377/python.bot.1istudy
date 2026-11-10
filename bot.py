@@ -229,7 +229,12 @@ def notify_change(guild_id=None):
 @app.route("/events", methods=["GET"])
 def sse_events():
     guild_id = request.args.get("guild_id")
-    guild_id = int(guild_id) if guild_id else None
+    # ★ 修正：フロントがGUILD_ID未確定のまま "null"/"undefined" の文字列で接続してくる
+    #   ことがあり、int()が ValueError で落ちて500になっていた。数字以外は「guild指定なし」扱いにする。
+    try:
+        guild_id = int(guild_id) if guild_id else None
+    except (TypeError, ValueError):
+        guild_id = None
 
     q = queue.Queue()
     with EVENT_SUBSCRIBERS_LOCK:
@@ -5766,7 +5771,9 @@ def save_cards():
                 #   マスクされたリンクとして描画されない（そのまま文字列として表示されてしまう）ため、
                 #   埋め込み（Embed）のdescriptionにマスクリンクとして書く形に変更した。
                 #   Embed内であれば [表示テキスト](url) がちゃんとクリック可能なリンクになる。
-                deck_url = f"{CARDMAKER_URL}?deck={filename}"
+                # ★ 修正：filenameに記号等が含まれてもリンクが壊れないようURLエンコードする
+                from urllib.parse import quote as _url_quote
+                deck_url = f"{CARDMAKER_URL}?deck={_url_quote(str(filename), safe='')}"
                 embed = discord.Embed(
                     title=f"📇 単語カードが{action}されました",
                     description=(
