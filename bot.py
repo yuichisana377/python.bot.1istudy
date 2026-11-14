@@ -322,7 +322,7 @@ def local_get(filename):
         data = None
     return data, _file_sha(raw)
 
-def _local_write_once(filename, content_obj, expected_sha=None):
+def _local_write_once(filename, content_obj, expected_sha=None, cas=False):
     """expected_sha が指定されていて現在のファイル内容と一致しない場合は
     (False, 現在のsha) を返す（＝GitHubでいう409相当）。
     書き込みに成功した場合は (True, 新しいsha) を返す。"""
@@ -330,14 +330,6 @@ def _local_write_once(filename, content_obj, expected_sha=None):
     dirname = os.path.dirname(path)
     if dirname:
         os.makedirs(dirname, exist_ok=True)
-
-    current_sha = None
-    if os.path.isfile(path):
-        with open(path, "rb") as f:
-            current_sha = _file_sha(f.read())
-
-    if expected_sha is not None and current_sha is not None and expected_sha != current_sha:
-        return False, current_sha
 
     encoded = json.dumps(content_obj, ensure_ascii=False, indent=2).encode("utf-8")
     # ★ 修正（不具合修正、2026/08/26）：以前は tmp_path が f"{path}.tmp" という
@@ -356,7 +348,19 @@ def _local_write_once(filename, content_obj, expected_sha=None):
     try:
         with open(tmp_path, "wb") as f:
             f.write(encoded)
-        os.replace(tmp_path, path)
+        # ★ 改善（2026/11/14）：sha の照合と差し替えを1つのロックの中で行う。
+        #   以前は「現在のshaを読む→比べる→書く」の間にロックが無く、2つの
+        #   スレッドが同時に照合を通過できた（local_put_cas でも取りこぼしうる）。
+        #   また、照合が不要な（expected_sha が無い）書き込みでも毎回ファイル全体を
+        #   読んでハッシュを計算していたので、必要なときだけ読むようにした。
+        #   cas=True（local_put_cas）のときは「読んだ時は無かったのに今はある」も競合として扱う。
+        with _FILE_WRITE_LOCK:  # 重い処理（JSON化・一時ファイル書き込み）は済ませてから握る
+            if (cas or expected_sha is not None) and os.path.isfile(path):
+                with open(path, "rb") as f:
+                    current_sha = _file_sha(f.read())
+                if expected_sha != current_sha:
+                    return False, current_sha
+            os.replace(tmp_path, path)
     finally:
         # ★ os.replaceが成功していれば既に無いはずだが、途中で例外が起きた場合に
         #   一時ファイルが残り続けないよう後始末する。
@@ -366,24 +370,20 @@ def _local_write_once(filename, content_obj, expected_sha=None):
             pass
     return True, _file_sha(encoded)
 
+_FILE_WRITE_LOCK = Lock()  # 全ファイル共通。握るのは「照合＋差し替え」の一瞬だけ
+
 def local_put(filename, content_obj, sha=None):
     """
     ローカルディスクへの書き込み。失敗した場合は例外を送出する（以前は無視していた）。
-    ・保存直前の内容が、渡された sha（前回読み込み時のハッシュ）と一致しない場合
-      （＝他の誰かが先に保存した）は、最新の内容を読み直して1回だけ自動再試行する。
-    ・それでも失敗する場合は DataWriteError を送出するので、呼び出し側で
-      「保存に失敗しました」とユーザーに伝えられるようにする。
+    ・sha は互換のために受け取るだけで、照合には使わない（常に上書きする）。
+      以前は「sha不一致なら無条件で1回だけ再試行」していたが、一致でも不一致でも
+      結果は必ず上書きになる＝照合に意味が無かったため、照合ごと省いた。
+    ・競合を検知したい「読む→書き換える→保存」は local_put_cas を使うこと。
     """
-    ok, info = _local_write_once(filename, content_obj, sha)
+    ok, info = _local_write_once(filename, content_obj, None)
     if ok:
         return {"content": {"sha": info}}
-
-    # 誰かが先に更新した（sha不一致）→ 無条件で1回だけ再試行
-    ok2, info2 = _local_write_once(filename, content_obj, None)
-    if ok2:
-        return {"content": {"sha": info2}}
-
-    raise DataWriteError(f"ローカル保存に失敗しました（再試行後も失敗）: {filename}")
+    raise DataWriteError(f"ローカル保存に失敗しました: {filename}")
 
 def local_put_cas(filename, content_obj, sha=None):
     """
@@ -404,7 +404,7 @@ def local_put_cas(filename, content_obj, sha=None):
       例外を受けて「最新のsha・内容を読み直してmutate_fnを再適用する」を
       実際にやり直せる。
     """
-    ok, info = _local_write_once(filename, content_obj, sha)
+    ok, info = _local_write_once(filename, content_obj, sha, cas=True)
     if ok:
         return {"content": {"sha": info}}
     raise DataWriteError(f"sha競合により保存できませんでした（呼び出し元で読み直して再試行してください）: {filename}")
@@ -2634,8 +2634,8 @@ async def check_study_timers():
             print(f"[WARN] study_timers 保存に失敗しました（guild_id={guild_id}）。次回のチェックで再試行します: {e}")
             continue
 
-        for student_id, kind in notifications:
-            _try_notify_timer(guild_id, student_id, MSG_TIMER_AUTO_PAUSED)
+        for student_id, kind in notifications:  # ★ DM送信は別スレッドへ（このループ上で待つとBot全体が10秒止まる）
+            await asyncio.get_running_loop().run_in_executor(None, _try_notify_timer, guild_id, student_id, MSG_TIMER_AUTO_PAUSED)
 
 # ================================
 #  Flask API — 予定管理
@@ -7012,7 +7012,7 @@ def _quiz_room_snapshot(room, student_id):
                         snap["your_points"] = player["cur_points"]
     return snap
 
-def _pick_distractors(correct: str, pool: list, k: int) -> list:
+def _pick_distractors(correct: str, pool: list, k: int, ranked: bool = False) -> list:
     """
     正解(correct)に対する誤答をpoolからk個選ぶ。
     ★ 完全ランダムに選ぶと、他のカードの答えと文字数も内容もかけ離れた
@@ -7027,13 +7027,13 @@ def _pick_distractors(correct: str, pool: list, k: int) -> list:
       「似ているが選ばれなかった」紛らわしい候補が混ざりにくくし、
       パッと見で消去法が効きにくい4択にする。
     """
-    def _score(a):
-        seq_ratio = difflib.SequenceMatcher(None, correct, a).ratio()
-        longer = max(len(correct), len(a), 1)
-        length_ratio = 1 - abs(len(correct) - len(a)) / longer
-        return seq_ratio * 0.7 + length_ratio * 0.3
+    # ★ 改善（2026/11/14）：採点（類似度の計算）は _distractor_shortlist の1か所にまとめた。
+    #   以前は同じ採点関数がここにも重複して書かれており、CardMakerのキャッシュ生成では
+    #   「即席4択用」と「AIに渡す候補用」で同じ採点を2回やり直していた。
+    #   ranked=True は「pool は既に採点順に並んでいる」という意味（採点を省く）。
+    #   並び順・選ばれ方は以前と全く同じ。
 
-    scored = sorted(pool, key=_score, reverse=True)
+    scored = pool if ranked else _distractor_shortlist(correct, pool, len(pool))
     pool_size = max(k, min(len(scored), k * 2))
     return random.sample(scored[:pool_size], k)
 
@@ -7411,9 +7411,8 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname, playe
             "correct_indices": [q["correct_index"]],
             "explanation": "",
             "imgs_q": [], "imgs_a": [], "imgs_e": [],
-            # ★ 追加：カード単位の作成者記録（ホストが全問を作ったのでホスト本人）。
-            #   「作成した問題数が多い人」を基準にする各種機能（CSVダウンロード・
-            #   削除依頼の通知先等）で使う。
+            # ★ 追加：カード単位の作成者記録（ホストが全問を作ったのでホスト本人）。「作成した
+            #   問題数が多い人」を基準にする各種機能（CSVダウンロード・削除依頼の通知先等）で使う。
             "created_by_id": student_id,
             "created_by_nickname": nickname,
         } for q in questions]
@@ -7427,9 +7426,8 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname, playe
             "incomplete": False,
             "choice_mode": True,  # ★ 選択式デッキであることのマーカー（単一/複数は問題ごとにcorrect_indicesの個数で決まる）
             "quiz_archive": True,  # ★ 追加（2026/08/21）：クイズ過去問デッキであることのマーカー。
-            # フォルダ位置に依存させると、フォルダの外へ移動できるようにした際に
-            # 判定できなくなる（save_cardsが問題編集を禁止する対象の特定にも使う）ため、
-            # デッキ自身に持たせる。
+            # フォルダ位置に依存させると、フォルダの外へ移動できるようにした際に判定できなくなる
+            # （save_cardsが問題編集を禁止する対象の特定にも使う）ため、デッキ自身に持たせる。
             "guild_id": guild_id,  # ★ 複数サーバー対応：このデッキがどのサーバー向けかを記録する
         }
         put_card_file(filename, card_payload)
@@ -7443,29 +7441,31 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname, playe
             actor=nickname,
             detail=detail if detail else None,
         )
-        # ★ 追加：各プレイヤーが不正解だった問題を、今作った過去問デッキへ裏で「わからない」
-        #   として記録する（表面上はQuiz.js側に一切表示しない）。デッキ作成自体が失敗した
-        #   場合はこのブロックへ来ない＝過去問デッキが無いのでマークのしようがなく、正しい。
-        if players:
-            for pid, p in players.items():
-                for i in p.get("wrong_indices") or []:
-                    if 0 <= i < len(cards):
-                        _silently_mark_unsure(guild_id, pid, filename, cards[i]["id"])
+        # ★ 各プレイヤーが不正解だった問題を、今作った過去問デッキへ裏で「わからない」として記録する
+        #   （プレイヤーごとに1回の保存にまとめる）。デッキ作成が失敗した場合はここへ来ないので正しい。
+        for pid, p in (players or {}).items():
+            ids = [cards[i]["id"] for i in p.get("wrong_indices") or [] if 0 <= i < len(cards)]
+            if ids:
+                _silently_mark_unsure(guild_id, pid, filename, ids)
     except Exception as e:
         print(f"[WARN] クイズ過去問の保存に失敗しました（クイズの進行自体は続行）: {e}")
 
+_QUIZ_ARCHIVE_LOCK = Lock()  # 過去問の保存どうしを1件ずつにする（フォルダ・索引の同時書き換え防止）
 def _archive_room_if_needed(room):
     """
-    ★ QUIZ_ROOMS_LOCK を保持している状態で呼び出すこと。
-      ルームが終了(state=="ended")した瞬間に1回だけ呼ばれ、オリジナル4択
-      （source=="manual"）だったクイズをCardMakerへアーカイブする。
-      room["archived"] で二重登録を防ぐ（自然終了とホストの手動終了の
-      両方から呼ばれ得るため）。
+    ★ QUIZ_ROOMS_LOCK を保持している状態で呼び出すこと。オリジナル4択（source=="manual"）の
+      クイズが終了した瞬間に1回だけCardMakerへ保存する（room["archived"] で二重登録を防ぐ）。
+      ファイル書き込みは別スレッドで行い、全ルーム共通のこのロックを握ったままにしない。
     """
     if room.get("source") != "manual" or room.get("archived"):
         return
     room["archived"] = True
-    _archive_manual_quiz(room["guild_id"], room["title"], room["questions"], room["host_id"], room["host_nickname"], room["players"])
+    players = {pid: {"wrong_indices": list(p.get("wrong_indices") or [])} for pid, p in room["players"].items()}  # 写し
+    args = (room["guild_id"], room["title"], room["questions"], room["host_id"], room["host_nickname"], players)
+    def _run():
+        with _QUIZ_ARCHIVE_LOCK:
+            _archive_manual_quiz(*args)
+    Thread(target=_run, daemon=True).start()
 
 @app.route("/quiz_create", methods=["POST"])
 def quiz_create():
@@ -7757,9 +7757,9 @@ def _build_cardmaker_fallback_choices(cards):
         pool = [a for a in pool_all if a != correct]
         if len(pool) <= FOUR_CHOICE_POOL_MIN_SIZE:
             continue
-        result[cid] = {"distractors": _pick_distractors(correct, pool, 3), "correct": correct}
+        ranked = _distractor_shortlist(correct, pool, len(pool))  # ★ 採点は1回だけ。AI用の候補（candidates）にも使い回す
+        result[cid] = {"distractors": _pick_distractors(correct, ranked, 3, ranked=True), "correct": correct, "candidates": ranked[:CARDMAKER_AI_SHORTLIST_SIZE]}
     return result
-
 
 def _cardmaker_cache_write(deck_filename, cards_map):
     """four_choice_cache_<filename>.json を丸ごと書き込む（used=Falseにリセット）。
@@ -7804,9 +7804,9 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
         for cid, v in fallback.items():
             card = by_id.get(cid)
             question = str((card or {}).get("question") or "").strip()
-            candidates = _distractor_shortlist(
-                v["correct"], [a for a in pool_all if a != v["correct"]], CARDMAKER_AI_SHORTLIST_SIZE
-            )
+            # ★ AIに渡す候補は、即席4択を作るときに採点済みの上位（v["candidates"]）を使い回す
+            #   （以前はここで全候補をもう一度採点し直していた）。
+            candidates = v["candidates"]
             entries.append({"id": cid, "question": question, "correct": v["correct"], "candidates": candidates})
         # ★ 記述系カードを先に（Cardmaker.js側と同じ理由：AI強化の価値が大きいため）
         entries.sort(key=lambda e: 0 if _is_descriptive_answer_text(e["correct"]) else 1)
@@ -8162,11 +8162,11 @@ def quiz_answer():
         mark_unsure_target = None
         if not correct and q.get("source_deck_filename") and q.get("source_card_id"):
             mark_unsure_target = (q["source_deck_filename"], q["source_card_id"])
+    # ★ 遅延低減：回答数の増加・reveal切り替わりを、他の端末のポーリング待ちなしで
+    #   即座に知らせる（ファイル書き込みを待たせないよう、下の「わからない」反映より先に送る）。
+    notify_change(guild_id)
     if mark_unsure_target:
         _silently_mark_unsure(guild_id, student_id, *mark_unsure_target)
-    # ★ 遅延低減：回答数の増加・reveal切り替わりを、他の端末のポーリング待ちなしで
-    #   即座に知らせる（answer自体は毎秒送られるものではないので通知頻度も問題ない）。
-    notify_change(guild_id)
     return jsonify({"ok": True})
 
 def _silently_mark_unsure(guild_id, student_id, deck_filename, card_id):
@@ -8177,9 +8177,9 @@ def _silently_mark_unsure(guild_id, student_id, deck_filename, card_id):
     ベストエフォート：失敗してもクイズの進行自体は止めない。"""
     try:
         def _mutate(my_data):
+            ids = card_id if isinstance(card_id, list) else [card_id]  # ★ 複数のカードidをまとめて渡してもよい
             arr = my_data["unsure"].get(deck_filename, [])
-            if card_id not in arr:
-                my_data["unsure"][deck_filename] = arr + [card_id]
+            my_data["unsure"][deck_filename] = arr + [c for c in dict.fromkeys(ids) if c not in arr]
         update_student_study_data(guild_id, student_id, _mutate)
     except Exception as e:
         print(f"[WARN] みんなでクイズの不正解を「わからない」へ反映できませんでした（進行は継続）: {e}")
@@ -9717,8 +9717,8 @@ async def on_ready():
         scheduler.start()
         started = True
         print("Scheduler started!")
-        # ★ 追加（2026/08/21）：quiz_archiveフラグ導入に伴う既存データの一度きりの移行。
-        _migrate_legacy_quiz_archive_decks()
+        # ★ quiz_archiveフラグの移行（_migrate_legacy_quiz_archive_decks）は、他の移行と同じく
+        #   起動時（keep_alive()の前）へ移した。ここで呼ぶとDiscordの通信ループを止めてしまうため。
 
 
 @bot.event
@@ -9833,7 +9833,7 @@ def migrate_system_log_to_guild(guild_id: int):
 migrate_cardmaker_data_to_guild(LEGACY_GUILD_ID)
 migrate_notices_data_to_guild(LEGACY_GUILD_ID)
 migrate_system_log_to_guild(LEGACY_GUILD_ID)
-
+_migrate_legacy_quiz_archive_decks()  # ★ guild_idを補う移行（上）の後で実行すること
 keep_alive()
 start_quiz_scheduler()
 
