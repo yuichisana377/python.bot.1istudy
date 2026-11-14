@@ -7798,7 +7798,7 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
         if not fallback or not OLLAMA_HOST:
             return
 
-        pool_all = _cardmaker_deck_answer_pool(cards)
+        # （AI用の候補は fallback の各要素に入っているので、ここで答えの一覧を作り直す必要は無い）
         by_id = {c.get("id"): c for c in cards if isinstance(c, dict) and c.get("id")}
         entries = []
         for cid, v in fallback.items():
