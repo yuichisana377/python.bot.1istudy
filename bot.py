@@ -5394,6 +5394,7 @@ def _meta_from_card_data(filename, data):
         "filename": filename,
         "name":     data.get("name", filename),
         "count":    len(cards),
+        "rev":      hashlib.md5(json.dumps(cards, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:12],  # ★ 本文の版。枚数が同じ編集でも他端末が検知できるように
         "subject":  data.get("subject"),
         "description": data.get("description"),  # ★ 追加：デッキの説明欄（一覧表示用にも索引へ含める）
         "folder_id": data.get("folder_id"),
@@ -5547,6 +5548,7 @@ def get_card_set():
             "filename": filename,
             "name": data.get("name", filename),
             "cards": data.get("cards", []),
+            "rev": _meta_from_card_data(filename, data)["rev"],
             "subject": data.get("subject"),
             "folder_id": data.get("folder_id"),
             "published_by": (data.get("published_by") or {}).get("nickname"),
