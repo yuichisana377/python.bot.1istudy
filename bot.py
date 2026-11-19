@@ -7180,13 +7180,14 @@ def _build_cardmaker_distractor_prompt(items):
         "混同しやすいものを選ぶ（例：似た化学用語同士、近い年号同士、似た人物同士）。",
         "5. 正解と同じ値、明らかに無関係な内容、長い説明文は避け、correctと"
         "同程度の短さ・文体にすること。",
-        "6. correctが『複数の要素の組み合わせ』（例：「ア, ウ」「①と③」「A・B・C」"
+        "6. （規則2・5より優先）correctが『複数の要素の組み合わせ』（例：「ア, ウ」「①と③」「A・B・C」"
         "「X→Y→Z」のように並べて書かれたもの）の場合は、candidatesは使わず、correctに含まれる"
         "要素・問題文に出てくる要素を組み替えた『別の組み合わせ』を誤答にすること。"
         "要素の数・並べ方・区切り文字・表記はcorrectと完全に同じ形式にし、"
-        "正解から1つだけ要素を入れ替えた／順序を変えた、といった『あと一歩で正解』の"
+        "正解から1つだけ要素を入れ替えた（順序に意味がある「→」の並びのときだけ順序変更も可。"
+        "「ア, ウ」のような集合は順序を変えても同じ答えになるので不可）、といった『あと一歩で正解』の"
         "組み合わせを最優先する（3つとも、正解と共通する要素を残すこと）。",
-        "7. correctが文章（定義・説明・理由）の場合は、正解の文とほぼ同じ構造・長さで、"
+        "7. （規則2・5より優先）correctが文章（定義・説明・理由）の場合は、正解の文とほぼ同じ構造・長さで、"
         "重要な語（数値・主語・条件・否定・向きなど）を1箇所だけ変えた、"
         "もっともらしいが誤りの文にすること。正解より極端に長い／短い誤答は避ける。",
         "8. 3つの誤答は互いに違う種類の間違い方にして、正解の形式的な特徴（長さ・"
@@ -8148,9 +8149,6 @@ def quiz_answer():
         q_index = data.get("q_index")
         if isinstance(q_index, int) and not isinstance(q_index, bool) and q_index != room["current_q"]:
             return jsonify({"ok": False, "error": "stale_question"})
-        # 時間切れ後〜スケジューラが reveal に進める前の隙間に届いた回答は受け付けない
-        if (now - room["question_started_at"]) >= room["time_limit_sec"]:
-            return jsonify({"ok": False, "error": "not_answerable"})
         player = room["players"].get(student_id)
         if player is None:
             return jsonify({"ok": False, "error": "not_in_room"})
@@ -8172,6 +8170,10 @@ def quiz_answer():
         answered_at = now
         if isinstance(pressed, (int, float)) and not isinstance(pressed, bool) and pressed == pressed:
             answered_at = min(now, max(pressed / 1000.0, room["question_started_at"], now - 2.0))
+        # 時間切れ後に押された回答（押した時刻が制限時間以降）は受け付けない。
+        #   時間内に押した分は、通信で少し遅れて届いても受け付ける。
+        if (answered_at - room["question_started_at"]) >= room["time_limit_sec"]:
+            return jsonify({"ok": False, "error": "not_answerable"})
         player["cur_answered_at"] = answered_at
         # ★ 追加：同点タイブレーク用に、回答にかかった時間（正誤にかかわらず）を積算する
         player["total_answer_time"] = player.get("total_answer_time", 0.0) + (answered_at - room["question_started_at"])
