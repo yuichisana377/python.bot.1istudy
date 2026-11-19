@@ -8131,9 +8131,16 @@ def quiz_answer():
         correct = (choice_index == q["correct_index"])
         player["cur_answer"] = choice_index
         player["cur_correct"] = correct
-        player["cur_answered_at"] = now
+        # ★ クライアントが「押した瞬間」の時刻(サーバー時計換算のms)を送ってきた場合はそれを使う。
+        #   通信遅延で不利にならないよう。ただし不正防止のため [出題開始, 今] の範囲に丸め、
+        #   さらに遅延の許容は最大10秒までとする。
+        pressed = data.get("pressed_at_ms")
+        answered_at = now
+        if isinstance(pressed, (int, float)) and not isinstance(pressed, bool) and pressed == pressed:
+            answered_at = min(now, max(pressed / 1000.0, room["question_started_at"], now - 10.0))
+        player["cur_answered_at"] = answered_at
         # ★ 追加：同点タイブレーク用に、回答にかかった時間（正誤にかかわらず）を積算する
-        player["total_answer_time"] = player.get("total_answer_time", 0.0) + (now - room["question_started_at"])
+        player["total_answer_time"] = player.get("total_answer_time", 0.0) + (answered_at - room["question_started_at"])
         if not correct:
             # ★ 追加：オリジナル4択（source=="manual"）は、クイズ終了時にクイズ過去問へ
             #   アーカイブされる（_archive_room_if_needed → _archive_manual_quiz）。
