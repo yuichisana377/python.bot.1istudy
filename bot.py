@@ -6768,6 +6768,22 @@ def _quiz_autoadvance_locked(room, now):
             all_answered = total > 0 and answered >= total
             if not (time_up or all_answered):
                 return
+            # ★ 「一番早く正解」ボーナスは、サーバーに届いた順ではなく「押した時刻」が
+            #   最も早い正解者に、発表の瞬間にまとめて付ける（通信遅延で不利にならないよう）。
+            #   quiz_answer側では基本点（ボーナス問題の2倍込み）だけを付けている。
+            first_p = None
+            for p in room["players"].values():
+                if p.get("cur_correct") and p.get("cur_answered_at") is not None:
+                    if first_p is None or p["cur_answered_at"] < first_p["cur_answered_at"]:
+                        first_p = p
+            if first_p is not None and room["first_correct_id"] is None:
+                bonus = QUIZ_FIRST_CORRECT_BONUS
+                if room["current_q"] in room.get("bonus_indices", set()):
+                    bonus *= 2
+                first_p["score"] += bonus
+                first_p["cur_points"] = (first_p.get("cur_points") or 0) + bonus
+                room["first_correct_id"] = first_p.get("id") or next((k for k, v in room["players"].items() if v is first_p), None)
+                room["first_correct_nickname"] = first_p["nickname"]
             room["state"] = "reveal"
             room["reveal_started_at"] = now
         elif room["state"] == "reveal":
@@ -7164,6 +7180,17 @@ def _build_cardmaker_distractor_prompt(items):
         "混同しやすいものを選ぶ（例：似た化学用語同士、近い年号同士、似た人物同士）。",
         "5. 正解と同じ値、明らかに無関係な内容、長い説明文は避け、correctと"
         "同程度の短さ・文体にすること。",
+        "6. correctが『複数の要素の組み合わせ』（例：「ア, ウ」「①と③」「A・B・C」"
+        "「X→Y→Z」のように並べて書かれたもの）の場合は、candidatesは使わず、correctに含まれる"
+        "要素・問題文に出てくる要素を組み替えた『別の組み合わせ』を誤答にすること。"
+        "要素の数・並べ方・区切り文字・表記はcorrectと完全に同じ形式にし、"
+        "正解から1つだけ要素を入れ替えた／順序を変えた、といった『あと一歩で正解』の"
+        "組み合わせを最優先する（3つとも、正解と共通する要素を残すこと）。",
+        "7. correctが文章（定義・説明・理由）の場合は、正解の文とほぼ同じ構造・長さで、"
+        "重要な語（数値・主語・条件・否定・向きなど）を1箇所だけ変えた、"
+        "もっともらしいが誤りの文にすること。正解より極端に長い／短い誤答は避ける。",
+        "8. 3つの誤答は互いに違う種類の間違い方にして、正解の形式的な特徴（長さ・"
+        "語尾・桁数）だけでは見分けがつかないようにすること。",
         "出力は次の形式のJSONオブジェクトのみ。説明文やコードブロックは書かないこと。",
         '{"questions": [{"i": <問題番号>, "distractors": ["誤答1", "誤答2", "誤答3"]}, ...]}',
         "",
@@ -8117,6 +8144,13 @@ def quiz_answer():
             return err
         if room["state"] != "question":
             return jsonify({"ok": False, "error": "not_answerable"})
+        # ★ 再送が次の問題の回答として受理されないよう、クライアントが見ていた問題番号と照合する
+        q_index = data.get("q_index")
+        if isinstance(q_index, int) and not isinstance(q_index, bool) and q_index != room["current_q"]:
+            return jsonify({"ok": False, "error": "stale_question"})
+        # 時間切れ後〜スケジューラが reveal に進める前の隙間に届いた回答は受け付けない
+        if (now - room["question_started_at"]) >= room["time_limit_sec"]:
+            return jsonify({"ok": False, "error": "not_answerable"})
         player = room["players"].get(student_id)
         if player is None:
             return jsonify({"ok": False, "error": "not_in_room"})
@@ -8133,11 +8167,11 @@ def quiz_answer():
         player["cur_correct"] = correct
         # ★ クライアントが「押した瞬間」の時刻(サーバー時計換算のms)を送ってきた場合はそれを使う。
         #   通信遅延で不利にならないよう。ただし不正防止のため [出題開始, 今] の範囲に丸め、
-        #   さらに遅延の許容は最大10秒までとする。
+        #   さらに遅延の許容は最大2秒までとする。
         pressed = data.get("pressed_at_ms")
         answered_at = now
         if isinstance(pressed, (int, float)) and not isinstance(pressed, bool) and pressed == pressed:
-            answered_at = min(now, max(pressed / 1000.0, room["question_started_at"], now - 10.0))
+            answered_at = min(now, max(pressed / 1000.0, room["question_started_at"], now - 2.0))
         player["cur_answered_at"] = answered_at
         # ★ 追加：同点タイブレーク用に、回答にかかった時間（正誤にかかわらず）を積算する
         player["total_answer_time"] = player.get("total_answer_time", 0.0) + (answered_at - room["question_started_at"])
@@ -8149,10 +8183,7 @@ def quiz_answer():
             player.setdefault("wrong_indices", []).append(room["current_q"])
         if correct:
             points = QUIZ_ANSWER_BASE_POINTS
-            if room["first_correct_id"] is None:
-                room["first_correct_id"] = student_id
-                room["first_correct_nickname"] = player["nickname"]
-                points += QUIZ_FIRST_CORRECT_BONUS
+            # （一番乗りボーナスは _quiz_autoadvance_locked の発表時に押した時刻順で付与する）
             # ★ 追加：ホストの詳細設定「ボーナス問題」。対象の問題（room["bonus_indices"]、
             #   quiz_create参照）なら、一番乗りボーナスも含めて得点をまるごと2倍にする。
             if room["current_q"] in room.get("bonus_indices", set()):
