@@ -7180,14 +7180,14 @@ def _build_cardmaker_distractor_prompt(items):
         "混同しやすいものを選ぶ（例：似た化学用語同士、近い年号同士、似た人物同士）。",
         "5. 正解と同じ値、明らかに無関係な内容、長い説明文は避け、correctと"
         "同程度の短さ・文体にすること。",
-        "6. （規則2・5より優先）correctが『複数の要素の組み合わせ』（例：「ア, ウ」「①と③」「A・B・C」"
+        "6. （規則1・2・5より優先）correctが『複数の要素の組み合わせ』（例：「ア, ウ」「①と③」「A・B・C」"
         "「X→Y→Z」のように並べて書かれたもの）の場合は、candidatesは使わず、correctに含まれる"
         "要素・問題文に出てくる要素を組み替えた『別の組み合わせ』を誤答にすること。"
         "要素の数・並べ方・区切り文字・表記はcorrectと完全に同じ形式にし、"
         "正解から1つだけ要素を入れ替えた（順序に意味がある「→」の並びのときだけ順序変更も可。"
         "「ア, ウ」のような集合は順序を変えても同じ答えになるので不可）、といった『あと一歩で正解』の"
         "組み合わせを最優先する（3つとも、正解と共通する要素を残すこと）。",
-        "7. （規則2・5より優先）correctが文章（定義・説明・理由）の場合は、正解の文とほぼ同じ構造・長さで、"
+        "7. （規則1・2・5より優先）correctが文章（定義・説明・理由）の場合は、正解の文とほぼ同じ構造・長さで、"
         "重要な語（数値・主語・条件・否定・向きなど）を1箇所だけ変えた、"
         "もっともらしいが誤りの文にすること。正解より極端に長い／短い誤答は避ける。",
         "8. 3つの誤答は互いに違う種類の間違い方にして、正解の形式的な特徴（長さ・"
@@ -8161,8 +8161,6 @@ def quiz_answer():
 
         q = room["questions"][room["current_q"]]
         correct = (choice_index == q["correct_index"])
-        player["cur_answer"] = choice_index
-        player["cur_correct"] = correct
         # ★ クライアントが「押した瞬間」の時刻(サーバー時計換算のms)を送ってきた場合はそれを使う。
         #   通信遅延で不利にならないよう。ただし不正防止のため [出題開始, 今] の範囲に丸め、
         #   さらに遅延の許容は最大2秒までとする。
@@ -8174,6 +8172,9 @@ def quiz_answer():
         #   時間内に押した分は、通信で少し遅れて届いても受け付ける。
         if (answered_at - room["question_started_at"]) >= room["time_limit_sec"]:
             return jsonify({"ok": False, "error": "not_answerable"})
+        # 受け付けると決まってから回答状態を書き込む（拒否した回答が残らないように）
+        player["cur_answer"] = choice_index
+        player["cur_correct"] = correct
         player["cur_answered_at"] = answered_at
         # ★ 追加：同点タイブレーク用に、回答にかかった時間（正誤にかかわらず）を積算する
         player["total_answer_time"] = player.get("total_answer_time", 0.0) + (answered_at - room["question_started_at"])
