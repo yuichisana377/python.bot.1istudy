@@ -3981,6 +3981,210 @@ def finalize_login():
     return jsonify({"ok": True, "needs_registration": True, "discord_reg_token": reg_token})
 
 
+# ================================
+#  ★ 追加（2026/11/21）：Discordログインできない人向けの代替ログイン（DMのワンタイムコード）
+#  ─────────────────────────────
+#  Discord OAuth（ブラウザでDiscordにログインして認可）が、Discordのパスワードを
+#  忘れた等の個人的な事情で通らない人向け。スマホのDiscordアプリ等には既に
+#  ログイン済みのことが多いので、BotからDMで6桁コードを送り、Web側に入力させる。
+#  ・宛先は discord_login_links（ログイン専用の紐付け）だけを信用する。
+#    /id連携 由来の discord_links は信用しない（send_discord_dm は使わない）。
+#  ・コードはリンクにしない：DiscordはDM内のURLを先読み（unfurl）して
+#    ワンタイムトークンを消費してしまううえ、アプリ内ブラウザ側のlocalStorageに
+#    セッションが入ってしまうため。
+#  ・コードは請求したブラウザ（request_id）に結び付く。試行5回・5分・1回限り。
+#  ・学籍番号が存在するかどうかは応答から分からないようにする（常に同じ応答）。
+#  ・状態はプロセス内メモリ（OAUTH_STATESと同じ前提：単一プロセス。再起動で未使用コードは失効）。
+# ================================
+DM_LOGIN_TTL_SEC = 5 * 60
+DM_LOGIN_MAX_ATTEMPTS = 5
+DM_LOGIN_STUDENT_MAX = 3                 # 同じ学籍番号宛てに送れる回数（DM連打の防止）
+DM_LOGIN_STUDENT_WINDOW_SEC = 15 * 60
+DM_LOGIN_REQUESTS = {}                   # request_id -> {"entries": [...], "attempts": int, "expires": float}
+_dm_login_student_hits = {}              # 学籍番号 -> [請求時刻, ...]
+DM_LOGIN_FAIL_MAX = 10                   # 同じ学籍番号への「コード誤り」の許容回数
+DM_LOGIN_FAIL_WINDOW_SEC = 60 * 60
+_dm_login_fail_hits = {}                 # 学籍番号 -> [誤入力時刻, ...]
+_DM_LOGIN_LOCK = Lock()
+
+
+def _dm_discord_user(discord_user_id: int, title: str, message: str):
+    """discord_user_id宛てに直接DMを送る（宛先の信頼性は呼び出し側が担保する）。
+    ★ 送信完了は待たない（待つと「登録済みの学籍番号だけ応答が遅い」というタイミングで
+      存在有無が分かってしまううえ、Flaskのスレッドを最大10秒止めるため）。
+      送信に失敗しても、そのコードは誰にも届かないだけで無害。"""
+    async def _send():
+        try:
+            user = bot.get_user(int(discord_user_id))
+            if user is None:
+                user = await bot.fetch_user(int(discord_user_id))
+            await user.send(f"**{title}**\n{message}")
+        except Exception:
+            pass
+
+    asyncio.run_coroutine_threadsafe(_send(), bot.loop)
+
+
+def _dm_login_prune(now: float):
+    for rid in [k for k, v in DM_LOGIN_REQUESTS.items() if v["expires"] < now]:
+        del DM_LOGIN_REQUESTS[rid]
+    for store, win in ((_dm_login_student_hits, DM_LOGIN_STUDENT_WINDOW_SEC), (_dm_login_fail_hits, DM_LOGIN_FAIL_WINDOW_SEC)):
+        if len(store) > 2000:
+            for k in [k for k, v in store.items() if not v or now - v[-1] > win]:
+                del store[k]
+
+
+@app.route("/dm_login_request", methods=["POST"])
+def dm_login_request():
+    """
+    body: { student_id }
+    ★ 登録済みで、かつサーバーのメンバーなら、そのDiscordアカウントへ6桁コードをDMする。
+      該当者がいない・DMが送れない場合も応答は同じ（学籍番号の存在を外から探れないように）。
+    """
+    if rate_limited("dm_login_request"):
+        return rate_limit_response()
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    student_id = str(data.get("student_id") or "").strip().upper()
+    if not student_id or len(student_id) > 20:
+        return jsonify({"ok": False, "error": "invalid_student_id"})
+
+    now = time.time()
+    request_id = secrets.token_urlsafe(16)
+    entries = []
+    with _DM_LOGIN_LOCK:
+        _dm_login_prune(now)
+        hits = [t for t in _dm_login_student_hits.get(student_id, []) if now - t < DM_LOGIN_STUDENT_WINDOW_SEC]
+        # ★ 学籍番号が存在するかに関わらず数える（存在有無でレスポンスが変わらないように）
+        if len(hits) >= DM_LOGIN_STUDENT_MAX:
+            _dm_login_student_hits[student_id] = hits
+            return jsonify({"ok": False, "error": "too_many_attempts", "retry_after_sec": DM_LOGIN_STUDENT_WINDOW_SEC}), 429
+        hits.append(now)
+        _dm_login_student_hits[student_id] = hits
+
+    # --- 宛先の洗い出し（discord_login_links のみを信用／サーバーのメンバーに限る） ---
+    by_user = {}
+    if bot.is_ready():
+        for g in list(bot.guilds):
+            try:
+                links = load_discord_login_links(g.id)
+            except Exception:
+                continue
+            for sid, did in links.items():
+                if str(sid).strip().upper() != student_id:
+                    continue
+                try:
+                    uid = int(did)
+                except (TypeError, ValueError):
+                    continue
+                if _guild_membership_status(g.id, uid) != "member":
+                    continue
+                user = find_user(g.id, sid)
+                if not user:
+                    continue
+                by_user.setdefault(uid, []).append({
+                    "guild_id": g.id,
+                    "guild_name": display_name_for_guild(g),
+                    "student_id": sid,
+                    "nickname": user.get("nickname", sid),
+                })
+
+    for uid, targets in by_user.items():
+        code = f"{secrets.randbelow(10**6):06d}"
+        try:
+            _dm_discord_user(
+                uid,
+                "ログインコード",
+                f"学生勉強会webのログインコードです：**{code}**\n"
+                "5分間有効・1回のみ使えます。\n"
+                "★ 自分でログインしようとしていないのに届いた場合は、このコードを誰にも教えず、入力もしないでください。",
+            )
+        except Exception:
+            continue
+        entries.append({"uid": uid, "code": code, "targets": targets})
+
+    with _DM_LOGIN_LOCK:
+        DM_LOGIN_REQUESTS[request_id] = {"student_key": student_id, "entries": entries, "attempts": 0, "expires": time.time() + DM_LOGIN_TTL_SEC}
+    return jsonify({"ok": True, "request_id": request_id})
+
+
+@app.route("/dm_login_verify", methods=["POST"])
+def dm_login_verify():
+    """
+    body: { request_id, code }
+    成功時は finalize_login と同じ形（ok/session_token/student/guild_id/guild_name/multi_guild）。
+    複数サーバーに登録済みなら { ok, choose:true, token, candidates }（以降は /finalize_login）。
+    """
+    if rate_limited("dm_login_verify"):
+        return rate_limit_response()
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    request_id = str(data.get("request_id") or "")
+    code = str(data.get("code") or "").strip()
+    if not request_id or not code:
+        return jsonify({"ok": False, "error": "missing fields"})
+    if not re.fullmatch(r"[0-9]{6}", code):
+        return jsonify({"ok": False, "error": "invalid_code"})
+
+    now = time.time()
+    with _DM_LOGIN_LOCK:
+        rec = DM_LOGIN_REQUESTS.get(request_id)
+        if not rec or rec["expires"] < now:
+            DM_LOGIN_REQUESTS.pop(request_id, None)
+            return jsonify({"ok": False, "error": "expired"})
+        sid_key = rec.get("student_key", "")
+        fails = [t for t in _dm_login_fail_hits.get(sid_key, []) if now - t < DM_LOGIN_FAIL_WINDOW_SEC]
+        if len(fails) >= DM_LOGIN_FAIL_MAX:
+            # ★ 同じ学籍番号への推測が続いている：request_idを作り直されても総当たりできないよう止める
+            _dm_login_fail_hits[sid_key] = fails
+            return jsonify({"ok": False, "error": "too_many_attempts", "retry_after_sec": DM_LOGIN_FAIL_WINDOW_SEC}), 429
+        rec["attempts"] += 1
+        match = next((e for e in rec["entries"] if hmac.compare_digest(e["code"], code)), None)
+        if not match:
+            fails.append(now)
+            _dm_login_fail_hits[sid_key] = fails
+            if rec["attempts"] >= DM_LOGIN_MAX_ATTEMPTS:
+                del DM_LOGIN_REQUESTS[request_id]
+                return jsonify({"ok": False, "error": "expired"})
+            return jsonify({"ok": False, "error": "invalid_code"})
+        del DM_LOGIN_REQUESTS[request_id]  # ★ 1回使い切り
+
+    uid = match["uid"]
+    # 発行から時間が経っているので、今もメンバーかを再確認する
+    targets = [t for t in match["targets"] if _guild_membership_status(t["guild_id"], uid) == "member"]
+    if not targets:
+        return jsonify({"ok": False, "error": "expired"})
+
+    if len(targets) == 1:
+        t = targets[0]
+        token = create_session(t["guild_id"], t["student_id"])
+        _notify_new_login(t["guild_id"], t["student_id"], t["nickname"])
+        return jsonify({
+            "ok": True,
+            "session_token": token,
+            "student": {"id": t["student_id"], "nickname": t["nickname"]},
+            "guild_id": str(t["guild_id"]),
+            "guild_name": t["guild_name"],
+            "multi_guild": len(bot_member_guilds(uid)) > 1,
+        })
+
+    pending = create_login_choice_token({
+        "discord_user_id": uid,
+        "discord_username": "",
+        "registered": [
+            {"guild_id": t["guild_id"], "guild_name": t["guild_name"], "student_id": t["student_id"], "nickname": t["nickname"]}
+            for t in targets
+        ],
+        "candidates": [{"guild_id": t["guild_id"], "guild_name": t["guild_name"]} for t in targets],
+    })
+    return jsonify({
+        "ok": True,
+        "choose": True,
+        "token": pending,
+        "candidates": [{"guild_id": str(t["guild_id"]), "guild_name": t["guild_name"], "registered": True} for t in targets],
+    })
+
+
 @app.route("/issue_guild_invite_code", methods=["POST"])
 def issue_guild_invite_code():
     """
