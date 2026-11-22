@@ -109,7 +109,7 @@ NO_CACHE_PATHS = {
     "/list_cards",
     "/get_card_set",
     "/list_folders",
-    "/list_order",
+    "/list_order", "/get_test_prep",
     "/channels",
     "/list_in_progress",
     "/timer_state",
@@ -10076,6 +10076,90 @@ def migrate_system_log_to_guild(guild_id: int):
         print(f"[INFO] 運用ログ移行: {old_name} → {new_name}")
     except (DataWriteError, OSError) as e:
         print(f"[WARN] 運用ログの移行に失敗しました: {e}")
+
+# ================================
+#  ★ 追加（2026/11/22）：テスト対策の「対象デッキ」と「テスト範囲」を全員で共有
+#  ─────────────────────────────
+#  以前は各端末のlocalStorageだけに保存していたが、同じテスト（日付|科目）なら
+#  誰が選んでも全員に同じ内容が出るよう、サーバー(test_prep_<guild_id>.json)に
+#  保存する。サーバー参加済みのログインユーザーなら誰でも編集できる
+#  （最後に保存した内容が残る）。送られてきた項目だけ更新する。
+#  日付が60日以上前のテストの記録は保存のたびに自動で消す。
+#  同時に別の人が同じ項目を変えた場合は上書きせず "conflict" を返す（項目ごとの *_at で判定）。
+# ================================
+_TEST_PREP_LOCK = Lock()
+
+@app.route("/get_test_prep", methods=["GET"])
+def get_test_prep():
+    guild_id, _student_id, err = require_member_session_get()
+    if err:
+        return err
+    data, _ = local_get(f"test_prep_{guild_id}.json")
+    return jsonify({"ok": True, "plans": (data or {}).get("plans", {})})
+
+@app.route("/save_test_prep", methods=["POST"])
+def save_test_prep():
+    data = request.json or {}
+    guild_id, _student_id, nickname, err = require_login_json(data)
+    if err:
+        return err
+    plan_id = data.get("id")
+    if not isinstance(plan_id, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}\|[^\r\n]{0,100}", plan_id):
+        return jsonify({"ok": False, "error": "invalid id"})
+    try:
+        plan_date = _date.fromisoformat(plan_id[:10])
+    except ValueError:
+        return jsonify({"ok": False, "error": "invalid id"})
+    if plan_date < datetime.now(JST).date() - timedelta(days=60):
+        return jsonify({"ok": False, "error": "too_old"})
+    err = reject_if_bug_chars({"科目": plan_id[11:]})
+    if err:
+        return err
+    upd = {}
+    if "decks" in data:
+        decks = data.get("decks")
+        if not isinstance(decks, list) or len(decks) > 300 \
+                or not all(isinstance(d, str) and len(d) <= 200 and _is_safe_deck_filename(d) for d in decks):
+            return jsonify({"ok": False, "error": "invalid decks"})
+        upd["decks"] = list(dict.fromkeys(decks))
+    if "scope" in data:
+        scope = data.get("scope")
+        if not isinstance(scope, str):
+            return jsonify({"ok": False, "error": "invalid scope"})
+        scope = scope.strip()[:200]
+        err = reject_if_bug_chars({"テスト範囲": scope})
+        if err:
+            return err
+        upd["scope"] = scope
+    if not upd:
+        return jsonify({"ok": False, "error": "nothing to save"})
+    try:
+        with _TEST_PREP_LOCK:
+            fname = f"test_prep_{guild_id}.json"
+            store, sha = local_get(fname)
+            if store is None and os.path.exists(_data_path(fname)):
+                return jsonify({"ok": False, "error": "データファイルを読み込めませんでした"})  # 壊れたまま上書きして全員分を消さない
+            plans = (store or {}).get("plans", {})
+            plan = plans.get(plan_id) or {"decks": [], "scope": ""}
+            # ★ 衝突対策：クライアントが「見ていた版」（項目ごとの更新時刻）と今の版が違えば、
+            #   他の人が先に変更している。上書きせず最新を返して、クライアントに見直してもらう。
+            for k in upd:
+                if int(data.get("base_" + k + "_at") or 0) != int(plan.get(k + "_at") or 0):
+                    return jsonify({"ok": False, "error": "conflict", "plan": plan})
+            now_ms = int(time.time() * 1000)
+            plan.update(upd)
+            for k in upd:
+                plan[k + "_at"] = now_ms
+            plan["updated_by"] = nickname
+            plans[plan_id] = plan
+            cutoff = (datetime.now(JST).date() - timedelta(days=60)).isoformat()
+            plans = {k: v for k, v in plans.items() if k[:10] >= cutoff}
+            local_put(fname, {"plans": plans}, sha)
+        return jsonify({"ok": True, "plan": plan})
+    except DataWriteError as e:
+        return jsonify({"ok": False, "error": f"local_write_failed: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 migrate_cardmaker_data_to_guild(LEGACY_GUILD_ID)
 migrate_notices_data_to_guild(LEGACY_GUILD_ID)
