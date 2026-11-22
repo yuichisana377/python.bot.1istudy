@@ -10094,7 +10094,10 @@ def get_test_prep():
     guild_id, _student_id, err = require_member_session_get()
     if err:
         return err
-    data, _ = local_get(f"test_prep_{guild_id}.json")
+    fname = f"test_prep_{guild_id}.json"
+    data, _ = local_get(fname)
+    if data is None and os.path.exists(_data_path(fname)):
+        return jsonify({"ok": False, "error": "データファイルを読み込めませんでした"})  # 壊れているのに「空」として成功扱いにしない
     return jsonify({"ok": True, "plans": (data or {}).get("plans", {})})
 
 @app.route("/save_test_prep", methods=["POST"])
@@ -10144,7 +10147,11 @@ def save_test_prep():
             # ★ 衝突対策：クライアントが「見ていた版」（項目ごとの更新時刻）と今の版が違えば、
             #   他の人が先に変更している。上書きせず最新を返して、クライアントに見直してもらう。
             for k in upd:
-                if int(data.get("base_" + k + "_at") or 0) != int(plan.get(k + "_at") or 0):
+                try:
+                    base_at = int(data.get("base_" + k + "_at") or 0)
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": "invalid base"})
+                if base_at != int(plan.get(k + "_at") or 0):
                     return jsonify({"ok": False, "error": "conflict", "plan": plan})
             now_ms = int(time.time() * 1000)
             plan.update(upd)
