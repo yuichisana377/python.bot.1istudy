@@ -1003,7 +1003,7 @@ def _timer_entry_json(entry, now_ms=None):
         "elapsed_sec": int(elapsed),
         "run_start_epoch": run_start,
         "accumulated_sec": int(round(accumulated)),  # ★ 端数（ミリ秒由来）が残らないよう常に整数化
-        "pause_reason": entry.get("pause_reason") if state == "paused" else None,
+        "pause_reason": entry.get("pause_reason") if state == "paused" else None, "timer_id": entry.get("created_at"),
     }
 
 def _timer_auth_from_json():
@@ -1057,7 +1057,7 @@ def timer_start():
             "state": "running",
             "run_start_epoch": now_ms,
             "accumulated_sec": 0,
-            "next_checkpoint_sec": TIMER_CHECKPOINT_SEC,
+            "next_checkpoint_sec": TIMER_CHECKPOINT_SEC, "created_at": now_ms,  # created_at=この計測の識別子(休止/再開で不変)
         }
         timers[student_id] = new_entry
         try:
@@ -1086,7 +1086,7 @@ def timer_pause():
         return err
 
     timers, entry = _sync_timer_entry(guild_id, student_id)
-    if not entry or entry.get("state") != "running":
+    if not entry or entry.get("state") != "running" or (request.get_json(silent=True) or {}).get("timer_id") not in (None, entry.get("created_at")):  # timer_id不一致=別の計測
         resp = {"ok": False, "error": "not_running"}
         resp.update(_timer_entry_json(entry))
         return jsonify(resp)
@@ -1119,7 +1119,7 @@ def timer_resume():
         return err
 
     timers, entry = _sync_timer_entry(guild_id, student_id)
-    if not entry or entry.get("state") != "paused":
+    if not entry or entry.get("state") != "paused" or (request.get_json(silent=True) or {}).get("timer_id") not in (None, entry.get("created_at")):  # timer_id不一致=別の計測
         resp = {"ok": False, "error": "not_paused"}
         resp.update(_timer_entry_json(entry))
         return jsonify(resp)
