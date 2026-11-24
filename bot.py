@@ -10329,7 +10329,7 @@ async def _spam_delete_targets(targets):
     return texts, gone
 
 
-def _strike_bump(guild_id: int, user_id: int) -> int:
+def _strike_bump(guild_id: int, user_id: int, cooldown: bool = False) -> int:
     """連投・禁止ワード共通の違反回数を1増やして返す（最後の違反からSPAM_STRIKE_RESET_SEC秒で0に戻る）。"""
     key = (guild_id, user_id)
     now = time.monotonic()
@@ -10337,7 +10337,9 @@ def _strike_bump(guild_id: int, user_id: int) -> int:
     if strike and now - strike[1] > SPAM_STRIKE_RESET_SEC:
         strike = None
     count = (strike[0] if strike else 0) + 1
-    _spam_strikes[key] = [count, now]
+    # 3番目の値＝クールダウン（直後の投稿を黙って削除する）の起点。連投違反のときだけ更新し、禁止ワード違反では通常の投稿を巻き込まない
+    prev_cd = strike[2] if (strike and len(strike) > 2) else 0
+    _spam_strikes[key] = [count, now, now if cooldown else prev_cd]
     return count
 
 
@@ -10379,7 +10381,7 @@ async def _antispam_on_message(message: discord.Message):
     strike = _spam_strikes.get(key)
     if strike and now - strike[1] > SPAM_STRIKE_RESET_SEC:
         strike = None
-    if strike and now - strike[1] < SPAM_STRIKE_COOLDOWN_SEC:
+    if strike and len(strike) > 2 and now - strike[2] < SPAM_STRIKE_COOLDOWN_SEC:
         # 違反直後（クールダウン中）に続けて送られた分は、違反を積まず今回の1件だけ黙って削除する
         await _spam_delete_targets([message])
         return
@@ -10387,7 +10389,7 @@ async def _antispam_on_message(message: discord.Message):
     if not targets:
         return
 
-    count = _strike_bump(message.guild.id, member.id)
+    count = _strike_bump(message.guild.id, member.id, cooldown=True)
     _spam_recent.pop(key, None)
     rid = _violation_add(
         message.guild.id, member.id, message.channel.id, "spam",
@@ -10584,7 +10586,15 @@ async def _banword_on_message(message: discord.Message):
         if did_delete:
             _bw_count = _strike_bump(message.guild.id, member.id)
             if _bw_count >= 3:
-                await _punish_timeout(message, member, _bw_rid, "不適切な投稿", _bw_count, 1)
+                try:
+                    await _punish_timeout(message, member, _bw_rid, "不適切な投稿", _bw_count, 1)
+                except discord.Forbidden:
+                    await _spam_report(
+                        message.guild,
+                        f"【荒らし対策】{member.display_name}（ID:{member.id}）を不適切な投稿（{_bw_count}回目）でタイムアウトにできませんでした。"
+                        "Botに「メンバーをタイムアウト」権限があるか、相手のロールがBotより上でないか確認してください。",
+                        _bw_rid,
+                    )
             else:
                 await _notify_violator(message, member, "あなたの投稿は不適切と判断され、削除されました。続けるとタイムアウトの対象になります。", _bw_rid)
     except Exception as e:
