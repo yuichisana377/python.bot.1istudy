@@ -10115,17 +10115,20 @@ async def _antispam_on_message(message: discord.Message):
             )
         elif count == 2:
             deleted = 0
+            already_gone = 0
             for m in targets[:15]:
                 try:
                     await m.delete()
                     deleted += 1
-                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                except discord.NotFound:
+                    already_gone += 1
+                except (discord.Forbidden, discord.HTTPException):
                     pass
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（2回目）。"
                 f"{deleted}件のメッセージを削除しました。次回はタイムアウトになります。"
-                + ("" if deleted else "（1件も削除できていません。Botに「メッセージの管理」権限があるか確認してください）"),
+                + ("" if (deleted or already_gone) else "（1件も削除できていません。Botに「メッセージの管理」権限があるか確認してください）"),
             )
         else:
             until = discord.utils.utcnow() + timedelta(minutes=SPAM_TIMEOUT_MINUTES)
@@ -10160,7 +10163,7 @@ async def _antispam_on_message(message: discord.Message):
 #    本人へDMで通知する。
 #  ・AIが使えない（OLLAMA_HOST未設定・タイムアウト・不正な応答）場合は削除せず、
 #    「未判定のため削除していない」と管理者へ報告するだけにする（誤削除より見逃しを選ぶ）。
-#  ・Ollamaへの同時問い合わせは2件まで、同じ人は5秒に1回までに制限（AIの負荷対策）。
+#  ・Ollamaへの同時問い合わせは2件まで（AIの負荷対策。過度な連投は連投検知側で止める）。
 #  ・投稿本文は「判定対象のデータ」としてプロンプトに入れ、中の指示には従わないよう伝えるが、
 #    完全には防げない（その場合は削除されないだけ＝安全側に倒れる）。
 # ================================
@@ -10169,10 +10172,10 @@ import unicodedata as _unicodedata
 # ★ ここに禁止ワードを追加・削除する（部分一致・大文字小文字/全角半角は区別しない）
 BANNED_WORDS = ["死ね", "殺す", "消えろ", "ガイジ", "キチガイ", "きもい", "うざい", "クズ"]
 BANWORD_AI_TIMEOUT_SEC = 20
-BANWORD_USER_COOLDOWN_SEC = 5
+BANWORD_UNJUDGED_REPORT_INTERVAL_SEC = 600  # 「AIで判定できなかった」報告はサーバーごとに10分に1回まで
 
 _banword_sem = None
-_banword_last_check = {}  # (guild_id, user_id) -> monotonic時刻
+_banword_last_unjudged_report = {}  # guild_id -> monotonic時刻
 
 
 def _banword_normalize(text: str) -> str:
@@ -10180,14 +10183,23 @@ def _banword_normalize(text: str) -> str:
 
 
 def _banword_hit(content: str):
+    """戻り値: (禁止ワード, 本文中の位置) または None。位置はAIに渡す抜粋の切り出しに使う。"""
     norm = _banword_normalize(content)
     for w in BANNED_WORDS:
-        if w and _banword_normalize(w) in norm:
-            return w
+        nw = _banword_normalize(w) if w else ""
+        if nw and nw in norm:
+            return w, norm.index(nw)
     return None
 
 
-def _banword_ai_judge(content: str, word: str):
+def _banword_excerpt(content: str, pos: int, width: int = 250) -> str:
+    """禁止ワード付近の前後を切り出す（先頭を無害な文章で埋めて見逃させる手口の対策）。
+    正規化で文字数が変わりうるため位置は目安。タグを閉じられないよう< >は全角にする。"""
+    start = max(0, pos - width)
+    return content[start:start + width * 2].replace("<", "＜").replace(">", "＞")
+
+
+def _banword_ai_judge(content: str, word: str, pos: int = 0):
     """AIに悪質かを聞く。戻り値: (True/False, 理由) または判定不能なら (None, "")。"""
     prompt = (
         "あなたは学校の学習用Discordサーバーのモデレーターです。"
@@ -10195,7 +10207,7 @@ def _banword_ai_judge(content: str, word: str):
         f"禁止ワード「{word}」が含まれています。この投稿が、特定の人への誹謗中傷・脅迫・暴言・嫌がらせなど"
         "悪質なものかを判定してください。冗談の引用、自分自身への言及、話題としての言及、無害な文脈なら悪質ではありません。\n"
         '必ず次のJSONだけを返してください: {"malicious": true または false, "reason": "20字以内の理由"}\n'
-        f"<message>{content[:500]}</message>"
+        f"<message>{_banword_excerpt(content, pos)}</message>"
     )
     res = _ollama_generate_json(prompt, timeout=BANWORD_AI_TIMEOUT_SEC, temperature=0.1)
     if not isinstance(res, dict) or not isinstance(res.get("malicious"), bool):
@@ -10213,26 +10225,23 @@ async def _banword_on_message(message: discord.Message):
     member = message.author
     if _spam_exempt(member):
         return
-    word = _banword_hit(message.content)
-    if not word:
+    hit = _banword_hit(message.content)
+    if not hit:
         return
-    key = (message.guild.id, member.id)
-    now = time.monotonic()
-    if now - _banword_last_check.get(key, -1e9) < BANWORD_USER_COOLDOWN_SEC:
-        return
-    _banword_last_check[key] = now
-    if len(_banword_last_check) > 500:
-        for k in [k for k, t in _banword_last_check.items() if now - t > 60]:
-            _banword_last_check.pop(k, None)
+    word, pos = hit
     if _banword_sem is None:
         _banword_sem = asyncio.Semaphore(2)
 
     try:
         async with _banword_sem:
-            malicious, reason = await asyncio.to_thread(_banword_ai_judge, message.content, word)
-        excerpt = message.content[:200].replace("\n", " ")
+            malicious, reason = await asyncio.to_thread(_banword_ai_judge, message.content, word, pos)
+        excerpt = discord.utils.escape_markdown(message.content[:200].replace("\n", " "))
         who = f"{member.display_name}（ID:{member.id}）が #{message.channel} で禁止ワード「{word}」を含む投稿"
         if malicious is None:
+            nowt = time.monotonic()
+            if nowt - _banword_last_unjudged_report.get(message.guild.id, -1e9) < BANWORD_UNJUDGED_REPORT_INTERVAL_SEC:
+                return
+            _banword_last_unjudged_report[message.guild.id] = nowt
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{who}。AIで判定できなかったため削除していません。内容: {excerpt}",
@@ -10240,21 +10249,24 @@ async def _banword_on_message(message: discord.Message):
             return
         if not malicious:
             return
+        did_delete = False
         try:
             await message.delete()
             deleted_note = "削除しました"
+            did_delete = True
         except discord.NotFound:
-            deleted_note = "（すでに削除されていました）"
+            deleted_note = "すでに削除されていました（連投検知などで削除済み）"
         except (discord.Forbidden, discord.HTTPException):
             deleted_note = "削除できませんでした（Botに「メッセージの管理」権限があるか確認してください）"
         await _spam_report(
             message.guild,
             f"【荒らし対策】{who}をAIが悪質と判定（{reason}）。{deleted_note}。内容: {excerpt}",
         )
-        try:
-            await member.send(f"【{message.guild.name}】あなたの投稿は不適切と判断され、削除されました。")
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        if did_delete:
+            try:
+                await member.send(f"【{message.guild.name}】あなたの投稿は不適切と判断され、削除されました。")
+            except (discord.Forbidden, discord.HTTPException):
+                pass
     except Exception as e:
         print(f"[WARN] 禁止ワード検知の処理に失敗: {e}")
 
