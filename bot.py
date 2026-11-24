@@ -10269,8 +10269,7 @@ bot.add_dynamic_items(_VioNoticeButton)
 
 
 async def _notify_violator(message: discord.Message, member: discord.Member, text: str, rid: str):
-    """本人への通知。DM（従来どおり）に加え、チャンネルへ短い公開通知＋本人だけが開ける詳細ボタンを出す。
-    公開側には投稿内容・理由は載せない（詳細は本人にだけ見えるephemeralで表示）。"""
+    """本人への通知はDMのみ（チャンネルへの公開通知は出さない。Discordの仕様上、通常の投稿に対して本人にだけ見えるメッセージは出せないため）。"""
     rec = _violation_records.get(rid)
     if rec is not None and rec.get("done"):
         return  # 通知を出す前に管理者が解除済み（誤検知）なら、処分の通知は出さない
@@ -10281,19 +10280,6 @@ async def _notify_violator(message: discord.Message, member: discord.Member, tex
         dm = await member.send(f"【{message.guild.name}】{text}")
         if rec is not None:
             rec["dm_msg"] = [dm.channel.id, dm.id]
-            _violation_save()
-    except (discord.Forbidden, discord.HTTPException):
-        pass
-    try:
-        v = discord.ui.View(timeout=None)
-        v.add_item(_VioNoticeButton(rid))
-        pub = await message.channel.send(
-            f"{member.mention} 荒らし対策により投稿を処理しました。詳細は下のボタンから（本人にだけ表示されます）。",
-            view=v, delete_after=600,
-            allowed_mentions=discord.AllowedMentions(users=[member]),
-        )
-        if rec is not None:
-            rec["notice_msg"] = [pub.channel.id, pub.id]
             _violation_save()
     except (discord.Forbidden, discord.HTTPException):
         pass
