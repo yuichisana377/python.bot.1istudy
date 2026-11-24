@@ -10019,11 +10019,11 @@ scheduler.add_job(check_study_timers,       "interval", minutes=1)  # ★ 勉強
 # ================================
 import collections as _collections
 
-SPAM_WINDOW_SEC = 6
-SPAM_MAX_MESSAGES = 6
-SPAM_SAME_WINDOW_SEC = 20
-SPAM_SAME_MAX = 4
-SPAM_SAME_MIN_CHARS = 4  # 「草」「了解」等の短い相づちは同一内容判定の対象外
+SPAM_WINDOW_SEC = 5
+SPAM_MAX_MESSAGES = 4
+SPAM_SAME_WINDOW_SEC = 30
+SPAM_SAME_MAX = 3
+SPAM_SAME_MIN_CHARS = 2  # 「草」「了解」等の短い相づちは同一内容判定の対象外
 SPAM_STRIKE_RESET_SEC = 30 * 60
 SPAM_STRIKE_COOLDOWN_SEC = 10
 SPAM_TIMEOUT_MINUTES = 10
