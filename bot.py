@@ -10170,6 +10170,32 @@ async def _violation_release(interaction: discord.Interaction, rid: str):
                 done.append("削除した投稿を復元")
             except (discord.Forbidden, discord.HTTPException):
                 done.append("投稿の復元に失敗（権限不足）")
+    # 本人への謝罪：送ったDMと公開通知を編集（DMが無い／編集できない場合は新規にDM）
+    sorry = "【お詫び】荒らし対策が誤って作動していました。先ほどの処理は誤検知のため管理者が取り消しました。ご迷惑をおかけして申し訳ありません。"
+    rec["notice"] = sorry
+    _violation_save()
+    apologized = False
+    try:
+        if rec.get("dm_msg") and member is not None:
+            dmch = await member.create_dm()
+            await dmch.get_partial_message(rec["dm_msg"][1]).edit(content=f"【{guild.name}】{sorry}")
+            apologized = True
+    except Exception:
+        pass
+    if not apologized and member is not None:
+        try:
+            await member.send(f"【{guild.name}】{sorry}")
+            apologized = True
+        except Exception:
+            pass
+    try:
+        if rec.get("notice_msg"):
+            nch = guild.get_channel_or_thread(rec["notice_msg"][0])
+            if nch is not None:
+                await nch.get_partial_message(rec["notice_msg"][1]).edit(content=f"（誤検知でした。お詫び申し上げます）", view=None)
+    except Exception:
+        pass
+    done.append("本人へお詫びを送信" if apologized else "本人へのお詫びDMは送れませんでした（DM拒否）")
     try:
         await interaction.message.edit(view=_ViolationView(rid, released=True))
     except Exception:
@@ -10248,17 +10274,23 @@ async def _notify_violator(message: discord.Message, member: discord.Member, tex
         rec["notice"] = text[:1800]
         _violation_save()
     try:
-        await member.send(f"【{message.guild.name}】{text}")
+        dm = await member.send(f"【{message.guild.name}】{text}")
+        if rec is not None:
+            rec["dm_msg"] = [dm.channel.id, dm.id]
+            _violation_save()
     except (discord.Forbidden, discord.HTTPException):
         pass
     try:
         v = discord.ui.View(timeout=None)
         v.add_item(_VioNoticeButton(rid))
-        await message.channel.send(
+        pub = await message.channel.send(
             f"{member.mention} 荒らし対策により投稿を処理しました。詳細は下のボタンから（本人にだけ表示されます）。",
             view=v, delete_after=600,
             allowed_mentions=discord.AllowedMentions(users=[member]),
         )
+        if rec is not None:
+            rec["notice_msg"] = [pub.channel.id, pub.id]
+            _violation_save()
     except (discord.Forbidden, discord.HTTPException):
         pass
 
