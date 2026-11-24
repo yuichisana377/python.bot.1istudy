@@ -10156,20 +10156,31 @@ async def _violation_release(interaction: discord.Interaction, rid: str):
         _spam_strikes.pop((rec["guild_id"], rec["user_id"]), None)
         _spam_recent.pop((rec["guild_id"], rec["user_id"]), None)
         done.append("違反回数をリセット")
+    pub_edited = False
     if rec.get("restore"):
         ch = guild.get_channel_or_thread(rec["channel_id"])
         if ch is None:
             done.append("投稿の復元に失敗（復元先のチャンネル/スレッドが見つかりません）")
         else:
+            name = member.display_name if member else str(rec["user_id"])
+            body = f"（誤検知のため管理者が復元）{name} の投稿:\n{rec['restore'][:1800]}"
             try:
-                name = member.display_name if member else str(rec["user_id"])
-                await ch.send(
-                    f"（誤検知のため管理者が復元）{name} の投稿:\n{rec['restore'][:1800]}",
-                    allowed_mentions=discord.AllowedMentions.none(),
-                )
-                done.append("削除した投稿を復元")
+                # 「メッセージを削除しました」の公開通知があれば、それを復元した投稿に書き換えて元の位置へ戻す
+                if rec.get("pub_notice"):
+                    pch = guild.get_channel_or_thread(rec["pub_notice"][0])
+                    if pch is not None:
+                        await pch.get_partial_message(rec["pub_notice"][1]).edit(
+                            content=body, allowed_mentions=discord.AllowedMentions.none())
+                        pub_edited = True
+                if not pub_edited:
+                    await ch.send(body, allowed_mentions=discord.AllowedMentions.none())
+                done.append("削除した投稿を復元（公開通知を書き換え）" if pub_edited else "削除した投稿を復元")
             except (discord.Forbidden, discord.HTTPException):
-                done.append("投稿の復元に失敗（権限不足）")
+                try:
+                    await ch.send(body, allowed_mentions=discord.AllowedMentions.none())
+                    done.append("削除した投稿を復元")
+                except (discord.Forbidden, discord.HTTPException):
+                    done.append("投稿の復元に失敗（権限不足）")
     # 本人への謝罪：送ったDM（と、旧版が出していた公開通知が残っていればそれ）を編集（DMが無い／編集できない場合は新規にDM）
     sorry = "【お詫び】荒らし対策が誤って作動していました。先ほどの処理は誤検知のため管理者が取り消しました。ご迷惑をおかけして申し訳ありません。"
     rec["notice"] = sorry
@@ -10187,6 +10198,13 @@ async def _violation_release(interaction: discord.Interaction, rid: str):
         try:
             await member.send(f"【{guild.name}】{sorry}")
             apologized = True
+        except Exception:
+            pass
+    if rec.get("pub_notice") and not pub_edited:
+        try:
+            pch = guild.get_channel_or_thread(rec["pub_notice"][0])
+            if pch is not None:
+                await pch.get_partial_message(rec["pub_notice"][1]).edit(content="（誤検知でした。お詫び申し上げます）")
         except Exception:
             pass
     try:
@@ -10329,12 +10347,18 @@ async def _spam_delete_targets(targets):
     return texts, gone
 
 
-async def _public_deleted_notice(channel):
-    """削除したことだけをチャンネルの全員に知らせる（誰の・何の投稿かは書かない）。一定時間で自動的に消える。"""
+async def _public_deleted_notice(channel, rid=None):
+    """削除したことだけをチャンネルの全員に知らせる（誰の・何の投稿かは書かない）。
+    管理者が誤検知として解除したとき、この通知を復元した投稿に書き換えて元の位置へ戻すため、自動では消さず、ridの記録に保存する。"""
     try:
-        await channel.send("荒らし対策により、メッセージを削除しました。", delete_after=30, allowed_mentions=discord.AllowedMentions.none())
+        msg = await channel.send("荒らし対策により、メッセージを削除しました。", allowed_mentions=discord.AllowedMentions.none())
     except Exception:
-        pass
+        return None
+    rec = _violation_records.get(rid) if rid else None
+    if rec is not None:
+        rec["pub_notice"] = [msg.channel.id, msg.id]
+        _violation_save()
+    return msg
 
 
 def _strike_bump(guild_id: int, user_id: int, cooldown: bool = False) -> int:
@@ -10409,7 +10433,7 @@ async def _antispam_on_message(message: discord.Message):
         if count == 1:
             texts1, _gone1 = await _spam_delete_targets(targets)
             if texts1:
-                await _public_deleted_notice(message.channel)
+                await _public_deleted_notice(message.channel, rid)
             _r1 = _violation_records.get(rid)
             if _r1:
                 _r1["restore"] = "\n".join(texts1)[:1800] if texts1 else None
@@ -10424,7 +10448,7 @@ async def _antispam_on_message(message: discord.Message):
         elif count == 2:
             restored_texts, already_gone = await _spam_delete_targets(targets)
             if restored_texts:
-                await _public_deleted_notice(message.channel)
+                await _public_deleted_notice(message.channel, rid)
             deleted = len(restored_texts)
             _rec = _violation_records.get(rid)
             if _rec:
@@ -10440,7 +10464,7 @@ async def _antispam_on_message(message: discord.Message):
         else:
             texts3, _g3 = await _spam_delete_targets(targets)
             if texts3:
-                await _public_deleted_notice(message.channel)
+                await _public_deleted_notice(message.channel, rid)
             _r3 = _violation_records.get(rid)
             if _r3:
                 _r3["restore"] = "\n".join(texts3)[:1800] if texts3 else None
@@ -10589,7 +10613,6 @@ async def _banword_on_message(message: discord.Message):
             await message.delete()
             deleted_note = "削除しました"
             did_delete = True
-            await _public_deleted_notice(message.channel)
         except discord.NotFound:
             deleted_note = "すでに削除されていました（連投検知などで削除済み）"
         except (discord.Forbidden, discord.HTTPException):
@@ -10598,6 +10621,8 @@ async def _banword_on_message(message: discord.Message):
             message.guild.id, member.id, message.channel.id, "banword", message.content,
             restore_content=message.content if did_delete else None,
         )
+        if did_delete:
+            await _public_deleted_notice(message.channel, _bw_rid)
         await _spam_report(
             message.guild,
             f"【荒らし対策】{who}をAIが悪質と判定（{reason}）。{deleted_note}。内容: {excerpt}",
@@ -10619,6 +10644,69 @@ async def _banword_on_message(message: discord.Message):
                 await _notify_violator(message, member, "あなたの投稿は不適切と判断され、削除されました。続けるとタイムアウトの対象になります。", _bw_rid)
     except Exception as e:
         print(f"[WARN] 禁止ワード検知の処理に失敗: {e}")
+
+
+@bot.tree.context_menu(name="不適切として処理")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+async def manual_inappropriate(interaction: discord.Interaction, message: discord.Message):
+    """管理者がメッセージを右クリック →「アプリ」から、AI判定を通さず不適切な投稿として処理する。
+    削除・公開通知・違反回数（連投・禁止ワードと共通）・3回目以降のタイムアウト・「解除」ボタン付きの管理ログ報告は、禁止ワード違反と同じ。"""
+    guild = interaction.guild
+    if guild is None or not isinstance(interaction.user, discord.Member) or not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("管理者のみ実行できます。", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True)
+    member = guild.get_member(message.author.id)
+    if member is None:
+        try:
+            member = await guild.fetch_member(message.author.id)
+        except (discord.NotFound, discord.HTTPException):
+            member = None
+    if member is None:
+        await interaction.followup.send("投稿者がサーバーのメンバーではないため処理できません。", ephemeral=True)
+        return
+    if member.bot:
+        await interaction.followup.send("Botの投稿は処理できません。", ephemeral=True)
+        return
+    if member.id == interaction.user.id:
+        await interaction.followup.send("自分自身の投稿は処理できません。", ephemeral=True)
+        return
+    excerpt = discord.utils.escape_markdown((message.content or "（本文なし）")[:200].replace("\n", " "))
+    who = f"{member.display_name}（ID:{member.id}）が #{message.channel} で投稿した内容"
+    did_delete = False
+    try:
+        await message.delete()
+        did_delete = True
+        deleted_note = "削除しました"
+    except discord.NotFound:
+        deleted_note = "すでに削除されていました"
+    except (discord.Forbidden, discord.HTTPException):
+        deleted_note = "削除できませんでした（Botに「メッセージの管理」権限があるか確認してください）"
+    rid = _violation_add(
+        guild.id, member.id, message.channel.id, "manual", message.content,
+        restore_content=(message.content or None) if did_delete else None,
+    )
+    if did_delete:
+        await _public_deleted_notice(message.channel, rid)
+    await _spam_report(
+        guild,
+        f"【荒らし対策】管理者 {interaction.user.display_name} の手動指定：{who}を不適切として処理。{deleted_note}。内容: {excerpt}",
+        rid,
+    )
+    result = deleted_note
+    if did_delete:
+        count = _strike_bump(guild.id, member.id)
+        try:
+            if count >= 3:
+                await _punish_timeout(message, member, rid, "不適切な投稿", count, 1)
+                result += f"。違反{count}回目のため、タイムアウト処理を行いました（管理者・オーナーは削除のみ）"
+            else:
+                await _notify_violator(message, member, "あなたの投稿は不適切と判断され、削除されました。続けるとタイムアウトの対象になります。", rid)
+                result += f"。違反{count}回目です"
+        except discord.Forbidden:
+            result += "。タイムアウトできませんでした（Botの権限、または相手のロールがBotより上でないか確認してください）"
+    await interaction.followup.send(f"処理しました：{result}。", ephemeral=True)
 
 
 started = False
