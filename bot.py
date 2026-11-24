@@ -10408,7 +10408,8 @@ async def _antispam_on_message(message: discord.Message):
     try:
         if count == 1:
             texts1, _gone1 = await _spam_delete_targets(targets)
-            await _public_deleted_notice(message.channel)
+            if texts1:
+                await _public_deleted_notice(message.channel)
             _r1 = _violation_records.get(rid)
             if _r1:
                 _r1["restore"] = "\n".join(texts1)[:1800] if texts1 else None
@@ -10422,7 +10423,8 @@ async def _antispam_on_message(message: discord.Message):
             )
         elif count == 2:
             restored_texts, already_gone = await _spam_delete_targets(targets)
-            await _public_deleted_notice(message.channel)
+            if restored_texts:
+                await _public_deleted_notice(message.channel)
             deleted = len(restored_texts)
             _rec = _violation_records.get(rid)
             if _rec:
@@ -10437,7 +10439,8 @@ async def _antispam_on_message(message: discord.Message):
             )
         else:
             texts3, _g3 = await _spam_delete_targets(targets)
-            await _public_deleted_notice(message.channel)
+            if texts3:
+                await _public_deleted_notice(message.channel)
             _r3 = _violation_records.get(rid)
             if _r3:
                 _r3["restore"] = "\n".join(texts3)[:1800] if texts3 else None
@@ -10550,6 +10553,9 @@ async def _banword_on_message(message: discord.Message):
     member = message.author
     if _spam_exempt(member):
         return
+    _st = _spam_strikes.get((message.guild.id, member.id))
+    if _st and len(_st) > 2 and time.monotonic() - _st[2] < SPAM_STRIKE_COOLDOWN_SEC:
+        return  # 連投違反の直後は連投側が黙って削除する（二重の告知・違反加算を避ける）
     hit = _banword_hit(message.content)
     if not hit:
         return
