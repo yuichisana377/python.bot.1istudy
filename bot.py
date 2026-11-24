@@ -705,6 +705,26 @@ def find_bug_chars(s):
     return found
 
 
+def describe_bug_chars(s, limit=5):
+    """
+    禁止文字の「どこに・どの文字が」あるかを人が読める形で返す。
+    ゼロ幅スペースなどは画面上では空白にすら見えず、文字そのものを出しても
+    何が弾かれたのか分からないため、行・桁・コードポイント・名前を添える。
+    """
+    import unicodedata
+    out, total = [], 0
+    for ln, line in enumerate(str(s).split("\n"), 1):
+        for col, ch in enumerate(line, 1):
+            if find_bug_chars(ch):
+                total += 1
+                if len(out) < limit:
+                    name = unicodedata.name(ch, "") or "名前なし"
+                    out.append(f"{ln}行目{col}文字目 U+{ord(ch):04X}（{name}）")
+    if total > len(out):
+        out.append(f"ほか{total - len(out)}件")
+    return "、".join(out)
+
+
 def reject_if_bug_chars(fields: dict):
     """
     fields: { "表示用フィールド名": 値 } の辞書。
@@ -720,8 +740,9 @@ def reject_if_bug_chars(fields: dict):
             g.error_hint = f"フィールド「{field_name}」に禁止文字: " + ", ".join(f"U+{ord(c):04X}" for c in bad) + f"（値の先頭: {ascii(str(value)[:60])}）"
             return jsonify({
                 "ok": False,
-                "error": f"{field_name} に使用できない文字が含まれています（制御文字・不可視文字など）: "
-                         + " ".join(bad)
+                "error": f"{field_name} に目に見えない文字などが含まれています: "
+                         + describe_bug_chars(value)
+                         + "。該当箇所を消して打ち直してください"
             })
     return None
 
