@@ -10170,7 +10170,7 @@ async def _violation_release(interaction: discord.Interaction, rid: str):
                 done.append("削除した投稿を復元")
             except (discord.Forbidden, discord.HTTPException):
                 done.append("投稿の復元に失敗（権限不足）")
-    # 本人への謝罪：送ったDMと公開通知を編集（DMが無い／編集できない場合は新規にDM）
+    # 本人への謝罪：送ったDM（と、旧版が出していた公開通知が残っていればそれ）を編集（DMが無い／編集できない場合は新規にDM）
     sorry = "【お詫び】荒らし対策が誤って作動していました。先ほどの処理は誤検知のため管理者が取り消しました。ご迷惑をおかけして申し訳ありません。"
     rec["notice"] = sorry
     _violation_save()
@@ -10281,6 +10281,11 @@ async def _notify_violator(message: discord.Message, member: discord.Member, tex
         if rec is not None:
             rec["dm_msg"] = [dm.channel.id, dm.id]
             _violation_save()
+            if rec.get("done"):  # DM送信中に管理者が解除していた場合は、その場でお詫びに書き換える
+                try:
+                    await dm.edit(content=f"【{message.guild.name}】【お詫び】荒らし対策が誤って作動していました。先ほどの処理は誤検知のため管理者が取り消しました。ご迷惑をおかけして申し訳ありません。")
+                except Exception:
+                    pass
     except (discord.Forbidden, discord.HTTPException):
         pass
 
