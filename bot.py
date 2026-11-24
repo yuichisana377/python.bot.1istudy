@@ -10060,20 +10060,118 @@ def _spam_detect(key, message) -> list:
     return []
 
 
-async def _spam_report(guild: discord.Guild, text: str):
-    """管理ログチャンネルへ報告。未設定・送信不可ならオーナーへDM（本人にしか見えない）。"""
+VIOLATION_RECORD_TTL_SEC = 7 * 24 * 3600
+_violation_records = {}  # record_id -> dict（メモリのみ。再起動すると消えるため、その場合ボタンは期限切れ扱い）
+
+
+def _violation_add(guild_id, user_id, channel_id, kind, content, restore_content=None):
+    """通知からあとで内容確認・解除できるよう、違反の詳細をメモリに保存してIDを返す。"""
+    now = time.time()
+    for k in [k for k, v in _violation_records.items() if now - v["at"] > VIOLATION_RECORD_TTL_SEC]:
+        _violation_records.pop(k, None)
+    while len(_violation_records) >= 200:
+        _violation_records.pop(next(iter(_violation_records)), None)
+    rid = secrets.token_hex(4)
+    _violation_records[rid] = {
+        "at": now, "guild_id": guild_id, "user_id": user_id, "channel_id": channel_id,
+        "kind": kind, "content": (content or "")[:1500], "restore": restore_content, "done": False,
+    }
+    return rid
+
+
+class _ViolationView(discord.ui.View):
+    """管理者への違反通知に付く「内容を見る」「解除」ボタン。操作できるのは管理者のみ。"""
+
+    def __init__(self, rid: str):
+        super().__init__(timeout=VIOLATION_RECORD_TTL_SEC)
+        self.rid = rid
+
+    def _admin_check(self, interaction: discord.Interaction, rec):
+        guild = bot.get_guild(rec["guild_id"])
+        if guild is None:
+            return None
+        m = guild.get_member(interaction.user.id)
+        if m is None or not m.guild_permissions.administrator:
+            return None
+        return guild
+
+    @discord.ui.button(label="内容を見る", style=discord.ButtonStyle.secondary)
+    async def show(self, interaction: discord.Interaction, button: discord.ui.Button):
+        rec = _violation_records.get(self.rid)
+        if rec is None:
+            await interaction.response.send_message("この記録は期限切れです（Botの再起動後、または7日経過）。", ephemeral=True)
+            return
+        if self._admin_check(interaction, rec) is None:
+            await interaction.response.send_message("管理者のみ操作できます。", ephemeral=True)
+            return
+        body = discord.utils.escape_markdown(rec["content"] or "（本文なし）")
+        await interaction.response.send_message(
+            f"対象ユーザーID: {rec['user_id']} / チャンネル: <#{rec['channel_id']}>\n--- 投稿内容 ---\n{body}"[:1900],
+            ephemeral=True, allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @discord.ui.button(label="解除（誤検知として戻す）", style=discord.ButtonStyle.danger)
+    async def release(self, interaction: discord.Interaction, button: discord.ui.Button):
+        rec = _violation_records.get(self.rid)
+        if rec is None:
+            await interaction.response.send_message("この記録は期限切れです（Botの再起動後、または7日経過）。", ephemeral=True)
+            return
+        guild = self._admin_check(interaction, rec)
+        if guild is None:
+            await interaction.response.send_message("管理者のみ操作できます。", ephemeral=True)
+            return
+        if rec["done"]:
+            await interaction.response.send_message("すでに解除済みです。", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        done = []
+        member = guild.get_member(rec["user_id"])
+        if member is not None and member.is_timed_out():
+            try:
+                await member.timeout(None, reason=f"荒らし対策の誤検知として管理者が解除（{interaction.user}）")
+                done.append("タイムアウトを解除")
+            except (discord.Forbidden, discord.HTTPException):
+                done.append("タイムアウト解除に失敗（権限不足）")
+        _spam_strikes.pop((rec["guild_id"], rec["user_id"]), None)
+        done.append("違反回数をリセット")
+        if rec.get("restore"):
+            ch = guild.get_channel(rec["channel_id"])
+            if ch is not None:
+                try:
+                    name = member.display_name if member else str(rec["user_id"])
+                    await ch.send(
+                        f"（誤検知のため管理者が復元）{name} の投稿:\n{rec['restore'][:1800]}",
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                    done.append("削除した投稿を復元")
+                except (discord.Forbidden, discord.HTTPException):
+                    done.append("投稿の復元に失敗（権限不足）")
+        rec["done"] = True
+        button.disabled = True
+        try:
+            await interaction.message.edit(view=self)
+        except Exception:
+            pass
+        await interaction.followup.send("解除しました：" + "、".join(done), ephemeral=True)
+
+
+async def _spam_report(guild: discord.Guild, text: str, record_id: str = None):
+    """管理ログチャンネルへ報告。未設定・送信不可ならオーナーへDM。
+    record_idがあれば「内容を見る」「解除」ボタンを付ける。"""
+    view = _ViolationView(record_id) if record_id else None
+    kwargs = {"view": view} if view else {}
     try:
         config = await async_load_config(guild.id)
         ch_id = (config or {}).get("mod_log_channel_id")
         ch = guild.get_channel(ch_id) if ch_id else None
         if ch is not None:
             try:
-                await ch.send(text, allowed_mentions=discord.AllowedMentions.none())
+                await ch.send(text, allowed_mentions=discord.AllowedMentions.none(), **kwargs)
                 return
             except (discord.Forbidden, discord.HTTPException):
                 pass  # 送れないならオーナーDMへ
         owner = guild.owner or await guild.fetch_member(guild.owner_id)
-        await owner.send(text)
+        await owner.send(text, **kwargs)
     except Exception as e:
         print(f"[WARN] 荒らし対策の報告に失敗: {e}")
 
@@ -10101,6 +10199,11 @@ async def _antispam_on_message(message: discord.Message):
     count = (strike[0] if strike else 0) + 1
     _spam_strikes[key] = [count, now]
     _spam_recent.pop(key, None)
+    rid = _violation_add(
+        message.guild.id, member.id, message.channel.id, "spam",
+        "\n---\n".join((m.content or "（本文なし）") for m in targets[:15]),
+        restore_content=None,
+    )
 
     try:
         if count == 1:
@@ -10112,6 +10215,7 @@ async def _antispam_on_message(message: discord.Message):
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（1回目）。本人へ警告しました。",
+                rid,
             )
         elif count == 2:
             deleted = 0
@@ -10129,6 +10233,7 @@ async def _antispam_on_message(message: discord.Message):
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（2回目）。"
                 f"{deleted}件のメッセージを削除しました。次回はタイムアウトになります。"
                 + ("" if (deleted or already_gone) else "（1件も削除できていません。Botに「メッセージの管理」権限があるか確認してください）"),
+                rid,
             )
         else:
             until = discord.utils.utcnow() + timedelta(minutes=SPAM_TIMEOUT_MINUTES)
@@ -10136,6 +10241,7 @@ async def _antispam_on_message(message: discord.Message):
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（{count}回目）。{SPAM_TIMEOUT_MINUTES}分間タイムアウトにしました。",
+                rid,
             )
             try:
                 await member.send(
@@ -10245,6 +10351,7 @@ async def _banword_on_message(message: discord.Message):
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{who}。AIで判定できなかったため削除していません。内容: {excerpt}",
+                _violation_add(message.guild.id, member.id, message.channel.id, "banword", message.content),
             )
             return
         if not malicious:
@@ -10261,6 +10368,10 @@ async def _banword_on_message(message: discord.Message):
         await _spam_report(
             message.guild,
             f"【荒らし対策】{who}をAIが悪質と判定（{reason}）。{deleted_note}。内容: {excerpt}",
+            _violation_add(
+                message.guild.id, member.id, message.channel.id, "banword", message.content,
+                restore_content=message.content if did_delete else None,
+            ),
         )
         if did_delete:
             try:
