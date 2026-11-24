@@ -10232,7 +10232,9 @@ async def _antispam_on_message(message: discord.Message):
                     already_gone += 1
                 except (discord.Forbidden, discord.HTTPException):
                     pass
-            _violation_records[rid]["restore"] = "\n".join(restored_texts)[:1800] if restored_texts else None
+            _rec = _violation_records.get(rid)
+            if _rec:
+                _rec["restore"] = "\n".join(restored_texts)[:1800] if restored_texts else None
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（2回目）。"
@@ -10243,7 +10245,9 @@ async def _antispam_on_message(message: discord.Message):
         else:
             until = discord.utils.utcnow() + timedelta(minutes=SPAM_TIMEOUT_MINUTES)
             await member.timeout(until, reason="連投（荒らし対策）")
-            _violation_records[rid]["timed_out"] = True
+            _rec = _violation_records.get(rid)
+            if _rec:
+                _rec["timed_out"] = True
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（{count}回目）。{SPAM_TIMEOUT_MINUTES}分間タイムアウトにしました。",
