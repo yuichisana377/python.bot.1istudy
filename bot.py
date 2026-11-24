@@ -4380,7 +4380,7 @@ def discord_complete_registration():
             "guild_id": str(guild_id),  # ★ JS側の数値精度を超えるため文字列で返す（discord_reg_info参照）
             # ★ フロント側で「サーバーを切り替える」メニューを複数サーバーに
             #   実際に参加している人にだけ出すための判定材料。
-            "multi_guild": len(entry.get("candidates", [])) > 1,
+            "multi_guild": len(bot_member_guilds(discord_user_id)) > 1,
         })
     except DataWriteError as e:
         return jsonify({"ok": False, "error": f"local_error: {e}"})
