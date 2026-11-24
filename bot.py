@@ -10152,7 +10152,7 @@ async def _violation_release(interaction: discord.Interaction, rid: str):
             done.append("タイムアウトを解除")
         except (discord.Forbidden, discord.HTTPException):
             done.append("タイムアウト解除に失敗（権限不足）")
-    if rec["kind"] == "spam":
+    if True:  # 連投・禁止ワードは違反回数を共有しているため、どちらの解除でもリセットする
         _spam_strikes.pop((rec["guild_id"], rec["user_id"]), None)
         _spam_recent.pop((rec["guild_id"], rec["user_id"]), None)
         done.append("違反回数をリセット")
@@ -10329,6 +10329,42 @@ async def _spam_delete_targets(targets):
     return texts, gone
 
 
+def _strike_bump(guild_id: int, user_id: int) -> int:
+    """連投・禁止ワード共通の違反回数を1増やして返す（最後の違反からSPAM_STRIKE_RESET_SEC秒で0に戻る）。"""
+    key = (guild_id, user_id)
+    now = time.monotonic()
+    strike = _spam_strikes.get(key)
+    if strike and now - strike[1] > SPAM_STRIKE_RESET_SEC:
+        strike = None
+    count = (strike[0] if strike else 0) + 1
+    _spam_strikes[key] = [count, now]
+    return count
+
+
+async def _punish_timeout(message: discord.Message, member: discord.Member, rid, label: str, count: int, deleted: int):
+    """3回目以降の共通処理（連投・禁止ワード共通）。管理者／オーナーはタイムアウトできないので削除のみ。"""
+    if member.guild_permissions.administrator or message.guild.owner_id == member.id:
+        await _spam_report(
+            message.guild,
+            f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で{label}（{count}回目）。"
+            f"{deleted}件を削除しました。管理者／オーナーはDiscordの仕様でタイムアウトできないため、削除のみです。",
+            rid,
+        )
+        return
+    until = discord.utils.utcnow() + timedelta(minutes=SPAM_TIMEOUT_MINUTES)
+    await member.timeout(until, reason=f"{label}（荒らし対策）")
+    _rec = _violation_records.get(rid)
+    if _rec:
+        _rec["timed_out"] = True
+        _violation_save()
+    await _spam_report(
+        message.guild,
+        f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で{label}（{count}回目）。{SPAM_TIMEOUT_MINUTES}分間タイムアウトにしました。",
+        rid,
+    )
+    await _notify_violator(message, member, f"{label}が続いたため、{SPAM_TIMEOUT_MINUTES}分間タイムアウトになりました。", rid)
+
+
 @bot.listen("on_message")
 async def _antispam_on_message(message: discord.Message):
     if message.guild is None or not isinstance(message.author, discord.Member):
@@ -10351,8 +10387,7 @@ async def _antispam_on_message(message: discord.Message):
     if not targets:
         return
 
-    count = (strike[0] if strike else 0) + 1
-    _spam_strikes[key] = [count, now]
+    count = _strike_bump(message.guild.id, member.id)
     _spam_recent.pop(key, None)
     rid = _violation_add(
         message.guild.id, member.id, message.channel.id, "spam",
@@ -10394,26 +10429,7 @@ async def _antispam_on_message(message: discord.Message):
             if _r3:
                 _r3["restore"] = "\n".join(texts3)[:1800] if texts3 else None
                 _violation_save()
-            if member.guild_permissions.administrator or message.guild.owner_id == member.id:
-                await _spam_report(
-                    message.guild,
-                    f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（{count}回目）。"
-                    f"{len(texts3)}件を削除しました。管理者／オーナーはDiscordの仕様でタイムアウトできないため、削除のみです。",
-                    rid,
-                )
-                return
-            until = discord.utils.utcnow() + timedelta(minutes=SPAM_TIMEOUT_MINUTES)
-            await member.timeout(until, reason="連投（荒らし対策）")
-            _rec = _violation_records.get(rid)
-            if _rec:
-                _rec["timed_out"] = True
-                _violation_save()
-            await _spam_report(
-                message.guild,
-                f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（{count}回目）。{SPAM_TIMEOUT_MINUTES}分間タイムアウトにしました。",
-                rid,
-            )
-            await _notify_violator(message, member, f"連投が続いたため、{SPAM_TIMEOUT_MINUTES}分間タイムアウトになりました。", rid)
+            await _punish_timeout(message, member, rid, "連投", count, len(texts3))
     except discord.Forbidden:
         print(f"[WARN] 荒らし対策: 権限不足で処理できませんでした (guild={message.guild.id})")
         await _spam_report(
@@ -10566,7 +10582,11 @@ async def _banword_on_message(message: discord.Message):
             _bw_rid,
         )
         if did_delete:
-            await _notify_violator(message, member, "あなたの投稿は不適切と判断され、削除されました。", _bw_rid)
+            _bw_count = _strike_bump(message.guild.id, member.id)
+            if _bw_count >= 3:
+                await _punish_timeout(message, member, _bw_rid, "不適切な投稿", _bw_count, 1)
+            else:
+                await _notify_violator(message, member, "あなたの投稿は不適切と判断され、削除されました。続けるとタイムアウトの対象になります。", _bw_rid)
     except Exception as e:
         print(f"[WARN] 禁止ワード検知の処理に失敗: {e}")
 
