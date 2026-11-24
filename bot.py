@@ -10182,7 +10182,8 @@ async def _violation_release(interaction: discord.Interaction, rid: str):
             apologized = True
     except Exception:
         pass
-    if not apologized and member is not None:
+    notified = bool(rec.get("dm_msg") or rec.get("notice_msg"))  # 本人に通知済みの場合だけお詫びする
+    if not apologized and member is not None and notified:
         try:
             await member.send(f"【{guild.name}】{sorry}")
             apologized = True
@@ -10195,7 +10196,8 @@ async def _violation_release(interaction: discord.Interaction, rid: str):
                 await nch.get_partial_message(rec["notice_msg"][1]).edit(content=f"（誤検知でした。お詫び申し上げます）", view=None)
     except Exception:
         pass
-    done.append("本人へお詫びを送信" if apologized else "本人へのお詫びDMは送れませんでした（DM拒否）")
+    if notified:
+        done.append("本人へお詫びを送信" if apologized else "本人へのお詫びは送れませんでした（DM拒否、または退出済み）")
     try:
         await interaction.message.edit(view=_ViolationView(rid, released=True))
     except Exception:
@@ -10270,6 +10272,8 @@ async def _notify_violator(message: discord.Message, member: discord.Member, tex
     """本人への通知。DM（従来どおり）に加え、チャンネルへ短い公開通知＋本人だけが開ける詳細ボタンを出す。
     公開側には投稿内容・理由は載せない（詳細は本人にだけ見えるephemeralで表示）。"""
     rec = _violation_records.get(rid)
+    if rec is not None and rec.get("done"):
+        return  # 通知を出す前に管理者が解除済み（誤検知）なら、処分の通知は出さない
     if rec is not None:
         rec["notice"] = text[:1800]
         _violation_save()
