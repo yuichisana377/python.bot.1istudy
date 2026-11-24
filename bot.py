@@ -10033,10 +10033,9 @@ _spam_strikes = {}  # (guild_id, user_id) -> [違反回数, 最後の違反の�
 
 
 def _spam_exempt(member) -> bool:
-    if getattr(member, "bot", False):
-        return True
-    perms = getattr(member, "guild_permissions", None)
-    return bool(perms and (perms.administrator or perms.manage_messages or perms.manage_guild))
+    # 管理者も対象にする（動作確認ができなくなるため）。ただしDiscordの仕様で
+    # 管理者・オーナーはタイムアウトできず、その場合は管理ログに権限不足として報告される。
+    return bool(getattr(member, "bot", False))
 
 
 def _spam_detect(key, message) -> list:
