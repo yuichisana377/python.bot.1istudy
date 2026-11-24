@@ -10008,8 +10008,9 @@ scheduler.add_job(check_study_timers,       "interval", minutes=1)  # ★ 勉強
 #    同一内容をSPAM_SAME_WINDOW_SEC秒以内にSPAM_SAME_MAX回以上投稿。
 #  ・段階的な対応（違反回数は最後の違反からSPAM_STRIKE_RESET_SEC秒で0に戻る）：
 #      1回目：本人にだけ警告（DM。DMが届かない場合は何も表示しない）
-#      2回目：連投したメッセージを削除し、管理ログチャンネルへ報告
-#      3回目以降：タイムアウト（SPAM_TIMEOUT_MINUTES分）。通知は本人へのDMのみ
+#      2回目：連投したメッセージを削除
+#      3回目以降：タイムアウト（SPAM_TIMEOUT_MINUTES分）。本人へDMで通知
+#      ※どの段階でも違反を検知したら管理ログチャンネル（未設定ならオーナーDM）へ報告する
 #  ・対象外：Bot・管理者・メッセージ管理権限を持つ人（誤検知で運営が止まらないように）。
 #  ・状態はメモリ上のみ（再起動で消えて問題ない短期情報）。コマンドの処理は
 #    bot.listen を使うので、既存のコマンド処理には干渉しない。
@@ -10108,6 +10109,10 @@ async def _antispam_on_message(message: discord.Message):
                 await member.send(f"【{message.guild.name}】{warn}")
             except (discord.Forbidden, discord.HTTPException):
                 pass  # DM不可。Discordには本人にだけ見える通常メッセージが無いため、何も表示しない
+            await _spam_report(
+                message.guild,
+                f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（1回目）。本人へ警告しました。",
+            )
         elif count == 2:
             deleted = 0
             for m in targets[:15]:
@@ -10124,6 +10129,10 @@ async def _antispam_on_message(message: discord.Message):
         else:
             until = discord.utils.utcnow() + timedelta(minutes=SPAM_TIMEOUT_MINUTES)
             await member.timeout(until, reason="連投（荒らし対策）")
+            await _spam_report(
+                message.guild,
+                f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（{count}回目）。{SPAM_TIMEOUT_MINUTES}分間タイムアウトにしました。",
+            )
             try:
                 await member.send(
                     f"【{message.guild.name}】連投が続いたため、{SPAM_TIMEOUT_MINUTES}分間タイムアウトになりました。"
