@@ -2028,6 +2028,8 @@ async def edit_category_autocomplete(interaction: discord.Interaction, current: 
     app_commands.Choice(name="お知らせ用", value="main"),
     app_commands.Choice(name="管理ログ用（荒らし対策の報告先）", value="modlog"),
 ])
+@app_commands.guild_only()
+@app_commands.checks.has_permissions(administrator=True)
 async def setchannel(interaction: discord.Interaction, type: app_commands.Choice[str] = None):
     await interaction.response.defer(ephemeral=True)
     guild_id = interaction.guild.id
@@ -2055,6 +2057,18 @@ async def setchannel(interaction: discord.Interaction, type: app_commands.Choice
     await interaction.followup.send(
         f"{label} の通知チャンネルを **#{interaction.channel.name}** に設定しました！"
     )
+
+@setchannel.error
+async def setchannel_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        msg = "このコマンドはサーバーの管理者のみ使えます。"
+    else:
+        msg = f"エラー: {error}"
+    if interaction.response.is_done():
+        await interaction.followup.send(msg, ephemeral=True)
+    else:
+        await interaction.response.send_message(msg, ephemeral=True)
+
 
 @bot.tree.command(name="set_subject_category", description="このチャンネルが属するカテゴリを「科目チャンネル」の範囲として設定する")
 async def set_subject_category(interaction: discord.Interaction):
