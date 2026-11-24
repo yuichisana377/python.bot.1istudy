@@ -2026,6 +2026,7 @@ async def edit_category_autocomplete(interaction: discord.Interaction, current: 
     app_commands.Choice(name="通生（朝5:30 / 夜20:00）", value="commute"),
     app_commands.Choice(name="寮生（朝7:20 / 夜20:00）", value="dorm"),
     app_commands.Choice(name="お知らせ用", value="main"),
+    app_commands.Choice(name="管理ログ用（荒らし対策の報告先）", value="modlog"),
 ])
 async def setchannel(interaction: discord.Interaction, type: app_commands.Choice[str] = None):
     await interaction.response.defer(ephemeral=True)
@@ -2039,6 +2040,9 @@ async def setchannel(interaction: discord.Interaction, type: app_commands.Choice
     elif kind == "main":
         config["notice_channel_id"] = interaction.channel.id
         label = "お知らせ用"
+    elif kind == "modlog":
+        config["mod_log_channel_id"] = interaction.channel.id
+        label = "管理ログ用"
     else:
         config["remind_channel_id"] = interaction.channel.id
         label = "通生（朝5:30・夜20:00）"
@@ -9981,6 +9985,132 @@ scheduler.add_job(send_today_plans_dorm,    "cron", hour=7,  minute=20)  # 寮�
 scheduler.add_job(send_today_plans_generic, "cron", hour=8,  minute=0)   # ★ 追加：1I勉強会以外のサーバー向け、朝8:00の一般枠
 scheduler.add_job(send_weekly_plans,        "cron", day_of_week="sun", hour=14, minute=0)  # 毎週日曜14:00に今週の予定
 scheduler.add_job(check_study_timers,       "interval", minutes=1)  # ★ 勉強タイマーの3時間ごとの自動休憩チェック（最大1分遅れで検知）
+
+# ================================
+#  荒らし（連投スパム）対策
+#  ─────────────────────────────
+#  ・検知：${SPAM_WINDOW_SEC}秒以内にSPAM_MAX_MESSAGES件以上の投稿、または
+#    同一内容をSPAM_SAME_WINDOW_SEC秒以内にSPAM_SAME_MAX回以上投稿。
+#  ・段階的な対応（違反回数は最後の違反からSPAM_STRIKE_RESET_SEC秒で0に戻る）：
+#      1回目：本人にだけ警告（DM。DM不可ならチャンネルに15秒で消える注意）
+#      2回目：連投したメッセージを削除し、管理ログチャンネルへ報告
+#      3回目以降：タイムアウト（SPAM_TIMEOUT_MINUTES分）。通知は本人へのDMのみ
+#  ・対象外：Bot・管理者・メッセージ管理権限を持つ人（誤検知で運営が止まらないように）。
+#  ・状態はメモリ上のみ（再起動で消えて問題ない短期情報）。コマンドの処理は
+#    bot.listen を使うので、既存のコマンド処理には干渉しない。
+#  ・管理ログチャンネルは /setchannel の「管理ログ用」で設定。未設定ならサーバー
+#    オーナーへDMで報告する。
+# ================================
+import collections as _collections
+
+SPAM_WINDOW_SEC = 6
+SPAM_MAX_MESSAGES = 6
+SPAM_SAME_WINDOW_SEC = 20
+SPAM_SAME_MAX = 4
+SPAM_STRIKE_RESET_SEC = 30 * 60
+SPAM_STRIKE_COOLDOWN_SEC = 10
+SPAM_TIMEOUT_MINUTES = 10
+
+_spam_recent = {}   # (guild_id, user_id) -> deque[(monotonic時刻, 正規化した本文, discord.Message)]
+_spam_strikes = {}  # (guild_id, user_id) -> [違反回数, 最後の違反の時刻]
+
+
+def _spam_exempt(member) -> bool:
+    if getattr(member, "bot", False):
+        return True
+    perms = getattr(member, "guild_permissions", None)
+    return bool(perms and (perms.administrator or perms.manage_messages or perms.manage_guild))
+
+
+def _spam_detect(key, message) -> list:
+    """違反と判定したら、対象のメッセージ（削除候補）のリストを返す。違反でなければ空リスト。"""
+    now = time.monotonic()
+    buf = _spam_recent.setdefault(key, _collections.deque(maxlen=30))
+    norm = " ".join((message.content or "").split()).lower()
+    buf.append((now, norm, message))
+    while buf and now - buf[0][0] > max(SPAM_WINDOW_SEC, SPAM_SAME_WINDOW_SEC):
+        buf.popleft()
+    burst = [m for (t, _, m) in buf if now - t <= SPAM_WINDOW_SEC]
+    if len(burst) >= SPAM_MAX_MESSAGES:
+        return burst
+    if norm:
+        same = [m for (t, n, m) in buf if n == norm and now - t <= SPAM_SAME_WINDOW_SEC]
+        if len(same) >= SPAM_SAME_MAX:
+            return same
+    return []
+
+
+async def _spam_report(guild: discord.Guild, text: str):
+    """管理ログチャンネルへ報告。未設定・送信不可ならオーナーへDM（本人にしか見えない）。"""
+    try:
+        config = await async_load_config(guild.id)
+        ch_id = (config or {}).get("mod_log_channel_id")
+        ch = guild.get_channel(ch_id) if ch_id else None
+        if ch is not None:
+            await ch.send(text, allowed_mentions=discord.AllowedMentions.none())
+            return
+        if guild.owner is not None:
+            await guild.owner.send(text)
+    except Exception as e:
+        print(f"[WARN] 荒らし対策の報告に失敗: {e}")
+
+
+@bot.listen("on_message")
+async def _antispam_on_message(message: discord.Message):
+    if message.guild is None or not isinstance(message.author, discord.Member):
+        return
+    member = message.author
+    if _spam_exempt(member):
+        return
+    key = (message.guild.id, member.id)
+    targets = _spam_detect(key, message)
+    if not targets:
+        return
+
+    now = time.monotonic()
+    strike = _spam_strikes.get(key)
+    if strike and now - strike[1] > SPAM_STRIKE_RESET_SEC:
+        strike = None
+    if strike and now - strike[1] < SPAM_STRIKE_COOLDOWN_SEC:
+        return  # 同じ連投で何度も違反を積まない
+    count = (strike[0] if strike else 0) + 1
+    _spam_strikes[key] = [count, now]
+    _spam_recent.pop(key, None)
+
+    try:
+        if count == 1:
+            warn = "連投が検知されました。続けると投稿の削除やタイムアウトの対象になります。ゆっくり投稿してください。"
+            try:
+                await member.send(f"【{message.guild.name}】{warn}")
+            except (discord.Forbidden, discord.HTTPException):
+                await message.channel.send(f"{member.mention} {warn}", delete_after=15)
+        elif count == 2:
+            deleted = 0
+            for m in targets[:15]:
+                try:
+                    await m.delete()
+                    deleted += 1
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
+            await _spam_report(
+                message.guild,
+                f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（2回目）。"
+                f"{deleted}件のメッセージを削除しました。次回はタイムアウトになります。",
+            )
+        else:
+            until = discord.utils.utcnow() + timedelta(minutes=SPAM_TIMEOUT_MINUTES)
+            await member.timeout(until, reason="連投（荒らし対策）")
+            try:
+                await member.send(
+                    f"【{message.guild.name}】連投が続いたため、{SPAM_TIMEOUT_MINUTES}分間タイムアウトになりました。"
+                )
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+    except discord.Forbidden:
+        print(f"[WARN] 荒らし対策: 権限不足で処理できませんでした (guild={message.guild.id})")
+    except Exception as e:
+        print(f"[WARN] 荒らし対策の処理に失敗: {e}")
+
 
 started = False
 synced_once = False
