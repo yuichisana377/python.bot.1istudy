@@ -2029,6 +2029,7 @@ async def edit_category_autocomplete(interaction: discord.Interaction, current: 
     app_commands.Choice(name="管理ログ用（荒らし対策の報告先）", value="modlog"),
 ])
 @app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
 @app_commands.checks.has_permissions(administrator=True)
 async def setchannel(interaction: discord.Interaction, type: app_commands.Choice[str] = None):
     await interaction.response.defer(ephemeral=True)
@@ -2151,7 +2152,7 @@ async def set_display_name(interaction: discord.Interaction, name: str):
 async def start_command(interaction: discord.Interaction):
     msg = (
         "📘 **はじめに（このサーバーでの導入手順）**\n\n"
-        "1️⃣ **/setchannel** — 予定・お知らせの通知を送るチャンネルを設定する（通生／寮生／お知らせ用、それぞれ実行したいチャンネルで実行）\n"
+        "1️⃣ **/setchannel** — 予定・お知らせの通知を送るチャンネルを設定する（通生／寮生／お知らせ用／管理ログ用、それぞれ実行したいチャンネルで実行。管理者のみ）\n"
         "2️⃣ **/set_subject_category** — 科目チャンネルをまとめているカテゴリ内のどれかのチャンネルで実行し、CardMakerの公開通知先などを設定する（任意）\n"
         "3️⃣ **/setup_roles** — 通生/寮生の振り分けパネルを投稿する（任意）\n"
         "4️⃣ **/name** — Bot・Webサイトの表示名を設定する（任意。未設定ならこのDiscordサーバーの名前がそのまま使われます）\n\n"
@@ -2436,7 +2437,7 @@ async def help_command(interaction: discord.Interaction):
         "**/list** — 予定を表示する\n"
         "**/delete** — 予定を削除する\n"
         "**/edit** — 予定を編集する\n"
-        "**/setchannel** — 通知チャンネルを設定する（通生／寮生／お知らせ用を選択可）\n"
+        "**/setchannel** — 通知チャンネルを設定する（通生／寮生／お知らせ用／管理ログ用を選択可・管理者のみ）\n"
         "**/set_subject_category** — このチャンネルが属するカテゴリを「科目チャンネル」の範囲として設定する\n"
         "**/setup_roles** — 通生/寮生 振り分けパネルを投稿する\n"
         "**/name** — Bot・Webサイトの表示名を設定する\n"
@@ -10003,10 +10004,10 @@ scheduler.add_job(check_study_timers,       "interval", minutes=1)  # ★ 勉強
 # ================================
 #  荒らし（連投スパム）対策
 #  ─────────────────────────────
-#  ・検知：${SPAM_WINDOW_SEC}秒以内にSPAM_MAX_MESSAGES件以上の投稿、または
+#  ・検知：SPAM_WINDOW_SEC秒以内にSPAM_MAX_MESSAGES件以上の投稿、または
 #    同一内容をSPAM_SAME_WINDOW_SEC秒以内にSPAM_SAME_MAX回以上投稿。
 #  ・段階的な対応（違反回数は最後の違反からSPAM_STRIKE_RESET_SEC秒で0に戻る）：
-#      1回目：本人にだけ警告（DM。DM不可ならチャンネルに15秒で消える注意）
+#      1回目：本人にだけ警告（DM。DMが届かない場合は何も表示しない）
 #      2回目：連投したメッセージを削除し、管理ログチャンネルへ報告
 #      3回目以降：タイムアウト（SPAM_TIMEOUT_MINUTES分）。通知は本人へのDMのみ
 #  ・対象外：Bot・管理者・メッセージ管理権限を持つ人（誤検知で運営が止まらないように）。
@@ -10021,6 +10022,7 @@ SPAM_WINDOW_SEC = 6
 SPAM_MAX_MESSAGES = 6
 SPAM_SAME_WINDOW_SEC = 20
 SPAM_SAME_MAX = 4
+SPAM_SAME_MIN_CHARS = 4  # 「草」「了解」等の短い相づちは同一内容判定の対象外
 SPAM_STRIKE_RESET_SEC = 30 * 60
 SPAM_STRIKE_COOLDOWN_SEC = 10
 SPAM_TIMEOUT_MINUTES = 10
@@ -10039,6 +10041,9 @@ def _spam_exempt(member) -> bool:
 def _spam_detect(key, message) -> list:
     """違反と判定したら、対象のメッセージ（削除候補）のリストを返す。違反でなければ空リスト。"""
     now = time.monotonic()
+    if len(_spam_recent) > 500:
+        for k in [k for k, v in _spam_recent.items() if not v or now - v[-1][0] > SPAM_SAME_WINDOW_SEC]:
+            _spam_recent.pop(k, None)
     buf = _spam_recent.setdefault(key, _collections.deque(maxlen=30))
     norm = " ".join((message.content or "").split()).lower()
     buf.append((now, norm, message))
@@ -10047,7 +10052,7 @@ def _spam_detect(key, message) -> list:
     burst = [m for (t, _, m) in buf if now - t <= SPAM_WINDOW_SEC]
     if len(burst) >= SPAM_MAX_MESSAGES:
         return burst
-    if norm:
+    if len(norm) >= SPAM_SAME_MIN_CHARS:
         same = [m for (t, n, m) in buf if n == norm and now - t <= SPAM_SAME_WINDOW_SEC]
         if len(same) >= SPAM_SAME_MAX:
             return same
@@ -10061,10 +10066,13 @@ async def _spam_report(guild: discord.Guild, text: str):
         ch_id = (config or {}).get("mod_log_channel_id")
         ch = guild.get_channel(ch_id) if ch_id else None
         if ch is not None:
-            await ch.send(text, allowed_mentions=discord.AllowedMentions.none())
-            return
-        if guild.owner is not None:
-            await guild.owner.send(text)
+            try:
+                await ch.send(text, allowed_mentions=discord.AllowedMentions.none())
+                return
+            except (discord.Forbidden, discord.HTTPException):
+                pass  # 送れないならオーナーDMへ
+        owner = guild.owner or await guild.fetch_member(guild.owner_id)
+        await owner.send(text)
     except Exception as e:
         print(f"[WARN] 荒らし対策の報告に失敗: {e}")
 
@@ -10073,6 +10081,8 @@ async def _spam_report(guild: discord.Guild, text: str):
 async def _antispam_on_message(message: discord.Message):
     if message.guild is None or not isinstance(message.author, discord.Member):
         return
+    if message.type not in (discord.MessageType.default, discord.MessageType.reply):
+        return  # ピン留め通知などのシステムメッセージは数えない
     member = message.author
     if _spam_exempt(member):
         return
@@ -10097,7 +10107,7 @@ async def _antispam_on_message(message: discord.Message):
             try:
                 await member.send(f"【{message.guild.name}】{warn}")
             except (discord.Forbidden, discord.HTTPException):
-                await message.channel.send(f"{member.mention} {warn}", delete_after=15)
+                pass  # DM不可。Discordには本人にだけ見える通常メッセージが無いため、何も表示しない
         elif count == 2:
             deleted = 0
             for m in targets[:15]:
@@ -10122,6 +10132,11 @@ async def _antispam_on_message(message: discord.Message):
                 pass
     except discord.Forbidden:
         print(f"[WARN] 荒らし対策: 権限不足で処理できませんでした (guild={message.guild.id})")
+        await _spam_report(
+            message.guild,
+            f"【荒らし対策】{member.display_name}（ID:{member.id}）の連投（{count}回目）に対応できませんでした。"
+            "Botに「メッセージの管理」「メンバーをタイムアウト」権限があるか、相手のロールがBotより上でないか確認してください。",
+        )
     except Exception as e:
         print(f"[WARN] 荒らし対策の処理に失敗: {e}")
 
