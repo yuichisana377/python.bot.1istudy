@@ -10463,7 +10463,7 @@ import unicodedata as _unicodedata
 BANNED_WORDS = ["死ね", "殺す", "消えろ", "ガイジ", "キチガイ", "きもい", "うざい", "クズ",
                 "くたばれ", "脳が足りて", "頭悪い", "頭が悪い", "馬鹿", "バカ野郎", "バカだな", "バカか", "バカじゃ", "無能"]
 # 単独で投稿された場合はAIに聞かず悪質扱いにする語（相手への罵倒とみなす）
-BANWORD_ALWAYS_BAD = ["死ね", "消えろ", "くたばれ", "殺すぞ", "ガイジ", "キチガイ"]
+BANWORD_ALWAYS_BAD = ["馬鹿", "バカ", "ばか", "アホ", "あほ", "阿呆", "死ね", "消えろ", "くたばれ", "殺すぞ", "ガイジ", "キチガイ"]
 BANWORD_AI_TIMEOUT_SEC = 45  # 実機で最大14秒（初回/混雑時はさらに延びうる）
 BANWORD_UNJUDGED_REPORT_INTERVAL_SEC = 600  # 「AIで判定できなかった」報告はサーバーごとに10分に1回まで
 
@@ -10477,6 +10477,8 @@ def _banword_normalize(text: str) -> str:
 
 def _banword_hit(content: str):
     """戻り値: (禁止ワード, 本文中の位置) または None。位置はAIに渡す抜粋の切り出しに使う。"""
+    if _banword_is_bare_insult(content):
+        return (content.strip()[:20] or "罵倒"), 0
     norm = _banword_normalize(content)
     for w in BANNED_WORDS:
         nw = _banword_normalize(w) if w else ""
