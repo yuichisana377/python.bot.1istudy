@@ -4952,7 +4952,7 @@ def _delete_target_summary(guild_id, category, filename):
                     content = f.read()
             except OSError:
                 content = None
-        return filename, [content if content is not None else "（内容を読み込めませんでした）"]
+        return filename, [_mask_notice_images(content) if content is not None else "（内容を読み込めませんでした）"]
     return filename, []
 
 @app.route("/request_delete", methods=["POST"])
@@ -8650,6 +8650,19 @@ def remove_in_progress():
 # ================================================================
 
 NOTICE_ALLOWED_EXT = (".md", ".txt")
+NOTICE_MAX_CONTENT_CHARS = 6_000_000  # 画像(data URI)込みの本文の上限。Web側(Notice.js)と同値
+
+_NOTICE_IMG_DATA_RE = re.compile(r"\(data:image/[a-z+]+;base64,[A-Za-z0-9+/=]+\)")
+
+
+def _mask_notice_images(text):
+    """運用ログ用：本文に埋め込まれた画像のbase64を「(画像データ)」に置き換える
+    （巨大な文字列がログの差分に出ないようにする）。"""
+    if not text:
+        return text
+    # 画像だけ差し替えた変更も差分に出るよう、中身の短いハッシュを付ける
+    return _NOTICE_IMG_DATA_RE.sub(
+        lambda m: "(画像データ " + hashlib.sha1(m.group(0).encode("utf-8")).hexdigest()[:8] + ")", text)
 
 # ★ 複数サーバー対応：以前はnotices/・notices_meta.jsonが全サーバー共通の
 #   単一の置き場だったため、新サーバーのお知らせ一覧に1Iのお知らせが
@@ -8812,8 +8825,12 @@ def upload_notice():
         return jsonify({"ok": False, "error": ".md または .txt ファイルのみアップロードできます"})
     if content is None or not content.strip():
         return jsonify({"ok": False, "error": "内容が空です"})
+    # 画像は data URI としてMarkdown本文に埋め込まれるため、極端に大きい投稿は弾く
+    if len(content) > NOTICE_MAX_CONTENT_CHARS:
+        return jsonify({"ok": False, "error": "内容（画像を含む）が大きすぎます。画像の枚数を減らしてください"})
 
-    err = reject_if_bug_chars({"内容": content, "アップロード者": uploader})
+    # 画像(base64)部分は文字種が限られ禁止文字を含み得ない。1文字ずつの判定は重いので除いて調べる
+    err = reject_if_bug_chars({"内容": _NOTICE_IMG_DATA_RE.sub("()", content), "アップロード者": uploader})
     if err:
         return err
 
@@ -8894,7 +8911,11 @@ def upload_notice():
         except Exception as e:
             print(f"[WARN] upload_notice notify failed: {e}")
 
-    change = file_diff(f"{notices_dir(guild_id)}/{filename}", old_content, content)
+    change = file_diff(
+        f"{notices_dir(guild_id)}/{filename}",
+        _mask_notice_images(old_content),
+        _mask_notice_images(content),
+    )
     detail = [c for c in (change, meta_change) if c]
     log_event(
         guild_id,
@@ -8946,7 +8967,7 @@ def _delete_notice_file(guild_id, filename, actor_nickname, approval_note=None):
     except DataWriteError as e:
         print(f"[WARN] notices_meta からの削除に失敗しました: {e}")
 
-    change = file_diff(f"{notices_dir(guild_id)}/{filename}", deleted_content, None)
+    change = file_diff(f"{notices_dir(guild_id)}/{filename}", _mask_notice_images(deleted_content), None)
     detail = [c for c in (change, meta_change) if c]
     summary = f"お知らせ「{filename}」を削除しました。"
     if approval_note:
