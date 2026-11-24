@@ -10007,11 +10007,11 @@ scheduler.add_job(check_study_timers,       "interval", minutes=1)  # ★ 勉強
 #  ・検知：SPAM_WINDOW_SEC秒以内にSPAM_MAX_MESSAGES件以上の投稿、または
 #    同一内容をSPAM_SAME_WINDOW_SEC秒以内にSPAM_SAME_MAX回以上投稿。
 #  ・段階的な対応（違反回数は最後の違反からSPAM_STRIKE_RESET_SEC秒で0に戻る）：
-#      1回目：本人にだけ警告（DM。DMが届かない場合は何も表示しない）
-#      2回目：連投したメッセージを削除
-#      3回目以降：タイムアウト（SPAM_TIMEOUT_MINUTES分）。本人へDMで通知
+#      1回目：連投したメッセージを削除し、本人へDMで警告（DM不可なら何も表示しない）
+#      2回目：連投したメッセージを削除（違反直後の続きの投稿も黙って削除）
+#      3回目以降：削除してタイムアウト（SPAM_TIMEOUT_MINUTES分）。本人へDMで通知
 #      ※どの段階でも違反を検知したら管理ログチャンネル（未設定ならオーナーDM）へ報告する
-#  ・対象外：Bot・管理者・メッセージ管理権限を持つ人（誤検知で運営が止まらないように）。
+#  ・対象外：Botのみ。管理者も対象（動作確認のため。ただし管理者・オーナーはタイムアウト不可で削除のみ）。
 #  ・状態はメモリ上のみ（再起動で消えて問題ない短期情報）。コマンドの処理は
 #    bot.listen を使うので、既存のコマンド処理には干渉しない。
 #  ・管理ログチャンネルは /setchannel の「管理ログ用」で設定。未設定ならサーバー
@@ -10134,6 +10134,7 @@ class _ViolationView(discord.ui.View):
                 done.append("タイムアウト解除に失敗（権限不足）")
         if rec["kind"] == "spam":
             _spam_strikes.pop((rec["guild_id"], rec["user_id"]), None)
+            _spam_recent.pop((rec["guild_id"], rec["user_id"]), None)
             done.append("違反回数をリセット")
         if rec.get("restore"):
             ch = guild.get_channel_or_thread(rec["channel_id"])
@@ -10178,7 +10179,6 @@ async def _spam_report(guild: discord.Guild, text: str, record_id: str = None):
         print(f"[WARN] 荒らし対策の報告に失敗: {e}")
 
 
-@bot.listen("on_message")
 async def _spam_delete_targets(targets):
     """連投と判定したメッセージを削除。戻り値: (削除できた本文のリスト, すでに消えていた件数)"""
     texts, gone = [], 0
@@ -10193,6 +10193,7 @@ async def _spam_delete_targets(targets):
     return texts, gone
 
 
+@bot.listen("on_message")
 async def _antispam_on_message(message: discord.Message):
     if message.guild is None or not isinstance(message.author, discord.Member):
         return
@@ -10202,18 +10203,18 @@ async def _antispam_on_message(message: discord.Message):
     if _spam_exempt(member):
         return
     key = (message.guild.id, member.id)
-    targets = _spam_detect(key, message)
-    if not targets:
-        return
-
     now = time.monotonic()
     strike = _spam_strikes.get(key)
     if strike and now - strike[1] > SPAM_STRIKE_RESET_SEC:
         strike = None
     if strike and now - strike[1] < SPAM_STRIKE_COOLDOWN_SEC:
-        # 同じ連投で何度も違反を積まない。ただし続けて送られた分は黙って削除する
-        await _spam_delete_targets(targets)
+        # 違反直後（クールダウン中）に続けて送られた分は、違反を積まず今回の1件だけ黙って削除する
+        await _spam_delete_targets([message])
         return
+    targets = _spam_detect(key, message)
+    if not targets:
+        return
+
     count = (strike[0] if strike else 0) + 1
     _spam_strikes[key] = [count, now]
     _spam_recent.pop(key, None)
@@ -10253,7 +10254,18 @@ async def _antispam_on_message(message: discord.Message):
                 rid,
             )
         else:
-            await _spam_delete_targets(targets)
+            texts3, _g3 = await _spam_delete_targets(targets)
+            _r3 = _violation_records.get(rid)
+            if _r3:
+                _r3["restore"] = "\n".join(texts3)[:1800] if texts3 else None
+            if member.guild_permissions.administrator or message.guild.owner_id == member.id:
+                await _spam_report(
+                    message.guild,
+                    f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（{count}回目）。"
+                    f"{len(texts3)}件を削除しました。管理者／オーナーはDiscordの仕様でタイムアウトできないため、削除のみです。",
+                    rid,
+                )
+                return
             until = discord.utils.utcnow() + timedelta(minutes=SPAM_TIMEOUT_MINUTES)
             await member.timeout(until, reason="連投（荒らし対策）")
             _rec = _violation_records.get(rid)
@@ -10276,6 +10288,7 @@ async def _antispam_on_message(message: discord.Message):
             message.guild,
             f"【荒らし対策】{member.display_name}（ID:{member.id}）の連投（{count}回目）に対応できませんでした。"
             "Botに「メッセージの管理」「メンバーをタイムアウト」権限があるか、相手のロールがBotより上でないか確認してください。",
+            rid,
         )
     except Exception as e:
         print(f"[WARN] 荒らし対策の処理に失敗: {e}")
