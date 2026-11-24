@@ -10060,11 +10060,33 @@ def _spam_detect(key, message) -> list:
 
 
 VIOLATION_RECORD_TTL_SEC = 7 * 24 * 3600
-_violation_records = {}  # record_id -> dict（メモリのみ。再起動で消える。永続ビューではないため、再起動後は古い通知のボタンがDiscord側で「インタラクションに失敗」と表示される）
+VIOLATION_RECORDS_PATH = os.path.join(DATA_DIR, "violation_records.json")  # 投稿本文を含むため運用ログ(system_log)には絶対に出さない
+
+
+def _violation_load():
+    try:
+        with open(VIOLATION_RECORDS_PATH, encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _violation_save():
+    try:
+        tmp = VIOLATION_RECORDS_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(_violation_records, f, ensure_ascii=False)
+        os.replace(tmp, VIOLATION_RECORDS_PATH)
+    except Exception as e:
+        print(f"[WARN] violation_records保存失敗: {e}")
+
+
+_violation_records = _violation_load()  # record_id -> dict（ファイルに永続化。再起動してもボタンは有効）
 
 
 def _violation_add(guild_id, user_id, channel_id, kind, content, restore_content=None):
-    """通知からあとで内容確認・解除できるよう、違反の詳細をメモリに保存してIDを返す。"""
+    """通知からあとで内容確認・解除できるよう、違反の詳細を保存してIDを返す。"""
     now = time.time()
     for k in [k for k, v in _violation_records.items() if now - v["at"] > VIOLATION_RECORD_TTL_SEC]:
         _violation_records.pop(k, None)
@@ -10075,87 +10097,122 @@ def _violation_add(guild_id, user_id, channel_id, kind, content, restore_content
         "at": now, "guild_id": guild_id, "user_id": user_id, "channel_id": channel_id,
         "kind": kind, "content": (content or "")[:1500], "restore": restore_content, "done": False,
     }
+    _violation_save()
     return rid
 
 
-class _ViolationView(discord.ui.View):
-    """管理者への違反通知に付く「内容を見る」「解除」ボタン。操作できるのは管理者のみ。"""
+def _violation_admin_check(interaction: discord.Interaction, rec):
+    guild = bot.get_guild(rec["guild_id"])
+    if guild is None:
+        return None
+    m = guild.get_member(interaction.user.id)
+    if m is None or not m.guild_permissions.administrator:
+        return None
+    return guild
 
+
+_VIO_EXPIRED = "この記録は期限切れです（7日経過、または記録が失われました）。"
+
+
+async def _violation_show(interaction: discord.Interaction, rid: str):
+    rec = _violation_records.get(rid)
+    if rec is None:
+        await interaction.response.send_message(_VIO_EXPIRED, ephemeral=True)
+        return
+    if _violation_admin_check(interaction, rec) is None:
+        await interaction.response.send_message("管理者のみ操作できます。", ephemeral=True)
+        return
+    body = discord.utils.escape_markdown(rec["content"] or "（本文なし）")
+    await interaction.response.send_message(
+        f"対象ユーザーID: {rec['user_id']} / チャンネル: <#{rec['channel_id']}>\n--- 投稿内容 ---\n{body}"[:1900],
+        ephemeral=True, allowed_mentions=discord.AllowedMentions.none(),
+    )
+
+
+async def _violation_release(interaction: discord.Interaction, rid: str):
+    rec = _violation_records.get(rid)
+    if rec is None:
+        await interaction.response.send_message(_VIO_EXPIRED, ephemeral=True)
+        return
+    guild = _violation_admin_check(interaction, rec)
+    if guild is None:
+        await interaction.response.send_message("管理者のみ操作できます。", ephemeral=True)
+        return
+    if rec["done"]:
+        await interaction.response.send_message("すでに解除済みです。", ephemeral=True)
+        return
+    rec["done"] = True  # awaitの前に確定（二重押し・同時押しで二重復元しないため）
+    _violation_save()
+    await interaction.response.defer(ephemeral=True)
+    done = []
+    member = guild.get_member(rec["user_id"])
+    if rec.get("timed_out") and member is not None and member.is_timed_out():
+        try:
+            await member.timeout(None, reason=f"荒らし対策の誤検知として管理者が解除（{interaction.user}）")
+            done.append("タイムアウトを解除")
+        except (discord.Forbidden, discord.HTTPException):
+            done.append("タイムアウト解除に失敗（権限不足）")
+    if rec["kind"] == "spam":
+        _spam_strikes.pop((rec["guild_id"], rec["user_id"]), None)
+        _spam_recent.pop((rec["guild_id"], rec["user_id"]), None)
+        done.append("違反回数をリセット")
+    if rec.get("restore"):
+        ch = guild.get_channel_or_thread(rec["channel_id"])
+        if ch is None:
+            done.append("投稿の復元に失敗（復元先のチャンネル/スレッドが見つかりません）")
+        else:
+            try:
+                name = member.display_name if member else str(rec["user_id"])
+                await ch.send(
+                    f"（誤検知のため管理者が復元）{name} の投稿:\n{rec['restore'][:1800]}",
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+                done.append("削除した投稿を復元")
+            except (discord.Forbidden, discord.HTTPException):
+                done.append("投稿の復元に失敗（権限不足）")
+    try:
+        await interaction.message.edit(view=_ViolationView(rid, released=True))
+    except Exception:
+        pass
+    await interaction.followup.send("解除しました：" + ("、".join(done) if done else "戻す対象はありませんでした（記録を解除済みにしました）"), ephemeral=True)
+
+
+class _VioShowButton(discord.ui.DynamicItem[discord.ui.Button], template=r"vio:show:(?P<rid>[0-9a-f]{8})"):
     def __init__(self, rid: str):
-        super().__init__(timeout=VIOLATION_RECORD_TTL_SEC)
+        super().__init__(discord.ui.Button(label="内容を見る", style=discord.ButtonStyle.secondary, custom_id=f"vio:show:{rid}"))
         self.rid = rid
 
-    def _admin_check(self, interaction: discord.Interaction, rec):
-        guild = bot.get_guild(rec["guild_id"])
-        if guild is None:
-            return None
-        m = guild.get_member(interaction.user.id)
-        if m is None or not m.guild_permissions.administrator:
-            return None
-        return guild
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls(match["rid"])
 
-    @discord.ui.button(label="内容を見る", style=discord.ButtonStyle.secondary)
-    async def show(self, interaction: discord.Interaction, button: discord.ui.Button):
-        rec = _violation_records.get(self.rid)
-        if rec is None:
-            await interaction.response.send_message("この記録は期限切れです（Botの再起動後、または7日経過）。", ephemeral=True)
-            return
-        if self._admin_check(interaction, rec) is None:
-            await interaction.response.send_message("管理者のみ操作できます。", ephemeral=True)
-            return
-        body = discord.utils.escape_markdown(rec["content"] or "（本文なし）")
-        await interaction.response.send_message(
-            f"対象ユーザーID: {rec['user_id']} / チャンネル: <#{rec['channel_id']}>\n--- 投稿内容 ---\n{body}"[:1900],
-            ephemeral=True, allowed_mentions=discord.AllowedMentions.none(),
-        )
+    async def callback(self, interaction: discord.Interaction):
+        await _violation_show(interaction, self.rid)
 
-    @discord.ui.button(label="解除（誤検知として戻す）", style=discord.ButtonStyle.danger)
-    async def release(self, interaction: discord.Interaction, button: discord.ui.Button):
-        rec = _violation_records.get(self.rid)
-        if rec is None:
-            await interaction.response.send_message("この記録は期限切れです（Botの再起動後、または7日経過）。", ephemeral=True)
-            return
-        guild = self._admin_check(interaction, rec)
-        if guild is None:
-            await interaction.response.send_message("管理者のみ操作できます。", ephemeral=True)
-            return
-        if rec["done"]:
-            await interaction.response.send_message("すでに解除済みです。", ephemeral=True)
-            return
-        rec["done"] = True  # awaitの前に確定（二重押し・同時押しで二重復元しないため）
-        await interaction.response.defer(ephemeral=True)
-        done = []
-        member = guild.get_member(rec["user_id"])
-        if rec.get("timed_out") and member is not None and member.is_timed_out():
-            try:
-                await member.timeout(None, reason=f"荒らし対策の誤検知として管理者が解除（{interaction.user}）")
-                done.append("タイムアウトを解除")
-            except (discord.Forbidden, discord.HTTPException):
-                done.append("タイムアウト解除に失敗（権限不足）")
-        if rec["kind"] == "spam":
-            _spam_strikes.pop((rec["guild_id"], rec["user_id"]), None)
-            _spam_recent.pop((rec["guild_id"], rec["user_id"]), None)
-            done.append("違反回数をリセット")
-        if rec.get("restore"):
-            ch = guild.get_channel_or_thread(rec["channel_id"])
-            if ch is None:
-                done.append("投稿の復元に失敗（復元先のチャンネル/スレッドが見つかりません）")
-            else:
-                try:
-                    name = member.display_name if member else str(rec["user_id"])
-                    await ch.send(
-                        f"（誤検知のため管理者が復元）{name} の投稿:\n{rec['restore'][:1800]}",
-                        allowed_mentions=discord.AllowedMentions.none(),
-                    )
-                    done.append("削除した投稿を復元")
-                except (discord.Forbidden, discord.HTTPException):
-                    done.append("投稿の復元に失敗（権限不足）")
-        button.disabled = True
-        try:
-            await interaction.message.edit(view=self)
-        except Exception:
-            pass
-        await interaction.followup.send("解除しました：" + ("、".join(done) if done else "戻す対象はありませんでした（記録を解除済みにしました）"), ephemeral=True)
+
+class _VioReleaseButton(discord.ui.DynamicItem[discord.ui.Button], template=r"vio:rel:(?P<rid>[0-9a-f]{8})"):
+    def __init__(self, rid: str, disabled: bool = False):
+        super().__init__(discord.ui.Button(label="解除（誤検知として戻す）", style=discord.ButtonStyle.danger,
+                                            custom_id=f"vio:rel:{rid}", disabled=disabled))
+        self.rid = rid
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls(match["rid"])
+
+    async def callback(self, interaction: discord.Interaction):
+        await _violation_release(interaction, self.rid)
+
+
+def _ViolationView(rid: str, released: bool = False):
+    """管理者への違反通知に付く「内容を見る」「解除」ボタン（永続。Bot再起動後も有効）。操作できるのは管理者のみ。"""
+    v = discord.ui.View(timeout=None)
+    v.add_item(_VioShowButton(rid))
+    v.add_item(_VioReleaseButton(rid, disabled=released))
+    return v
+
+
+bot.add_dynamic_items(_VioShowButton, _VioReleaseButton)
 
 
 async def _spam_report(guild: discord.Guild, text: str, record_id: str = None):
@@ -10271,6 +10328,7 @@ async def _antispam_on_message(message: discord.Message):
             _rec = _violation_records.get(rid)
             if _rec:
                 _rec["timed_out"] = True
+                _violation_save()
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（{count}回目）。{SPAM_TIMEOUT_MINUTES}分間タイムアウトにしました。",
