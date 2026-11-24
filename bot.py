@@ -10333,13 +10333,15 @@ async def _spam_report(guild: discord.Guild, text: str, record_id: str = None):
         print(f"[WARN] 荒らし対策の報告に失敗: {e}")
 
 
-async def _spam_delete_targets(targets):
-    """連投と判定したメッセージを削除。戻り値: (削除できた本文のリスト, すでに消えていた件数)"""
+async def _spam_delete_targets(targets, restore_channel_id=None):
+    """連投と判定したメッセージを削除。戻り値: (削除できた本文のリスト, すでに消えていた件数)
+    restore_channel_idを渡すと、そのチャンネルの投稿の本文だけを戻り値に含める（別チャンネルの本文が復元時に公開チャンネルへ出るのを防ぐ）。"""
     texts, gone = [], 0
     for m in targets[:30]:
         try:
             await m.delete()
-            texts.append(m.content or "（本文なし）")
+            if restore_channel_id is None or m.channel.id == restore_channel_id:
+                texts.append(m.content or "（本文なし）")
         except discord.NotFound:
             gone += 1
         except (discord.Forbidden, discord.HTTPException):
@@ -10431,7 +10433,7 @@ async def _antispam_on_message(message: discord.Message):
 
     try:
         if count == 1:
-            texts1, _gone1 = await _spam_delete_targets(targets)
+            texts1, _gone1 = await _spam_delete_targets(targets, message.channel.id)
             if texts1:
                 await _public_deleted_notice(message.channel, rid)
             _r1 = _violation_records.get(rid)
@@ -10446,7 +10448,7 @@ async def _antispam_on_message(message: discord.Message):
                 rid,
             )
         elif count == 2:
-            restored_texts, already_gone = await _spam_delete_targets(targets)
+            restored_texts, already_gone = await _spam_delete_targets(targets, message.channel.id)
             if restored_texts:
                 await _public_deleted_notice(message.channel, rid)
             deleted = len(restored_texts)
@@ -10462,7 +10464,7 @@ async def _antispam_on_message(message: discord.Message):
                 rid,
             )
         else:
-            texts3, _g3 = await _spam_delete_targets(targets)
+            texts3, _g3 = await _spam_delete_targets(targets, message.channel.id)
             if texts3:
                 await _public_deleted_notice(message.channel, rid)
             _r3 = _violation_records.get(rid)
@@ -10704,8 +10706,13 @@ async def manual_inappropriate(interaction: discord.Interaction, message: discor
             else:
                 await _notify_violator(message, member, "あなたの投稿は不適切と判断され、削除されました。続けるとタイムアウトの対象になります。", rid)
                 result += f"。違反{count}回目です"
-        except discord.Forbidden:
+        except (discord.Forbidden, discord.HTTPException):
             result += "。タイムアウトできませんでした（Botの権限、または相手のロールがBotより上でないか確認してください）"
+        except Exception as e:
+            print(f"[WARN] 手動処理の後続処理に失敗: {e}")
+            result += "。後続処理で想定外のエラーが発生しました"
+    if did_delete and not (message.content or "").strip():
+        result += "（本文が無い投稿のため、解除しても復元はできません。添付ファイルも復元できません）"
     await interaction.followup.send(f"処理しました：{result}。", ephemeral=True)
 
 
