@@ -10060,7 +10060,7 @@ def _spam_detect(key, message) -> list:
 
 
 VIOLATION_RECORD_TTL_SEC = 7 * 24 * 3600
-_violation_records = {}  # record_id -> dict（メモリのみ。再起動すると消えるため、その場合ボタンは期限切れ扱い）
+_violation_records = {}  # record_id -> dict（メモリのみ。再起動で消える。永続ビューではないため、再起動後は古い通知のボタンがDiscord側で「インタラクションに失敗」と表示される）
 
 
 def _violation_add(guild_id, user_id, channel_id, kind, content, restore_content=None):
@@ -10122,20 +10122,24 @@ class _ViolationView(discord.ui.View):
         if rec["done"]:
             await interaction.response.send_message("すでに解除済みです。", ephemeral=True)
             return
+        rec["done"] = True  # awaitの前に確定（二重押し・同時押しで二重復元しないため）
         await interaction.response.defer(ephemeral=True)
         done = []
         member = guild.get_member(rec["user_id"])
-        if member is not None and member.is_timed_out():
+        if rec.get("timed_out") and member is not None and member.is_timed_out():
             try:
                 await member.timeout(None, reason=f"荒らし対策の誤検知として管理者が解除（{interaction.user}）")
                 done.append("タイムアウトを解除")
             except (discord.Forbidden, discord.HTTPException):
                 done.append("タイムアウト解除に失敗（権限不足）")
-        _spam_strikes.pop((rec["guild_id"], rec["user_id"]), None)
-        done.append("違反回数をリセット")
+        if rec["kind"] == "spam":
+            _spam_strikes.pop((rec["guild_id"], rec["user_id"]), None)
+            done.append("違反回数をリセット")
         if rec.get("restore"):
-            ch = guild.get_channel(rec["channel_id"])
-            if ch is not None:
+            ch = guild.get_channel_or_thread(rec["channel_id"])
+            if ch is None:
+                done.append("投稿の復元に失敗（復元先のチャンネル/スレッドが見つかりません）")
+            else:
                 try:
                     name = member.display_name if member else str(rec["user_id"])
                     await ch.send(
@@ -10145,13 +10149,12 @@ class _ViolationView(discord.ui.View):
                     done.append("削除した投稿を復元")
                 except (discord.Forbidden, discord.HTTPException):
                     done.append("投稿の復元に失敗（権限不足）")
-        rec["done"] = True
         button.disabled = True
         try:
             await interaction.message.edit(view=self)
         except Exception:
             pass
-        await interaction.followup.send("解除しました：" + "、".join(done), ephemeral=True)
+        await interaction.followup.send("解除しました：" + ("、".join(done) if done else "戻す対象はありませんでした（記録を解除済みにしました）"), ephemeral=True)
 
 
 async def _spam_report(guild: discord.Guild, text: str, record_id: str = None):
@@ -10219,14 +10222,17 @@ async def _antispam_on_message(message: discord.Message):
         elif count == 2:
             deleted = 0
             already_gone = 0
+            restored_texts = []
             for m in targets[:15]:
                 try:
                     await m.delete()
                     deleted += 1
+                    restored_texts.append(m.content or "（本文なし）")
                 except discord.NotFound:
                     already_gone += 1
                 except (discord.Forbidden, discord.HTTPException):
                     pass
+            _violation_records[rid]["restore"] = "\n".join(restored_texts)[:1800] if restored_texts else None
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（2回目）。"
@@ -10237,6 +10243,7 @@ async def _antispam_on_message(message: discord.Message):
         else:
             until = discord.utils.utcnow() + timedelta(minutes=SPAM_TIMEOUT_MINUTES)
             await member.timeout(until, reason="連投（荒らし対策）")
+            _violation_records[rid]["timed_out"] = True
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（{count}回目）。{SPAM_TIMEOUT_MINUTES}分間タイムアウトにしました。",
@@ -10321,7 +10328,7 @@ def _banword_ai_judge(content: str, word: str, pos: int = 0):
         "「課題多すぎて死ねる」→ false（自分の愚痴）\n"
         "「きもいって言われた」→ false（出来事の報告）\n"
         '必ず次のJSONだけを返してください: {"malicious": true または false, "reason": "20字以内の理由"}\n'
-        f"<message>{_banword_excerpt(content, pos)}</message>"
+        f"<message>{_banword_excerpt(_banword_normalize(content), pos)}</message>"
     )
     res = _ollama_generate_json(prompt, timeout=BANWORD_AI_TIMEOUT_SEC, temperature=0.1)
     if not isinstance(res, dict) or not isinstance(res.get("malicious"), bool):
