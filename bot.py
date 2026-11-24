@@ -10287,6 +10287,7 @@ async def _antispam_on_message(message: discord.Message):
             _r1 = _violation_records.get(rid)
             if _r1:
                 _r1["restore"] = "\n".join(texts1)[:1800] if texts1 else None
+                _violation_save()
             warn = "連投が検知され、該当の投稿を削除しました。続けるとタイムアウトの対象になります。ゆっくり投稿してください。"
             try:
                 await member.send(f"【{message.guild.name}】{warn}")
@@ -10303,6 +10304,7 @@ async def _antispam_on_message(message: discord.Message):
             _rec = _violation_records.get(rid)
             if _rec:
                 _rec["restore"] = "\n".join(restored_texts)[:1800] if restored_texts else None
+                _violation_save()
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（2回目）。"
@@ -10315,6 +10317,7 @@ async def _antispam_on_message(message: discord.Message):
             _r3 = _violation_records.get(rid)
             if _r3:
                 _r3["restore"] = "\n".join(texts3)[:1800] if texts3 else None
+                _violation_save()
             if member.guild_permissions.administrator or message.guild.owner_id == member.id:
                 await _spam_report(
                     message.guild,
