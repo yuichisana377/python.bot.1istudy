@@ -10329,6 +10329,14 @@ async def _spam_delete_targets(targets):
     return texts, gone
 
 
+async def _public_deleted_notice(channel):
+    """削除したことだけをチャンネルの全員に知らせる（誰の・何の投稿かは書かない）。一定時間で自動的に消える。"""
+    try:
+        await channel.send("荒らし対策により、メッセージを削除しました。", delete_after=30, allowed_mentions=discord.AllowedMentions.none())
+    except Exception:
+        pass
+
+
 def _strike_bump(guild_id: int, user_id: int, cooldown: bool = False) -> int:
     """連投・禁止ワード共通の違反回数を1増やして返す（最後の違反からSPAM_STRIKE_RESET_SEC秒で0に戻る）。"""
     key = (guild_id, user_id)
@@ -10400,6 +10408,7 @@ async def _antispam_on_message(message: discord.Message):
     try:
         if count == 1:
             texts1, _gone1 = await _spam_delete_targets(targets)
+            await _public_deleted_notice(message.channel)
             _r1 = _violation_records.get(rid)
             if _r1:
                 _r1["restore"] = "\n".join(texts1)[:1800] if texts1 else None
@@ -10413,6 +10422,7 @@ async def _antispam_on_message(message: discord.Message):
             )
         elif count == 2:
             restored_texts, already_gone = await _spam_delete_targets(targets)
+            await _public_deleted_notice(message.channel)
             deleted = len(restored_texts)
             _rec = _violation_records.get(rid)
             if _rec:
@@ -10427,6 +10437,7 @@ async def _antispam_on_message(message: discord.Message):
             )
         else:
             texts3, _g3 = await _spam_delete_targets(targets)
+            await _public_deleted_notice(message.channel)
             _r3 = _violation_records.get(rid)
             if _r3:
                 _r3["restore"] = "\n".join(texts3)[:1800] if texts3 else None
@@ -10572,6 +10583,7 @@ async def _banword_on_message(message: discord.Message):
             await message.delete()
             deleted_note = "削除しました"
             did_delete = True
+            await _public_deleted_notice(message.channel)
         except discord.NotFound:
             deleted_note = "すでに削除されていました（連投検知などで削除済み）"
         except (discord.Forbidden, discord.HTTPException):
