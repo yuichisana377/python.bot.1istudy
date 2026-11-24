@@ -10179,6 +10179,20 @@ async def _spam_report(guild: discord.Guild, text: str, record_id: str = None):
 
 
 @bot.listen("on_message")
+async def _spam_delete_targets(targets):
+    """連投と判定したメッセージを削除。戻り値: (削除できた本文のリスト, すでに消えていた件数)"""
+    texts, gone = [], 0
+    for m in targets[:30]:
+        try:
+            await m.delete()
+            texts.append(m.content or "（本文なし）")
+        except discord.NotFound:
+            gone += 1
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+    return texts, gone
+
+
 async def _antispam_on_message(message: discord.Message):
     if message.guild is None or not isinstance(message.author, discord.Member):
         return
@@ -10197,7 +10211,9 @@ async def _antispam_on_message(message: discord.Message):
     if strike and now - strike[1] > SPAM_STRIKE_RESET_SEC:
         strike = None
     if strike and now - strike[1] < SPAM_STRIKE_COOLDOWN_SEC:
-        return  # 同じ連投で何度も違反を積まない
+        # 同じ連投で何度も違反を積まない。ただし続けて送られた分は黙って削除する
+        await _spam_delete_targets(targets)
+        return
     count = (strike[0] if strike else 0) + 1
     _spam_strikes[key] = [count, now]
     _spam_recent.pop(key, None)
@@ -10209,29 +10225,23 @@ async def _antispam_on_message(message: discord.Message):
 
     try:
         if count == 1:
-            warn = "連投が検知されました。続けると投稿の削除やタイムアウトの対象になります。ゆっくり投稿してください。"
+            texts1, _gone1 = await _spam_delete_targets(targets)
+            _r1 = _violation_records.get(rid)
+            if _r1:
+                _r1["restore"] = "\n".join(texts1)[:1800] if texts1 else None
+            warn = "連投が検知され、該当の投稿を削除しました。続けるとタイムアウトの対象になります。ゆっくり投稿してください。"
             try:
                 await member.send(f"【{message.guild.name}】{warn}")
             except (discord.Forbidden, discord.HTTPException):
                 pass  # DM不可。Discordには本人にだけ見える通常メッセージが無いため、何も表示しない
             await _spam_report(
                 message.guild,
-                f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（1回目）。本人へ警告しました。",
+                f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（1回目）。{len(texts1)}件のメッセージを削除し、本人へ警告しました。",
                 rid,
             )
         elif count == 2:
-            deleted = 0
-            already_gone = 0
-            restored_texts = []
-            for m in targets[:15]:
-                try:
-                    await m.delete()
-                    deleted += 1
-                    restored_texts.append(m.content or "（本文なし）")
-                except discord.NotFound:
-                    already_gone += 1
-                except (discord.Forbidden, discord.HTTPException):
-                    pass
+            restored_texts, already_gone = await _spam_delete_targets(targets)
+            deleted = len(restored_texts)
             _rec = _violation_records.get(rid)
             if _rec:
                 _rec["restore"] = "\n".join(restored_texts)[:1800] if restored_texts else None
@@ -10243,6 +10253,7 @@ async def _antispam_on_message(message: discord.Message):
                 rid,
             )
         else:
+            await _spam_delete_targets(targets)
             until = discord.utils.utcnow() + timedelta(minutes=SPAM_TIMEOUT_MINUTES)
             await member.timeout(until, reason="連投（荒らし対策）")
             _rec = _violation_records.get(rid)
