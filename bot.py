@@ -10215,6 +10215,54 @@ def _ViolationView(rid: str, released: bool = False):
 bot.add_dynamic_items(_VioShowButton, _VioReleaseButton)
 
 
+class _VioNoticeButton(discord.ui.DynamicItem[discord.ui.Button], template=r"vio:nt:(?P<rid>[0-9a-f]{8})"):
+    """違反した本人だけが押せる「詳細を見る」ボタン。押すと本人にだけ見える（青い）メッセージで理由を表示する。"""
+
+    def __init__(self, rid: str):
+        super().__init__(discord.ui.Button(label="詳細を見る（本人のみ）", style=discord.ButtonStyle.primary, custom_id=f"vio:nt:{rid}"))
+        self.rid = rid
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls(match["rid"])
+
+    async def callback(self, interaction: discord.Interaction):
+        rec = _violation_records.get(self.rid)
+        if rec is None:
+            await interaction.response.send_message(_VIO_EXPIRED, ephemeral=True)
+            return
+        if interaction.user.id != rec["user_id"]:
+            await interaction.response.send_message("この通知は対象の本人のみ確認できます。", ephemeral=True)
+            return
+        await interaction.response.send_message(rec.get("notice") or "詳細はありません。", ephemeral=True)
+
+
+bot.add_dynamic_items(_VioNoticeButton)
+
+
+async def _notify_violator(message: discord.Message, member: discord.Member, text: str, rid: str):
+    """本人への通知。DM（従来どおり）に加え、チャンネルへ短い公開通知＋本人だけが開ける詳細ボタンを出す。
+    公開側には投稿内容・理由は載せない（詳細は本人にだけ見えるephemeralで表示）。"""
+    rec = _violation_records.get(rid)
+    if rec is not None:
+        rec["notice"] = text[:1800]
+        _violation_save()
+    try:
+        await member.send(f"【{message.guild.name}】{text}")
+    except (discord.Forbidden, discord.HTTPException):
+        pass
+    try:
+        v = discord.ui.View(timeout=None)
+        v.add_item(_VioNoticeButton(rid))
+        await message.channel.send(
+            f"{member.mention} 荒らし対策により投稿を処理しました。詳細は下のボタンから（本人にだけ表示されます）。",
+            view=v, delete_after=600,
+            allowed_mentions=discord.AllowedMentions(users=[member]),
+        )
+    except (discord.Forbidden, discord.HTTPException):
+        pass
+
+
 async def _spam_report(guild: discord.Guild, text: str, record_id: str = None):
     """管理ログチャンネルへ報告。未設定・送信不可ならオーナーへDM。
     record_idがあれば「内容を見る」「解除」ボタンを付ける。"""
@@ -10289,10 +10337,7 @@ async def _antispam_on_message(message: discord.Message):
                 _r1["restore"] = "\n".join(texts1)[:1800] if texts1 else None
                 _violation_save()
             warn = "連投が検知され、該当の投稿を削除しました。続けるとタイムアウトの対象になります。ゆっくり投稿してください。"
-            try:
-                await member.send(f"【{message.guild.name}】{warn}")
-            except (discord.Forbidden, discord.HTTPException):
-                pass  # DM不可。Discordには本人にだけ見える通常メッセージが無いため、何も表示しない
+            await _notify_violator(message, member, warn, rid)
             await _spam_report(
                 message.guild,
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（1回目）。{len(texts1)}件のメッセージを削除し、本人へ警告しました。",
@@ -10337,12 +10382,7 @@ async def _antispam_on_message(message: discord.Message):
                 f"【荒らし対策】{member.display_name}（ID:{member.id}）が #{message.channel} で連投（{count}回目）。{SPAM_TIMEOUT_MINUTES}分間タイムアウトにしました。",
                 rid,
             )
-            try:
-                await member.send(
-                    f"【{message.guild.name}】連投が続いたため、{SPAM_TIMEOUT_MINUTES}分間タイムアウトになりました。"
-                )
-            except (discord.Forbidden, discord.HTTPException):
-                pass
+            await _notify_violator(message, member, f"連投が続いたため、{SPAM_TIMEOUT_MINUTES}分間タイムアウトになりました。", rid)
     except discord.Forbidden:
         print(f"[WARN] 荒らし対策: 権限不足で処理できませんでした (guild={message.guild.id})")
         await _spam_report(
@@ -10469,19 +10509,17 @@ async def _banword_on_message(message: discord.Message):
             deleted_note = "すでに削除されていました（連投検知などで削除済み）"
         except (discord.Forbidden, discord.HTTPException):
             deleted_note = "削除できませんでした（Botに「メッセージの管理」権限があるか確認してください）"
+        _bw_rid = _violation_add(
+            message.guild.id, member.id, message.channel.id, "banword", message.content,
+            restore_content=message.content if did_delete else None,
+        )
         await _spam_report(
             message.guild,
             f"【荒らし対策】{who}をAIが悪質と判定（{reason}）。{deleted_note}。内容: {excerpt}",
-            _violation_add(
-                message.guild.id, member.id, message.channel.id, "banword", message.content,
-                restore_content=message.content if did_delete else None,
-            ),
+            _bw_rid,
         )
         if did_delete:
-            try:
-                await member.send(f"【{message.guild.name}】あなたの投稿は不適切と判断され、削除されました。")
-            except (discord.Forbidden, discord.HTTPException):
-                pass
+            await _notify_violator(message, member, "あなたの投稿は不適切と判断され、削除されました。", _bw_rid)
     except Exception as e:
         print(f"[WARN] 禁止ワード検知の処理に失敗: {e}")
 
