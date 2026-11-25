@@ -7863,11 +7863,13 @@ def _quiz_discord_embed(snapshot):
         shown.append(f"…ほか{len(names) - QUIZ_DISCORD_MAX_NAMES}人")
     label = _quiz_discord_state_label(snapshot["state"], snapshot["current_q"], snapshot["total_q"])
     ended = snapshot["state"] == "ended"
+    # 途中参加ナシのクイズは、開始後（待機中以外）は参加リンクを出さない
+    can_join = snapshot["state"] == "lobby" or (snapshot.get("allow_late_join") and not ended)
     embed = discord.Embed(
         title=f"みんなでクイズ「{_quiz_discord_escape(snapshot['title'])}」",
         description=(
             f"{_quiz_discord_escape(snapshot['host'])}さんによりクイズが作成されました。\n"
-            + ("" if ended else f"**[ここから参加する]({url})**\n")
+            + (f"**[ここから参加する]({url})**\n" if can_join else "")
         ),
         color=discord.Color.light_grey() if ended else discord.Color.blurple(),
     )
@@ -7881,6 +7883,7 @@ def _quiz_discord_snapshot_locked(room):
         "host": room["host_nickname"],
         "names": [p["nickname"] for p in room["players"].values()],
         "state": room["state"], "current_q": room["current_q"], "total_q": len(room["questions"]),
+        "allow_late_join": bool(room.get("allow_late_join")),
     }
 
 def _quiz_discord_send_initial(snapshot):
