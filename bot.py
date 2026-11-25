@@ -7825,6 +7825,134 @@ def _archive_room_if_needed(room):
             _archive_manual_quiz(*args)
     Thread(target=_run, daemon=True).start()
 
+
+# ============================================================
+#  ★ 追加（2026/11/25）：みんなでクイズの作成・状況をDiscordのお知らせチャンネルに通知
+# ------------------------------------------------------------
+#  ・クイズ作成時に1通だけ投稿し、以降は同じメッセージを編集して
+#    「現在の参加者」「現在の状態（待機中／プレイ中（N/M問）／終了済み）」を更新する
+#    （投稿を増やさないので、チャンネルが荒れない）。
+#  ・送信先は他のお知らせ（upload_notice）と同じ：notice_channel_id →無ければ remind_channel_id。
+#  ・編集は5秒ごとの監視スレッドが「表示内容が変わったときだけ」行う（Discordのレート制限対策）。
+#  ・通知はベストエフォート。失敗してもクイズ自体には一切影響させない。
+#  ・メンションは付けない（allowed_mentions=none）。ニックネームはmarkdownを無効化して表示する。
+# ============================================================
+QUIZ_DISCORD_TRACKED = {}  # code -> {"message": discord.Message, "sig": 最後に反映した内容}
+QUIZ_DISCORD_LOCK = Lock()
+QUIZ_DISCORD_WATCHER_STARTED = False
+QUIZ_DISCORD_WATCH_INTERVAL_SEC = 5
+QUIZ_DISCORD_MAX_NAMES = 20
+QUIZ_WEB_BASE_URL = "https://study-web.chiro377.com"
+
+def _quiz_discord_escape(text: str) -> str:
+    return discord.utils.escape_markdown(discord.utils.escape_mentions(str(text)))
+
+def _quiz_discord_state_label(state, current_q, total_q):
+    if state == "lobby":
+        return "待機中"
+    if state == "ended":
+        return "終了済み"
+    return f"プレイ中（{min(current_q + 1, total_q)}/{total_q}問）"
+
+def _quiz_discord_embed(snapshot):
+    """snapshot: dict(code, guild_id, title, host, names, state, current_q, total_q)"""
+    url = f"{QUIZ_WEB_BASE_URL}/Quiz.html?code={snapshot['code']}&g={snapshot['guild_id']}"
+    names = snapshot["names"]
+    shown = [_quiz_discord_escape(n) for n in names[:QUIZ_DISCORD_MAX_NAMES]]
+    if len(names) > QUIZ_DISCORD_MAX_NAMES:
+        shown.append(f"…ほか{len(names) - QUIZ_DISCORD_MAX_NAMES}人")
+    label = _quiz_discord_state_label(snapshot["state"], snapshot["current_q"], snapshot["total_q"])
+    ended = snapshot["state"] == "ended"
+    embed = discord.Embed(
+        title=f"みんなでクイズ「{_quiz_discord_escape(snapshot['title'])}」",
+        description=(
+            f"{_quiz_discord_escape(snapshot['host'])}さんによりクイズが作成されました。\n"
+            + ("" if ended else f"**[ここから参加する]({url})**\n")
+        ),
+        color=discord.Color.light_grey() if ended else discord.Color.blurple(),
+    )
+    embed.add_field(name="現在の状態", value=label, inline=False)
+    embed.add_field(name=f"現在の参加者（{len(names)}人）", value="、".join(shown) or "なし", inline=False)
+    return embed
+
+def _quiz_discord_snapshot_locked(room):
+    return {
+        "code": room["code"], "guild_id": room["guild_id"], "title": room["title"],
+        "host": room["host_nickname"],
+        "names": [p["nickname"] for p in room["players"].values()],
+        "state": room["state"], "current_q": room["current_q"], "total_q": len(room["questions"]),
+    }
+
+def _quiz_discord_send_initial(snapshot):
+    """作成直後に1回だけ投稿し、監視対象に登録する（別スレッドで実行）。"""
+    try:
+        guild = bot.get_guild(int(snapshot["guild_id"]))
+        if not guild:
+            return
+        config = load_config(guild.id)
+        channel_id = config.get("notice_channel_id") or config.get("remind_channel_id")
+        channel = bot.get_channel(channel_id) if channel_id else None
+        if not channel:
+            return
+        msg = asyncio.run_coroutine_threadsafe(
+            channel.send(embed=_quiz_discord_embed(snapshot), allowed_mentions=discord.AllowedMentions.none()),
+            bot.loop,
+        ).result(timeout=15)
+        sig = (snapshot["state"], snapshot["current_q"], tuple(snapshot["names"]))
+        with QUIZ_DISCORD_LOCK:
+            QUIZ_DISCORD_TRACKED[snapshot["code"]] = {"message": msg, "sig": sig}
+        _quiz_discord_ensure_watcher()
+    except Exception as e:
+        print(f"[WARN] quiz discord notify failed: {e}")
+
+def _quiz_discord_watch_loop():
+    while True:
+        time.sleep(QUIZ_DISCORD_WATCH_INTERVAL_SEC)
+        try:
+            with QUIZ_DISCORD_LOCK:
+                items = list(QUIZ_DISCORD_TRACKED.items())
+            for code, tr in items:
+                with QUIZ_ROOMS_LOCK:
+                    room = QUIZ_ROOMS.get(code)
+                    snap = _quiz_discord_snapshot_locked(room) if room else None
+                if snap is not None:
+                    tr["last_snap"] = snap
+                elif tr.get("last_snap"):
+                    # ルームが掃除済み（放置等）：最後に「終了済み」へ更新して監視を終える
+                    snap = dict(tr["last_snap"])
+                    snap["state"] = "ended"
+                else:
+                    with QUIZ_DISCORD_LOCK:
+                        QUIZ_DISCORD_TRACKED.pop(code, None)
+                    continue
+                sig = (snap["state"], snap["current_q"], tuple(snap["names"]))
+                if sig != tr["sig"]:
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            tr["message"].edit(embed=_quiz_discord_embed(snap), allowed_mentions=discord.AllowedMentions.none()),
+                            bot.loop,
+                        ).result(timeout=15)
+                        tr["sig"] = sig
+                    except discord.NotFound:
+                        with QUIZ_DISCORD_LOCK:
+                            QUIZ_DISCORD_TRACKED.pop(code, None)  # メッセージが消された→監視を終える
+                        continue
+                    except Exception as e:
+                        print(f"[WARN] quiz discord edit failed: {e}")  # 次の周期で再試行
+                if snap["state"] == "ended" and tr["sig"] == sig:
+                    with QUIZ_DISCORD_LOCK:
+                        QUIZ_DISCORD_TRACKED.pop(code, None)
+        except Exception as e:
+            print(f"[WARN] quiz discord watcher error: {e}")
+
+def _quiz_discord_ensure_watcher():
+    global QUIZ_DISCORD_WATCHER_STARTED
+    with QUIZ_DISCORD_LOCK:
+        if QUIZ_DISCORD_WATCHER_STARTED:
+            return
+        QUIZ_DISCORD_WATCHER_STARTED = True
+    Thread(target=_quiz_discord_watch_loop, daemon=True).start()
+
 @app.route("/quiz_create", methods=["POST"])
 def quiz_create():
     data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
@@ -7970,6 +8098,12 @@ def quiz_create():
     #   いつも通り /quiz_list_rooms を取りに行くだけで、既存のSSE設計（notify_change）
     #   の使い方から外れない。
     notify_change(guild_id)
+    # ★ 追加（2026/11/25）：お知らせチャンネルへの作成通知（別スレッド・ベストエフォート）
+    with QUIZ_ROOMS_LOCK:
+        _room_now = QUIZ_ROOMS.get(code)
+        _discord_snap = _quiz_discord_snapshot_locked(_room_now) if _room_now else None
+    if _discord_snap:
+        Thread(target=_quiz_discord_send_initial, args=(_discord_snap,), daemon=True).start()
     if source == "deck" and OLLAMA_HOST:
         # ★ ローカルAIによる誤答強化はロビー中に裏で行う（quiz_create自体はブロックしない）。
         #   OLLAMA_HOST未設定（開発機など）なら従来通りスレッドすら起動しない。
