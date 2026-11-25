@@ -7512,16 +7512,16 @@ def _is_kanji_writing(question, correct):
     if any(w in q for w in ("漢字に直", "漢字で書", "漢字を書", "読み方", "読みを", "かんじ")):
         return True
     # 「他の【ツイズイ】を許さない。」形式：全角かぎ括弧の中がかな（カタカナ/ひらがな）だけ
-    import re as _re_k
-    for m_ in _re_k.finditer("【([^】]+)】", q):
+    # 中身が1文字のもの（【ア】【イ】のような空欄記号）は除く
+    for m_ in re.finditer("【([^】]+)】", q):
         inner = m_.group(1)
-        if inner and all(0x3040 <= ord(ch) <= 0x30ff or ch == "ー" for ch in inner):
+        if len(inner) >= 2 and all(0x3040 <= ord(ch) <= 0x30ff for ch in inner):
             return True
     kana = sum(1 for ch in q if 0x3040 <= ord(ch) <= 0x30ff)
     return len(q) > 0 and kana / len(q) >= 0.8
 
 KANJI_DISTRACTOR_RULE = (
-    "（kanji=true が付いた問題だけに適用。他の問題には適用しない。上の規則1〜8よりも優先）その問題は漢字の書き取りなので、candidatesに頼らず、"
+    "（kanji=true が付いた問題だけに適用。他の問題には適用しない。他の指示よりも優先）その問題は漢字の書き取りなので、candidatesに頼らず、"
     "correctと同じ字数で、次のような『見た目や音が紛らわしい別の語』を3つ作ること："
     "(a)字形がよく似た別の漢字（偏や旁だけが違う、点画が1つ違う等）に1〜2字だけ入れ替えた語、"
     "(b)同じ読みの別の漢字（同音異字）に入れ替えた語（ただし意思／意志のように、問題によっては正解にもなりうる実在の同音語は避け、字形違いを優先する）。"
@@ -7536,7 +7536,7 @@ def _build_quiz_distractor_prompt(items):
         "きちんと覚えていないと迷うくらい紛らわしいものに選び直してください。",
         "各問題に question（問題文）・correct（正解）・candidates（誤答の候補。"
         "実際に他の問題の正解として使われている値のリスト）を与えます。",
-        "まずはcandidatesの中から、correctと意味・カテゴリ・形式（物質名・説明文・人名など）が近く紛らわしいものを"
+        "まずはcandidatesの中から、correctと意味・カテゴリが近く紛らわしいものを"
         "3つ選んでください。candidatesの中に紛らわしいものが3つ無い場合に限り、"
         "correctと同じ分野・形式のもっともらしい誤答を新しく考えて補ってください"
         "（正解と同じ値、明らかに無関係な内容、長い説明文は避け、correctと同程度の"
@@ -7552,8 +7552,7 @@ def _build_quiz_distractor_prompt(items):
             "i": item["i"],
             "question": item["question"],
             "correct": item["correct"],
-            "candidates": item["candidates"],
-            **({"kanji": True} if _is_kanji_writing(item["question"], item["correct"]) else {}),
+            **({"candidates": [], "kanji": True} if _is_kanji_writing(item["question"], item["correct"]) else {"candidates": item["candidates"]}),
         }, ensure_ascii=False))
     return "\n".join(lines)
 
@@ -7577,8 +7576,8 @@ def _build_cardmaker_distractor_prompt(items):
         "各問題に question（問題文）・correct（正解）・candidates（誤答の候補。"
         "同じデッキの他のカードの正解として使われている値のリスト）を与えます。",
         "厳守事項：",
-        "1. candidatesは実在するデッキの中身なので、必ずこの中を一つ一つ検討し、"
-        "correctと意味・カテゴリ・粒度が近く紛らわしいものを優先的に3つ選ぶこと。"
+        "1. candidatesは実在するデッキの中身なので、まずこの中を一つ一つ検討し、"
+        "規則2の条件を満たす、correctと意味・カテゴリ・粒度が近く紛らわしいものを優先的に選ぶこと。"
         "『とりあえず候補から3つ』ではなく『本当に間違えそうなものだけ』を選ぶこと。",
         "2. correctと同じ種類・同じ形式（物質名なら物質名、説明文なら説明文、人名なら人名、数値なら数値）で、本当に紛らわしいcandidatesが3つに満たない場合は、"
         "足りない分を、同じ分野・同じ粒度・同じ形式のもっともらしい誤答として新しく自分で考えて補うこと（0個なら3つとも新規でよい）。"
@@ -7613,24 +7612,27 @@ def _build_cardmaker_distractor_prompt(items):
             "i": item["i"],
             "question": item["question"],
             "correct": item["correct"],
-            "candidates": item["candidates"],
-            **({"kanji": True} if _is_kanji_writing(item["question"], item["correct"]) else {}),
+            **({"candidates": [], "kanji": True} if _is_kanji_writing(item["question"], item["correct"]) else {"candidates": item["candidates"]}),
         }, ensure_ascii=False))
     return "\n".join(lines)
 
 
-def _sanitize_ai_distractors(distractors, correct: str):
+def _sanitize_ai_distractors(distractors, correct: str, question: str = ""):
     """AIが返した誤答候補を検証する。重複なく・correctと異なり・禁止文字を含まない
     文字列がちょうど3件そろえばそのリストを、そろわなければNoneを返す
     （None＝この問題は差し替えず、既存の選択肢のまま使う）。"""
     if not isinstance(distractors, list):
         return None
     max_len = max(60, len(correct) * 3)
+    kanji = _is_kanji_writing(question, correct)
     cleaned = []
     seen = {correct.strip()}
     for d in distractors:
         text = str(d or "").strip()
         if not text or len(text) > max_len or text in seen or find_bug_chars(text):
+            continue
+        # 漢字の書き取りは、correctと同じ字数の漢字だけの語に限る（かな書きや別形式は不採用）
+        if kanji and (len(text) != len(correct.strip()) or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in text)):
             continue
         seen.add(text)
         cleaned.append(text)
@@ -7673,7 +7675,7 @@ def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
         if not pick:
             continue
         correct = q["choices"][q["correct_index"]]
-        distractors = _sanitize_ai_distractors(pick.get("distractors"), correct)
+        distractors = _sanitize_ai_distractors(pick.get("distractors"), correct, q.get("question", ""))
         if distractors is None:
             continue
         choices = distractors + [correct]
@@ -8282,7 +8284,7 @@ def cardmaker_ai_distractors():
         pick = picks_by_i.get(it["i"])
         if not pick:
             continue
-        distractors = _sanitize_ai_distractors(pick.get("distractors"), it["correct"])
+        distractors = _sanitize_ai_distractors(pick.get("distractors"), it["correct"], it["question"])
         if distractors:
             out.append({"i": it["i"], "distractors": distractors})
     return jsonify({"ok": True, "questions": out})
@@ -8434,7 +8436,7 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
                 pick = picks_by_i.get(i)
                 if not pick:
                     continue
-                distractors = _sanitize_ai_distractors(pick.get("distractors"), e["correct"])
+                distractors = _sanitize_ai_distractors(pick.get("distractors"), e["correct"], e["question"])
                 if not distractors:
                     continue
                 current.setdefault("cards", {})[e["id"]] = {"distractors": distractors}
