@@ -7028,6 +7028,9 @@ def _quiz_autoadvance_locked(room, now):
                 first_p["cur_points"] = (first_p.get("cur_points") or 0) + bonus
                 room["first_correct_id"] = first_p.get("id") or next((k for k, v in room["players"].items() if v is first_p), None)
                 room["first_correct_nickname"] = first_p["nickname"]
+            # 平均点モード用：この問題にアクティブだった人の「出題された問題数」を数える
+            for p in active_players:
+                p["played_q"] = p.get("played_q", 0) + 1
             room["state"] = "reveal"
             room["reveal_started_at"] = now
         elif room["state"] == "reveal":
@@ -7215,18 +7218,30 @@ def _quiz_get_room_or_error(code, guild_id):
         return None, jsonify({"ok": False, "error": "room_not_found"})
     return room, None
 
+def _quiz_display_score(room, p):
+    """表示・順位づけに使う点数。score_mode=="average"（途中参加ありのクイズでホストが選ぶ）の
+    ときは「1問あたりの平均点」（自分がアクティブだった問題数で割る。途中参加者が不利にならないため）。"""
+    if room.get("score_mode") == "average":
+        n = p.get("played_q", 0)
+        return round(p["score"] / n, 1) if n else 0
+    return p["score"]
+
+def _quiz_score_unit(room):
+    return "点/問" if room.get("score_mode") == "average" else "点"
+
 def _quiz_room_players_json(room):
     """スコア順（全体順位）の一覧。同点の場合は、それまでの回答時間の合計
     （total_answer_time）が短い方＝素早く押せていた方を上位にする。
     ロビー・"ranking"（途中経過）画面・最終結果("ended")で使う共通の並び順。"""
-    players = sorted(room["players"].values(), key=lambda p: (-p["score"], p.get("total_answer_time", 0.0)))
+    players = sorted(room["players"].values(), key=lambda p: (-_quiz_display_score(room, p), p.get("total_answer_time", 0.0)))
     return [
         {
             "id": p["id"],
             "nickname": p["nickname"],
             "color": p["color"],
             "text_color": p["text_color"],
-            "score": p["score"],
+            "score": _quiz_display_score(room, p),
+            "score_unit": _quiz_score_unit(room),
         }
         for p in players
     ]
@@ -7252,7 +7267,8 @@ def _quiz_room_players_json_press_order(room):
             "nickname": p["nickname"],
             "color": p["color"],
             "text_color": p["text_color"],
-            "score": p["score"],
+            "score": _quiz_display_score(room, p),
+            "score_unit": _quiz_score_unit(room),
             "answered": answered,
             "correct": bool(p["cur_correct"]) if answered else None,
         })
@@ -7278,6 +7294,7 @@ def _quiz_room_snapshot_raw(room, student_id):
         "title": room["title"],
         "state": room["state"],
         "host_nickname": room["host_nickname"],
+        "score_mode": room.get("score_mode", "total"),
         "players": _quiz_room_players_json(room),
     }
     if room["state"] == "countdown":
@@ -8056,6 +8073,9 @@ def quiz_create():
     if err:
         return err
 
+    # 途中参加を許可するクイズだけ、平均点（1問あたり）での順位づけを選べる
+    score_mode = "average" if (allow_late_join and data.get("score_mode") == "average") else "total"
+
     now = time.time()
     with QUIZ_ROOMS_LOCK:
         _quiz_gc_locked(now)
@@ -8076,6 +8096,7 @@ def quiz_create():
             "host_id": student_id,
             "host_nickname": nickname,
             "allow_late_join": allow_late_join,
+            "score_mode": score_mode,
             "players": {
                 student_id: {
                     "id": student_id,
