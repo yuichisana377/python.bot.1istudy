@@ -9068,7 +9068,7 @@ def set_notice_done():
 # ================================
 #  Flask API — カードのフォルダ（みんなで共有）
 # ================================
-MAX_FOLDER_DEPTH = 3
+MAX_FOLDER_DEPTH = 10
 
 def folders_file(guild_id: int) -> str:
     return f"folders_{guild_id}.json"
@@ -9272,7 +9272,7 @@ def save_folder():
                 return jsonify({"ok": False, "error": "このフォルダは変更できません"})
             if parent_id != target.get("parent_id"):
                 if not _can_move_folder_to(folders, folder_id, parent_id):
-                    return jsonify({"ok": False, "error": "移動できません（3階層を超える、または循環参照）"})
+                    return jsonify({"ok": False, "error": f"移動できません（{MAX_FOLDER_DEPTH}階層を超える、または循環参照）"})
                 # ★「クイズ過去問」フォルダの中身は、その外へ移動できない
                 if _is_in_archive_scope(folders, folder_id) and not _is_in_archive_scope(folders, parent_id):
                     return jsonify({"ok": False, "error": "クイズ過去問フォルダの外には移動できません"})
