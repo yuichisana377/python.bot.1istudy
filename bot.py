@@ -7218,13 +7218,31 @@ def _quiz_get_room_or_error(code, guild_id):
         return None, jsonify({"ok": False, "error": "room_not_found"})
     return room, None
 
-def _quiz_display_score(room, p):
+def _quiz_display_score(room, p, raw=False):
     """表示・順位づけに使う点数。score_mode=="average"（途中参加ありのクイズでホストが選ぶ）の
     ときは「1問あたりの平均点」（自分がアクティブだった問題数で割る。途中参加者が不利にならないため）。"""
     if room.get("score_mode") == "average":
-        n = p.get("played_q", 0)
-        return round(p["score"] / n, 1) if n else 0
+        n = _quiz_played_n(room, p)
+        v = p["score"] / n if n else 0
+        return v if raw else round(v, 1)
     return p["score"]
+
+def _quiz_played_n(room, p):
+    """平均点の分母。reveal到達ごとに加算されるplayed_qに加え、出題中(question)で既に回答済みの
+    今の問題も数える（回答直後に加点だけ先に反映されて平均が跳ね上がる／ホストが出題中に
+    終了したとき分母が足りなくなる、のを防ぐ）。"""
+    n = p.get("played_q", 0)
+    if room.get("state") == "question" and p.get("cur_answer") is not None:
+        n += 1
+    return n
+
+def _quiz_rank_key(room, p):
+    """順位づけのキー。平均点モードでは、同点時の比較も「1問あたりの平均回答時間」にして、
+    参加した問題数が少ない途中参加者が累計時間の短さだけで有利にならないようにする。"""
+    t = p.get("total_answer_time", 0.0)
+    if room.get("score_mode") == "average":
+        t = t / max(1, _quiz_played_n(room, p))
+    return (-_quiz_display_score(room, p, raw=True), t)
 
 def _quiz_score_unit(room):
     return "点/問" if room.get("score_mode") == "average" else "点"
@@ -7233,7 +7251,7 @@ def _quiz_room_players_json(room):
     """スコア順（全体順位）の一覧。同点の場合は、それまでの回答時間の合計
     （total_answer_time）が短い方＝素早く押せていた方を上位にする。
     ロビー・"ranking"（途中経過）画面・最終結果("ended")で使う共通の並び順。"""
-    players = sorted(room["players"].values(), key=lambda p: (-_quiz_display_score(room, p), p.get("total_answer_time", 0.0)))
+    players = sorted(room["players"].values(), key=lambda p: _quiz_rank_key(room, p))
     return [
         {
             "id": p["id"],
@@ -7255,7 +7273,7 @@ def _quiz_room_players_json_press_order(room):
         answered_at = p.get("cur_answered_at")
         if answered_at is not None:
             return (0, answered_at)
-        return (1, -p["score"])
+        return (1, -_quiz_display_score(room, p, raw=True))
     players = sorted(room["players"].values(), key=sort_key)
     result = []
     for p in players:
