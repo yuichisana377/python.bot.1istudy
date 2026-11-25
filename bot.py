@@ -7420,11 +7420,30 @@ def _pick_distractors(correct: str, pool: list, k: int, ranked: bool = False) ->
 def _distractor_shortlist(correct: str, pool: list, k: int) -> list:
     """_pick_distractorsと同じ類似度スコアで、上位k件を（ランダム抽選せず）そのまま返す。
     AIに渡す候補を絞り込むための下ごしらえとして使う（プロンプトを軽くする目的）。"""
+    def _classes(s):
+        # 文字種（漢字／ひらがな／カタカナ／その他）の構成比。漢字だけの語に、ひらがな主体の語が
+        # 並ぶと一目で消去できてしまうため、文字種の近さも加味する。
+        c = {"k": 0, "h": 0, "t": 0, "o": 0}
+        for ch in s:
+            o = ord(ch)
+            if 0x4e00 <= o <= 0x9fff:
+                c["k"] += 1
+            elif 0x3040 <= o <= 0x309f:
+                c["h"] += 1
+            elif 0x30a0 <= o <= 0x30ff:
+                c["t"] += 1
+            else:
+                c["o"] += 1
+        n = max(len(s), 1)
+        return {k: v / n for k, v in c.items()}
+    correct_cls = _classes(correct)
     def _score(a):
         seq_ratio = difflib.SequenceMatcher(None, correct, a).ratio()
         longer = max(len(correct), len(a), 1)
         length_ratio = 1 - abs(len(correct) - len(a)) / longer
-        return seq_ratio * 0.7 + length_ratio * 0.3
+        a_cls = _classes(a)
+        class_ratio = 1 - sum(abs(correct_cls[k] - a_cls[k]) for k in correct_cls) / 2
+        return seq_ratio * 0.5 + length_ratio * 0.25 + class_ratio * 0.25
     return sorted(pool, key=_score, reverse=True)[:k]
 
 
@@ -7481,6 +7500,17 @@ def _collect_deck_unique_answers(guild_id, deck_filenames):
     return answers
 
 
+# 漢字の答えはデッキ内の他の答えから選ぶだけだと字面が違いすぎて簡単すぎたため、
+# 漢字を含む正解は字形・読みが紛らわしい語をAIに新しく作らせる（両プロンプト共通）。
+KANJI_DISTRACTOR_RULE = (
+    "（他の規則より優先）correctが漢字を含む語（漢字の書き取り・熟語など）の場合は、candidatesに頼らず、"
+    "correctと同じ字数で、次のような『見た目や音が紛らわしい別の語』を3つ作ること："
+    "(a)字形がよく似た別の漢字（偏や旁だけが違う、点画が1つ違う等）に1〜2字だけ入れ替えた語、"
+    "(b)同じ読みの別の漢字（同音異字）に入れ替えた語。"
+    "3つとも正解と大半の字が共通し、一部の字だけが違う形にすること。できるだけ実在する語にするが、"
+    "実在しなくても字形が紛らわしければよい。ひらがな・カタカナ表記に変えてはいけない。"
+)
+
 def _build_quiz_distractor_prompt(items):
     """_ai_pick_quiz_distractorsが使う、Ollamaへのプロンプト文字列を組み立てる。"""
     lines = [
@@ -7493,6 +7523,7 @@ def _build_quiz_distractor_prompt(items):
         "correctと同じ分野・形式のもっともらしい誤答を新しく考えて補ってください"
         "（正解と同じ値、明らかに無関係な内容、長い説明文は避け、correctと同程度の"
         "短さにすること）。",
+        KANJI_DISTRACTOR_RULE,
         "出力は次の形式のJSONオブジェクトのみ。説明文やコードブロックは書かないこと。",
         '{"questions": [{"i": <問題番号>, "distractors": ["誤答1", "誤答2", "誤答3"]}, ...]}',
         "",
@@ -7553,6 +7584,7 @@ def _build_cardmaker_distractor_prompt(items):
         "もっともらしいが誤りの文にすること。正解より極端に長い／短い誤答は避ける。",
         "8. 3つの誤答は互いに違う種類の間違い方にして、正解の形式的な特徴（長さ・"
         "語尾・桁数）だけでは見分けがつかないようにすること。",
+        "9. " + KANJI_DISTRACTOR_RULE,
         "出力は次の形式のJSONオブジェクトのみ。説明文やコードブロックは書かないこと。",
         '{"questions": [{"i": <問題番号>, "distractors": ["誤答1", "誤答2", "誤答3"]}, ...]}',
         "",
