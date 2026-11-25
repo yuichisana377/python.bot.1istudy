@@ -7854,6 +7854,21 @@ def _quiz_discord_state_label(state, current_q, total_q):
         return "終了済み"
     return f"プレイ中（{min(current_q + 1, total_q)}/{total_q}問）"
 
+def _quiz_discord_sig(snapshot):
+    """表示内容が同じなら同じ値になる署名（内部stateの細かな遷移では編集しない）。"""
+    state = snapshot["state"]
+    can_join = state == "lobby" or (snapshot.get("allow_late_join") and state != "ended")
+    return (_quiz_discord_state_label(state, snapshot["current_q"], snapshot["total_q"]), bool(can_join), tuple(snapshot["names"]))
+
+def _quiz_discord_run(coro):
+    """bot.loopで実行して結果を待つ。タイムアウト時は取り消し、後から古い内容が反映されるのを防ぐ。"""
+    fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
+    try:
+        return fut.result(timeout=15)
+    except BaseException:
+        fut.cancel()
+        raise
+
 def _quiz_discord_embed(snapshot):
     """snapshot: dict(code, guild_id, title, host, names, state, current_q, total_q)"""
     url = f"{QUIZ_WEB_BASE_URL}/Quiz.html?code={snapshot['code']}&g={snapshot['guild_id']}"
@@ -7897,11 +7912,10 @@ def _quiz_discord_send_initial(snapshot):
         channel = bot.get_channel(channel_id) if channel_id else None
         if not channel:
             return
-        msg = asyncio.run_coroutine_threadsafe(
-            channel.send(embed=_quiz_discord_embed(snapshot), allowed_mentions=discord.AllowedMentions.none()),
-            bot.loop,
-        ).result(timeout=15)
-        sig = (snapshot["state"], snapshot["current_q"], tuple(snapshot["names"]))
+        msg = _quiz_discord_run(
+            channel.send(embed=_quiz_discord_embed(snapshot), allowed_mentions=discord.AllowedMentions.none())
+        )
+        sig = _quiz_discord_sig(snapshot)
         with QUIZ_DISCORD_LOCK:
             QUIZ_DISCORD_TRACKED[snapshot["code"]] = {"message": msg, "sig": sig}
         _quiz_discord_ensure_watcher()
@@ -7928,15 +7942,14 @@ def _quiz_discord_watch_loop():
                     with QUIZ_DISCORD_LOCK:
                         QUIZ_DISCORD_TRACKED.pop(code, None)
                     continue
-                sig = (snap["state"], snap["current_q"], tuple(snap["names"]))
+                sig = _quiz_discord_sig(snap)
                 if sig != tr["sig"]:
                     try:
-                        asyncio.run_coroutine_threadsafe(
-                            tr["message"].edit(embed=_quiz_discord_embed(snap), allowed_mentions=discord.AllowedMentions.none()),
-                            bot.loop,
-                        ).result(timeout=15)
+                        _quiz_discord_run(
+                            tr["message"].edit(embed=_quiz_discord_embed(snap), allowed_mentions=discord.AllowedMentions.none())
+                        )
                         tr["sig"] = sig
-                    except discord.NotFound:
+                    except (discord.NotFound, discord.Forbidden):
                         with QUIZ_DISCORD_LOCK:
                             QUIZ_DISCORD_TRACKED.pop(code, None)  # メッセージが消された→監視を終える
                         continue
