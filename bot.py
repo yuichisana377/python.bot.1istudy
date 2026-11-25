@@ -1313,14 +1313,14 @@ def _client_ip() -> str:
         return xff.split(",")[0].strip()
     return request.remote_addr or "unknown"
 
-def rate_limited(bucket: str) -> bool:
+def rate_limited(bucket: str, max_hits=None) -> bool:
     """呼び出すたびに1回分の試行として記録する。直近 RATE_LIMIT_WINDOW_SEC 秒
     以内の試行数が RATE_LIMIT_MAX_HITS を超えていれば True（＝拒否すべき）。"""
     key = f"{bucket}:{_client_ip()}"
     now = time.time()
     hits = _rate_limit_hits.setdefault(key, [])
     hits[:] = [t for t in hits if now - t < RATE_LIMIT_WINDOW_SEC]
-    if len(hits) >= RATE_LIMIT_MAX_HITS:
+    if len(hits) >= (max_hits or RATE_LIMIT_MAX_HITS):
         return True
     hits.append(now)
     return False
@@ -7113,9 +7113,73 @@ def start_quiz_scheduler():
     Thread(target=_quiz_scheduler_loop, daemon=True).start()
     print("[INFO] Quiz scheduler thread started")
 
-def _quiz_auth_from_json():
+# ================================
+#  ★ 追加（2026/11/25）：みんなでクイズの「ゲスト参加」（ログイン不要・ニックネームだけ）
+#  ─────────────────────────────
+#  ホストが待機中に発行する参加URLから、ログインしていない人もニックネームだけで
+#  参加できる。ログインセッションとは別物の「そのルーム専用・短命のゲストトークン」を発行する。
+#  ・署名は SESSION_SECRET から派生させた別の鍵（"quiz-guest:"付き）で行い、payloadにも
+#    typ="guest" を持たせる。ログイン用トークンはゲストとして通らず、ゲストトークンも
+#    resolve_session() を通らない（相互に流用できない）。
+#  ・トークンはルームコードとサーバーに紐づく。許可するAPIは quiz_state / quiz_answer /
+#    quiz_leave と専用の quiz_guest_join のみ（_quiz_auth_from_json(allow_guest=True)を
+#    明示したものだけ）。作成・開始・終了・一覧・その他の全APIは今まで通りログイン必須。
+#  ・ゲストのidは "guest:xxxxxxxx"。学習データ（study_data_*）や過去問デッキの
+#    「わからない」記録には一切書き込まない（_is_guest_id で除外）。
+# ================================
+QUIZ_GUEST_TOKEN_TTL_SEC = 60 * 60 * 6   # ゲストトークンの有効期間（クイズ1回分には十分）
+QUIZ_GUEST_MAX_PER_ROOM = 30             # 1ルームあたりのゲスト人数上限（荒らし対策）
+QUIZ_GUEST_NICK_MAX_LEN = 12
+QUIZ_GUEST_JOIN_MAX_HITS = 60            # 同一IP・15分あたりの参加試行（学校の共有IPで全員が弾かれないよう通常より緩め）
+
+def _quiz_nick_key(s) -> str:
+    """表示名の重複判定用キー（全角/半角ゆれ・大文字小文字・不可視文字を無視）。"""
+    import unicodedata
+    s = unicodedata.normalize("NFKC", str(s or ""))
+    return "".join(c for c in s if unicodedata.category(c) not in ("Cf", "Cc", "Zs", "Zl", "Zp")).casefold()
+
+def _is_guest_id(student_id) -> bool:
+    return isinstance(student_id, str) and student_id.startswith("guest:")
+
+def _guest_sig(payload_b64: str) -> str:
+    key = hmac.new(SESSION_SECRET.encode(), b"quiz-guest-token-v1", hashlib.sha256).digest()
+    return hmac.new(key, payload_b64.encode(), hashlib.sha256).hexdigest()
+
+def create_guest_token(guild_id: int, room_code: str, guest_id: str, nickname: str) -> str:
+    payload = json.dumps(
+        {"typ": "guest", "g": guild_id, "room": room_code, "id": guest_id, "n": nickname, "t": int(time.time())},
+        separators=(",", ":"), ensure_ascii=False,
+    )
+    payload_b64 = base64.urlsafe_b64encode(payload.encode()).decode()
+    return f"{payload_b64}.{_guest_sig(payload_b64)}"
+
+def resolve_guest_token(token, guild_id: int, room_code: str):
+    """有効なゲストトークンで、サーバー・ルームが一致していれば (guest_id, nickname)。それ以外は None。"""
+    if not token or "." not in token:
+        return None
+    try:
+        payload_b64, sig = token.rsplit(".", 1)
+        if not hmac.compare_digest(sig, _guest_sig(payload_b64)):
+            return None
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()).decode())
+        if payload.get("typ") != "guest":
+            return None
+        if payload.get("g") != guild_id or payload.get("room") != room_code:
+            return None
+        if time.time() - payload.get("t", 0) > QUIZ_GUEST_TOKEN_TTL_SEC:
+            return None
+        gid, nick = payload.get("id"), payload.get("n")
+        if not _is_guest_id(gid) or not isinstance(nick, str) or not nick:
+            return None
+        return gid, nick
+    except Exception:
+        return None
+
+def _quiz_auth_from_json(allow_guest=False):
     """POST系クイズAPI共通：JSONボディからguild_id・session_tokenを検証し、
     (data, guild_id, student_id, nickname, error_response) を返す。
+    ★ allow_guest=True のAPIだけ、そのルーム専用のゲストトークンも受け付ける
+      （ゲストのstudent_idは "guest:..."、nicknameはトークンに署名済みの値）。
     ★ nickname はクライアントの自己申告ではなく、サーバー側のユーザーデータから
     引き直す（他の参加者への表示名の詐称防止）。
     ★ クイズの作成・参加・回答も編集の一種なので、対象サーバーのメンバーで
@@ -7125,6 +7189,10 @@ def _quiz_auth_from_json():
     if not guild_id:
         return None, None, None, None, jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
+    if allow_guest:
+        guest = resolve_guest_token(data.get("session_token"), guild_id, (data.get("code") or "").strip().upper())
+        if guest:
+            return data, guild_id, guest[0], guest[1], None
     student_id, err = require_member_session(data.get("session_token"), guild_id)
     if err:
         return None, None, None, None, err
@@ -7191,6 +7259,20 @@ def _quiz_room_players_json_press_order(room):
     return result
 
 def _quiz_room_snapshot(room, student_id):
+    snap = _quiz_room_snapshot_raw(room, student_id)
+    if _is_guest_id(student_id):
+        # ★ ゲスト（ログインしていない人）には他の参加者の学籍番号を渡さない。自分以外のidは
+        #   このルーム内だけで通用する不透明な値に置き換える（フロントは「自分の行か」の比較にしか使わない）。
+        def _mask(pid):
+            if pid == student_id:
+                return pid
+            return "p:" + hmac.new(SESSION_SECRET.encode(), (room["code"] + "|" + str(pid)).encode(), hashlib.sha256).hexdigest()[:10]
+        for key in ("players",):
+            for p in snap.get(key) or []:
+                p["id"] = _mask(p.get("id"))
+    return snap
+
+def _quiz_room_snapshot_raw(room, student_id):
     snap = {
         "code": room["code"],
         "title": room["title"],
@@ -7718,6 +7800,8 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname, playe
         # ★ 各プレイヤーが不正解だった問題を、今作った過去問デッキへ裏で「わからない」として記録する
         #   （プレイヤーごとに1回の保存にまとめる）。デッキ作成が失敗した場合はここへ来ないので正しい。
         for pid, p in (players or {}).items():
+            if _is_guest_id(pid):
+                continue  # ★ ゲストには学習データが無い（study_data_*を作らない）
             ids = [cards[i]["id"] for i in p.get("wrong_indices") or [] if 0 <= i < len(cards)]
             if ids:
                 _silently_mark_unsure(guild_id, pid, filename, ids)
@@ -8255,6 +8339,80 @@ def quiz_list_rooms():
         del r["created_at"]  # フロントには不要な内部情報なので落とす
     return jsonify({"ok": True, "rooms": rooms})
 
+def _quiz_add_player_locked(room, student_id, nickname):
+    """QUIZ_ROOMS_LOCK保持中に呼ぶ。参加可否の判定後、プレイヤーを追加する（quiz_join・quiz_guest_join共通）。"""
+    color, text_color = _quiz_palette_for(student_id)
+    # ★ 追加：途中参加は「今まさに出題・発表中の問題」には混ぜず、次の問題から
+    #   アクティブにする（countdown/introの間はまだ制限時間が始まっていないので、
+    #   今の問題からそのまま参加できる）。
+    if room["state"] in ("question", "reveal", "ranking"):
+        active_from_q = room["current_q"] + 1
+    else:
+        active_from_q = room["current_q"]
+    room["players"][student_id] = {
+        "id": student_id,
+        "nickname": nickname,
+        "color": color,
+        "text_color": text_color,
+        "score": 0,
+        "cur_answer": None,
+        "cur_correct": None,
+        "cur_points": None,  # ★ 追加：この問題で実際に加点された点数（正解発表の表示用）
+        "cur_answered_at": None,
+        "total_answer_time": 0.0,
+        "active_from_q": active_from_q,
+        "wrong_indices": [],
+    }
+
+@app.route("/quiz_guest_join", methods=["POST"])
+def quiz_guest_join():
+    """★ 追加：ログインしていない人が、ホストの発行した参加URLからニックネームだけで参加する。
+    戻り値のsession_tokenは「このルーム専用のゲストトークン」（ログインセッションではない）。"""
+    data = request.json or {}
+    try:
+        guild_id = int(data.get("guild_id"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    if rate_limited("quiz_guest_join", QUIZ_GUEST_JOIN_MAX_HITS):
+        return rate_limit_response()
+    code = (data.get("code") or "").strip().upper()
+    nick = re.sub(r"\s+", " ", str(data.get("nickname") or "")).strip()
+    import unicodedata
+    if (not nick or len(nick) > QUIZ_GUEST_NICK_MAX_LEN
+            or any(unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp") for c in nick)
+            or not _quiz_nick_key(nick)):
+        return jsonify({"ok": False, "error": "invalid_nickname"})
+    if reject_if_bug_chars({"ニックネーム": nick}):
+        return jsonify({"ok": False, "error": "invalid_nickname"})
+    # ★ 登録済みメンバーの名前はなりすまし防止のためゲストには使わせない
+    reg_keys = {_quiz_nick_key(u.get("nickname")) for u in load_users(guild_id)}
+
+    now = time.time()
+    with QUIZ_ROOMS_LOCK:
+        _quiz_gc_locked(now)
+        room, err = _quiz_get_room_or_error(code, guild_id)
+        if err:
+            return err
+        if room["state"] == "ended" or (room["state"] != "lobby" and not room.get("allow_late_join")):
+            return jsonify({"ok": False, "error": "quiz_already_started"})
+        if sum(1 for pid in room["players"] if _is_guest_id(pid)) >= QUIZ_GUEST_MAX_PER_ROOM:
+            return jsonify({"ok": False, "error": "room_full"})
+        # ★ 表示名の重複は不可（正解発表の「一番乗り」判定等がニックネームで比較されるため、ホスト・参加者とも）
+        taken = {_quiz_nick_key(p["nickname"]) for p in room["players"].values()} | reg_keys
+        taken.add(_quiz_nick_key(room.get("host_nickname")))
+        if _quiz_nick_key(nick) in taken:
+            return jsonify({"ok": False, "error": "nickname_taken"})
+        guest_id = "guest:" + secrets.token_hex(4)
+        _quiz_add_player_locked(room, guest_id, nick)
+        room["last_activity"] = now
+        _quiz_autoadvance_locked(room, now)
+        snap = _quiz_room_snapshot(room, guest_id)
+    notify_change(guild_id)
+    return jsonify({
+        "ok": True, "is_host": False, "room": snap, "server_now": int(now * 1000),
+        "guest": {"id": guest_id, "nickname": nick, "session_token": create_guest_token(guild_id, code, guest_id, nick)},
+    })
+
 @app.route("/quiz_join", methods=["POST"])
 def quiz_join():
     data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
@@ -8277,28 +8435,7 @@ def quiz_join():
                 return jsonify({"ok": False, "error": "quiz_already_started"})
             if room["state"] != "lobby" and not room.get("allow_late_join"):
                 return jsonify({"ok": False, "error": "quiz_already_started"})
-            color, text_color = _quiz_palette_for(student_id)
-            # ★ 追加：途中参加は「今まさに出題・発表中の問題」には混ぜず、次の問題から
-            #   アクティブにする（countdown/introの間はまだ制限時間が始まっていないので、
-            #   今の問題からそのまま参加できる）。
-            if room["state"] in ("question", "reveal", "ranking"):
-                active_from_q = room["current_q"] + 1
-            else:
-                active_from_q = room["current_q"]
-            room["players"][student_id] = {
-                "id": student_id,
-                "nickname": nickname,
-                "color": color,
-                "text_color": text_color,
-                "score": 0,
-                "cur_answer": None,
-                "cur_correct": None,
-                "cur_points": None,  # ★ 追加：この問題で実際に加点された点数（正解発表の表示用）
-                "cur_answered_at": None,
-                "total_answer_time": 0.0,
-                "active_from_q": active_from_q,
-                "wrong_indices": [],
-            }
+            _quiz_add_player_locked(room, student_id, nickname)
         room["last_activity"] = now
         _quiz_autoadvance_locked(room, now)
         snap = _quiz_room_snapshot(room, student_id)
@@ -8312,10 +8449,15 @@ def quiz_state():
     if not guild_id:
         return jsonify({"ok": False, "error": "missing guild_id"})
     guild_id = int(guild_id)
-    student_id, err = require_member_session(session_token_from_request(), guild_id)
-    if err:
-        return err
     code = (request.args.get("code") or "").strip().upper()
+    token = session_token_from_request()
+    guest = resolve_guest_token(token, guild_id, code)  # ★ ゲスト参加者はルーム専用トークンで状態を取得する
+    if guest:
+        student_id = guest[0]
+    else:
+        student_id, err = require_member_session(token, guild_id)
+        if err:
+            return err
 
     now = time.time()
     with QUIZ_ROOMS_LOCK:
@@ -8374,7 +8516,7 @@ def quiz_start():
 
 @app.route("/quiz_answer", methods=["POST"])
 def quiz_answer():
-    data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
+    data, guild_id, student_id, nickname, err = _quiz_auth_from_json(allow_guest=True)
     if err:
         return err
     code = (data.get("code") or "").strip().upper()
@@ -8447,7 +8589,7 @@ def quiz_answer():
         #   ロック内ではファイルI/Oをしない（他プレイヤーを待たせないため）ので、
         #   ここでは対象だけ控えておき、実際の書き込みはロックを抜けてから行う。
         mark_unsure_target = None
-        if not correct and q.get("source_deck_filename") and q.get("source_card_id"):
+        if not correct and not _is_guest_id(student_id) and q.get("source_deck_filename") and q.get("source_card_id"):
             mark_unsure_target = (q["source_deck_filename"], q["source_card_id"])
     # ★ 遅延低減：回答数の増加・reveal切り替わりを、他の端末のポーリング待ちなしで
     #   即座に知らせる（ファイル書き込みを待たせないよう、下の「わからない」反映より先に送る）。
@@ -8494,7 +8636,7 @@ def quiz_end():
 
 @app.route("/quiz_leave", methods=["POST"])
 def quiz_leave():
-    data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
+    data, guild_id, student_id, nickname, err = _quiz_auth_from_json(allow_guest=True)
     if err:
         return err
     code = (data.get("code") or "").strip().upper()
