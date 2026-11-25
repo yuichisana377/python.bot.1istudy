@@ -7410,7 +7410,7 @@ def _pick_distractors(correct: str, pool: list, k: int, ranked: bool = False) ->
     #   以前は同じ採点関数がここにも重複して書かれており、CardMakerのキャッシュ生成では
     #   「即席4択用」と「AIに渡す候補用」で同じ採点を2回やり直していた。
     #   ranked=True は「pool は既に採点順に並んでいる」という意味（採点を省く）。
-    #   並び順・選ばれ方は以前と全く同じ。
+    #   文字種の近さを加味したため、以前（綴り0.7・長さ0.3）とは選ばれ方が変わっている。
 
     scored = pool if ranked else _distractor_shortlist(correct, pool, len(pool))
     pool_size = max(k, min(len(scored), k * 2))
@@ -7509,16 +7509,16 @@ def _is_kanji_writing(question, correct):
     if not 1 <= len(c) <= 4 or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in c):
         return False
     q = str(question or "")
-    if any(w in q for w in ("読み", "書き", "漢字", "かんじ")):
+    if any(w in q for w in ("漢字に直", "漢字で書", "漢字を書", "読み方", "読みを", "かんじ")):
         return True
     kana = sum(1 for ch in q if 0x3040 <= ord(ch) <= 0x30ff)
     return len(q) > 0 and kana / len(q) >= 0.8
 
 KANJI_DISTRACTOR_RULE = (
-    "（kanji=true が付いた問題だけに適用。他の問題には適用しない）その問題は漢字の書き取りなので、candidatesに頼らず、"
+    "（kanji=true が付いた問題だけに適用。他の問題には適用しない。上の規則1〜8よりも優先）その問題は漢字の書き取りなので、candidatesに頼らず、"
     "correctと同じ字数で、次のような『見た目や音が紛らわしい別の語』を3つ作ること："
     "(a)字形がよく似た別の漢字（偏や旁だけが違う、点画が1つ違う等）に1〜2字だけ入れ替えた語、"
-    "(b)同じ読みの別の漢字（同音異字）に入れ替えた語。"
+    "(b)同じ読みの別の漢字（同音異字）に入れ替えた語（ただし意思／意志のように、問題によっては正解にもなりうる実在の同音語は避け、字形違いを優先する）。"
     "3つとも正解と大半の字が共通し、一部の字だけが違う形にすること。できるだけ実在する語にするが、"
     "実在しなくても字形が紛らわしければよい。ひらがな・カタカナ表記に変えてはいけない。"
 )
