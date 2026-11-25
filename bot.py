@@ -7502,8 +7502,20 @@ def _collect_deck_unique_answers(guild_id, deck_filenames):
 
 # 漢字の答えはデッキ内の他の答えから選ぶだけだと字面が違いすぎて簡単すぎたため、
 # 漢字を含む正解は字形・読みが紛らわしい語をAIに新しく作らせる（両プロンプト共通）。
+def _is_kanji_writing(question, correct):
+    """漢字の書き取り・読み問題（正解が1〜4字の漢字語で、問題文が読み仮名主体か読み/書き/漢字に言及）か。
+    プロンプトのkanji=trueの付与対象。歴史人物名など通常の語句問題には適用しない。"""
+    c = str(correct or "").strip()
+    if not 1 <= len(c) <= 4 or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in c):
+        return False
+    q = str(question or "")
+    if any(w in q for w in ("読み", "書き", "漢字", "かんじ")):
+        return True
+    kana = sum(1 for ch in q if 0x3040 <= ord(ch) <= 0x30ff)
+    return len(q) > 0 and kana / len(q) >= 0.8
+
 KANJI_DISTRACTOR_RULE = (
-    "（他の規則より優先）correctが漢字を含む語（漢字の書き取り・熟語など）の場合は、candidatesに頼らず、"
+    "（kanji=true が付いた問題だけに適用。他の問題には適用しない）その問題は漢字の書き取りなので、candidatesに頼らず、"
     "correctと同じ字数で、次のような『見た目や音が紛らわしい別の語』を3つ作ること："
     "(a)字形がよく似た別の漢字（偏や旁だけが違う、点画が1つ違う等）に1〜2字だけ入れ替えた語、"
     "(b)同じ読みの別の漢字（同音異字）に入れ替えた語。"
@@ -7535,6 +7547,7 @@ def _build_quiz_distractor_prompt(items):
             "question": item["question"],
             "correct": item["correct"],
             "candidates": item["candidates"],
+            **({"kanji": True} if _is_kanji_writing(item["question"], item["correct"]) else {}),
         }, ensure_ascii=False))
     return "\n".join(lines)
 
@@ -7596,6 +7609,7 @@ def _build_cardmaker_distractor_prompt(items):
             "question": item["question"],
             "correct": item["correct"],
             "candidates": item["candidates"],
+            **({"kanji": True} if _is_kanji_writing(item["question"], item["correct"]) else {}),
         }, ensure_ascii=False))
     return "\n".join(lines)
 
