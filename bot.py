@@ -6008,7 +6008,7 @@ def save_cards():
     # ★ 追加：選択式デッキかどうか（null=通常のフラッシュカードデッキ / "single" / "multi"）
     choice_mode = data.get("choice_mode")
     # ★ 追加：漢字デッキ（手書きで採点）かどうか。選択式デッキとは両立しない
-    kanji_mode = bool(data.get("kanji_mode")) and not choice_mode
+    kanji_mode = bool(data.get("kanji_mode"))
 
     if not name or not isinstance(cards, list):
         return jsonify({"ok": False, "error": "name と cards は必須です"})
