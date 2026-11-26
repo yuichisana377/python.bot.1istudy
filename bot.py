@@ -6118,6 +6118,7 @@ def save_cards():
     #   （1枚以上あり全カードが選択式のときだけ True。混在・通常のみ・並び替えを
     #   含む場合は None）。クイズ過去問は下の card_payload で既存値を維持する。
     choice_mode = True if (cards and all(card_type(c) == "choice" for c in cards)) else None
+    kanji_mode = kanji_mode and not choice_mode  # ★ 全カード選択式なら漢字デッキ（手書き）とは両立しない
 
     for c in cards:
         if not isinstance(c, dict):
