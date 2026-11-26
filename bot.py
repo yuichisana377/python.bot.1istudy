@@ -1122,6 +1122,7 @@ def timer_pause():
     new_entry["run_start_epoch"] = None
     new_entry["state"] = "paused"
     new_entry["pause_reason"] = "manual"
+    new_entry["pause_seg_ms"] = max(0, now_ms - int(entry["run_start_epoch"]))  # ★ この走行区間の長さ（補正で区間より前の累計まで引かないための上限）
     new_entry["pause_hide_ts"] = (request.get_json(silent=True) or {}).get("hide_ts")  # ★ どの「画面が隠れた」に対する一時停止か（他画面・他端末からの一時停止を補正対象にしないための照合用）
     new_entry["paused_at"] = now_ms  # ★ 一時停止がサーバーに届いた時刻（再開時、通知の遅れ=離席中の過大計上の補正に使う）
     timers[student_id] = new_entry
@@ -1163,9 +1164,12 @@ def timer_resume():
         late_ms = away_ms - max(0, now_ms - int(paused_at))
         if late_ms > 2000:  # 2秒以内の誤差は無視
             acc = entry.get("accumulated_sec", 0) or 0
-            new_entry["accumulated_sec"] = max(0, int(round(acc - min(late_ms, away_ms) / 1000.0)))
+            seg_ms = entry.get("pause_seg_ms")
+            cap_ms = min(late_ms, away_ms, seg_ms if isinstance(seg_ms, (int, float)) else late_ms)
+            new_entry["accumulated_sec"] = max(0, int(round(acc - cap_ms / 1000.0)))
     new_entry.pop("paused_at", None)
     new_entry.pop("pause_hide_ts", None)
+    new_entry.pop("pause_seg_ms", None)
     new_entry["run_start_epoch"] = now_ms
     new_entry["state"] = "running"
     new_entry.pop("pause_reason", None)
