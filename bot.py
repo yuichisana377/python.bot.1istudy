@@ -9119,6 +9119,14 @@ def _quiz_device_claim_locked(room, student_id, device, now, takeover=False):
     devs[student_id] = {"dev": device, "seen": now}
     return True
 
+def _quiz_stale_device_locked(room, student_id, device):
+    """QUIZ_ROOMS_LOCK保持中に呼ぶ。別端末へ移動済みのアカウントの古い端末からの操作なら True（弾く）。
+    device を送らない古いクライアント・ゲストは対象外。"""
+    if not device or _is_guest_id(student_id):
+        return False
+    cur = room.get("devices", {}).get(student_id)
+    return bool(cur and cur["dev"] != str(device)[:64])
+
 @app.route("/quiz_join", methods=["POST"])
 def quiz_join():
     data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
@@ -9266,6 +9274,8 @@ def quiz_start():
         room, err = _quiz_get_room_or_error(code, guild_id)
         if err:
             return err
+        if _quiz_stale_device_locked(room, student_id, data.get("device")):
+            return jsonify({"ok": False, "error": "moved_to_other_device"})
         if student_id != room["host_id"]:
             return jsonify({"ok": False, "error": "not_host"})
         if room["state"] != "lobby":
@@ -9308,6 +9318,8 @@ def quiz_answer():
         room, err = _quiz_get_room_or_error(code, guild_id)
         if err:
             return err
+        if _quiz_stale_device_locked(room, student_id, data.get("device")):
+            return jsonify({"ok": False, "error": "moved_to_other_device"})
         if room["state"] != "question":
             return jsonify({"ok": False, "error": "not_answerable"})
         # ★ 再送が次の問題の回答として受理されないよう、クライアントが見ていた問題番号と照合する
@@ -9415,6 +9427,8 @@ def quiz_end():
         room, err = _quiz_get_room_or_error(code, guild_id)
         if err:
             return err
+        if _quiz_stale_device_locked(room, student_id, data.get("device")):
+            return jsonify({"ok": False, "error": "moved_to_other_device"})
         if student_id != room["host_id"]:
             return jsonify({"ok": False, "error": "not_host"})
         room["state"] = "ended"
@@ -9435,6 +9449,8 @@ def quiz_leave():
         room, err = _quiz_get_room_or_error(code, guild_id)
         if err:
             return err
+        if _quiz_stale_device_locked(room, student_id, data.get("device")):
+            return jsonify({"ok": False, "error": "moved_to_other_device"})
         room["players"].pop(student_id, None)
         room["last_activity"] = time.time()
     notify_change(guild_id)
