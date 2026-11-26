@@ -1122,6 +1122,8 @@ def timer_pause():
     new_entry["run_start_epoch"] = None
     new_entry["state"] = "paused"
     new_entry["pause_reason"] = "manual"
+    new_entry["pause_hide_ts"] = (request.get_json(silent=True) or {}).get("hide_ts")  # ★ どの「画面が隠れた」に対する一時停止か（他画面・他端末からの一時停止を補正対象にしないための照合用）
+    new_entry["paused_at"] = now_ms  # ★ 一時停止がサーバーに届いた時刻（再開時、通知の遅れ=離席中の過大計上の補正に使う）
     timers[student_id] = new_entry
     try:
         save_study_timers(guild_id, timers)
@@ -1147,6 +1149,23 @@ def timer_resume():
 
     now_ms = int(time.time() * 1000)
     new_entry = dict(entry)
+    # ★ 補正：画面が隠れたときの一時停止が(iOS等で)遅れて届いた場合、離れていた時間が
+    #   計測に含まれてしまう。クライアントが測った離席時間(away_ms)と、サーバーに一時停止が
+    #   届いてから今までの経過(gap)の差が「遅れた分」なので、その分だけ累計から引く。
+    #   時計のずれに影響されないよう、両方とも「長さ」だけで比較する。
+    try:
+        away_ms = int((request.get_json(silent=True) or {}).get("away_ms") or 0)
+    except (TypeError, ValueError):
+        away_ms = 0
+    paused_at = entry.get("paused_at")
+    hide_ts = (request.get_json(silent=True) or {}).get("hide_ts")
+    if away_ms > 0 and hide_ts is not None and entry.get("pause_hide_ts") == hide_ts and isinstance(paused_at, (int, float)) and entry.get("pause_reason") == "manual":
+        late_ms = away_ms - max(0, now_ms - int(paused_at))
+        if late_ms > 2000:  # 2秒以内の誤差は無視
+            acc = entry.get("accumulated_sec", 0) or 0
+            new_entry["accumulated_sec"] = max(0, int(round(acc - min(late_ms, away_ms) / 1000.0)))
+    new_entry.pop("paused_at", None)
+    new_entry.pop("pause_hide_ts", None)
     new_entry["run_start_epoch"] = now_ms
     new_entry["state"] = "running"
     new_entry.pop("pause_reason", None)
