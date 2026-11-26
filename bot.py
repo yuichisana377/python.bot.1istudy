@@ -9099,6 +9099,26 @@ def quiz_guest_join():
         "guest": {"id": guest_id, "nickname": nick, "session_token": create_guest_token(guild_id, code, guest_id, nick)},
     })
 
+# ★ 追加（2026/11/27）：同じアカウントで複数端末から同じルームに入った場合の端末判定。
+#   クライアントが端末(タブ)ごとの乱数 device を送る。直近 QUIZ_DEVICE_ACTIVE_SEC 秒以内に
+#   別の device が状態を取得していたら、quiz_join は already_on_other_device を返し、
+#   クライアントが「この端末に移動するか／ゲストとして参加か」を選ばせる。
+#   移動(takeover)すると旧端末の quiz_state は moved_to_other_device になる。
+#   device を送らない古いクライアントは判定の対象外（従来どおり）。ゲストは対象外。
+QUIZ_DEVICE_ACTIVE_SEC = 15
+
+def _quiz_device_claim_locked(room, student_id, device, now, takeover=False):
+    """QUIZ_ROOMS_LOCK保持中に呼ぶ。戻り値：自分の端末として扱えるなら True、別端末が使用中なら False。"""
+    if not device or _is_guest_id(student_id):
+        return True
+    device = str(device)[:64]
+    devs = room.setdefault("devices", {})
+    cur = devs.get(student_id)
+    if cur and cur["dev"] != device and not takeover and now - cur["seen"] < QUIZ_DEVICE_ACTIVE_SEC:
+        return False
+    devs[student_id] = {"dev": device, "seen": now}
+    return True
+
 @app.route("/quiz_join", methods=["POST"])
 def quiz_join():
     data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
@@ -9113,6 +9133,8 @@ def quiz_join():
         if err:
             return err
         is_host = (student_id == room["host_id"])
+        if (is_host or student_id in room["players"]) and not _quiz_device_claim_locked(room, student_id, data.get("device"), now, bool(data.get("takeover"))):
+            return jsonify({"ok": False, "error": "already_on_other_device"})
         if not is_host and student_id not in room["players"]:
             # ★ lobby中は誰でも参加可能。開始後（question/reveal）は、
             #   ホストが作成時に途中参加を許可していた場合のみ参加できる。
@@ -9122,6 +9144,7 @@ def quiz_join():
             if room["state"] != "lobby" and not room.get("allow_late_join"):
                 return jsonify({"ok": False, "error": "quiz_already_started"})
             _quiz_add_player_locked(room, student_id, nickname)
+            _quiz_device_claim_locked(room, student_id, data.get("device"), now, True)
         room["last_activity"] = now
         _quiz_autoadvance_locked(room, now)
         snap = _quiz_room_snapshot(room, student_id)
@@ -9155,6 +9178,12 @@ def quiz_state():
         if not is_host and student_id not in room["players"]:
             # 参加したことのない部屋の状態は覗けないようにする（未参加なら「見つからない」扱い）
             return jsonify({"ok": False, "error": "room_not_found"})
+        dev = request.args.get("device")
+        if dev and not guest:
+            cur = room.get("devices", {}).get(student_id)
+            if cur and cur["dev"] != str(dev)[:64]:
+                return jsonify({"ok": False, "error": "moved_to_other_device"})
+            _quiz_device_claim_locked(room, student_id, dev, now)
         room["last_activity"] = now
         _quiz_autoadvance_locked(room, now)
         snap = _quiz_room_snapshot(room, student_id)
