@@ -5578,7 +5578,7 @@ def _deck_meta_text(data, folder_names=None):
     lines.append(f"科目: {data.get('subject') or '(未設定)'}")
     lines.append(f"説明: {_clip_text(data.get('description')) or '(未設定)'}")
     lines.append(f"状態: {'未完成（作成中）' if data.get('incomplete') else '完成'}")
-    lines.append(f"形式: {'選択式デッキ' if data.get('choice_mode') else '暗記カード（通常デッキ）'}")
+    lines.append(f"形式: {'選択式デッキ' if data.get('choice_mode') else ('漢字デッキ（手書き）' if data.get('kanji_mode') else '暗記カード（通常デッキ）')}")
     lines.append(f"由来: {'クイズ過去問（問題の編集不可）' if data.get('quiz_archive') else '通常'}")
     folder_id = data.get('folder_id')
     lines.append(f"フォルダ: {folder_names.get(folder_id, folder_id) if folder_id else '(フォルダなし)'}")
@@ -5646,6 +5646,7 @@ def _meta_from_card_data(filename, data):
         "published_by": (data.get("published_by") or {}).get("nickname"),
         "incomplete": bool(data.get("incomplete", False)),
         "choice_mode": data.get("choice_mode"),  # ★ null/false=通常デッキ / true=選択式デッキ（単一/複数は問題ごとに決まる。旧形式の"single"/"multi"文字列もtruthyとして扱う）
+        "kanji_mode": bool(data.get("kanji_mode", False)),  # ★ 追加：漢字デッキ（手書きで採点）かどうか
         "quiz_archive": bool(data.get("quiz_archive", False)),  # ★ 追加：クイズ過去問デッキかどうか（問題編集不可の対象）
     }
 
@@ -5668,7 +5669,7 @@ def _card_index_entry_lines(entry, folder_names=None):
         ("フォルダ", folder_names.get(folder_id, folder_id) if folder_id else "(フォルダなし)"),
         ("公開者", entry.get("published_by") or "(不明)"),
         ("状態", "未完成（作成中）" if entry.get("incomplete") else "完成"),
-        ("形式", "選択式デッキ" if entry.get("choice_mode") else "暗記カード（通常デッキ）"),
+        ("形式", "選択式デッキ" if entry.get("choice_mode") else ("漢字デッキ（手書き）" if entry.get("kanji_mode") else "暗記カード（通常デッキ）")),
         ("由来", "クイズ過去問（問題の編集不可）" if entry.get("quiz_archive") else "通常"),
     ]
     return _json_block(fields)
@@ -5799,6 +5800,7 @@ def get_card_set():
             # ★ カード本体を開いた際にも未完成フラグを返す
             "incomplete": bool(data.get("incomplete", False)),
             "choice_mode": data.get("choice_mode"),  # ★ null/false=通常デッキ / true=選択式デッキ（単一/複数は問題ごとに決まる。旧形式の"single"/"multi"文字列もtruthyとして扱う）
+            "kanji_mode": bool(data.get("kanji_mode", False)),  # ★ 追加：漢字デッキかどうか
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -5837,6 +5839,8 @@ def save_cards():
     first_publish = data.get("first_publish")
     # ★ 追加：選択式デッキかどうか（null=通常のフラッシュカードデッキ / "single" / "multi"）
     choice_mode = data.get("choice_mode")
+    # ★ 追加：漢字デッキ（手書きで採点）かどうか。選択式デッキとは両立しない
+    kanji_mode = bool(data.get("kanji_mode")) and not choice_mode
 
     if not name or not isinstance(cards, list):
         return jsonify({"ok": False, "error": "name と cards は必須です"})
@@ -5966,6 +5970,7 @@ def save_cards():
         # ★ クイズ過去問デッキは choice_mode もクライアント値ではなく既存データを
         #   維持する（cardsと同じく、改ざん・取りこぼしで中身の形式が変わらないように）。
         "choice_mode": existing_data.get("choice_mode") if is_quiz_archive else choice_mode,
+        "kanji_mode": False if is_quiz_archive else kanji_mode,  # ★ 追加：漢字デッキかどうか
         "quiz_archive": is_quiz_archive,  # ★ 追加：クイズ過去問デッキかどうか（一度trueになったら維持され続ける）
         "guild_id": guild_id,  # ★ 複数サーバー対応：このデッキがどのサーバー向けかを記録する
     }
@@ -6635,6 +6640,7 @@ def deck_share_info():
         "description": data.get("description"),  # ★ 追加：デッキの説明欄（任意、閲覧専用ビューアにも見せてよい情報）
         "cards": data.get("cards", []),
         "choice_mode": data.get("choice_mode"),
+        "kanji_mode": bool(data.get("kanji_mode", False)),  # ★ 追加：漢字デッキかどうか
         "incomplete": bool(data.get("incomplete", False)),
         "shared_by": entry.get("created_by_nickname"),
         "expires_at": entry.get("expires_at"),
