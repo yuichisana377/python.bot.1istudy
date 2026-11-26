@@ -5481,6 +5481,140 @@ def _clip_text(s, max_len=150):
     s = (s or "").strip().replace("\n", " ")
     return s if len(s) <= max_len else s[:max_len] + "…"
 
+# ================================
+#  ★ 追加：カード種別（通常／選択式／並び替え）
+#  ─────────────────────────────
+#  1枚のデッキに複数の種別のカードを混在できるよう、カード単位で type を持たせる。
+#  type が無い旧カードは、choices が CHOICE_MIN 個以上あれば "choice"、無ければ
+#  "normal" と推定する（Cardmaker.js 側の推定と同じ基準）。
+# ================================
+CHOICE_MIN = 2  # ★ Cardmaker.js の CHOICE_MIN と同じ値
+CARD_TYPES = ("normal", "choice", "order")
+CARD_TYPE_LABELS = {"normal": "通常", "choice": "選択式", "order": "並び替え"}
+ORDER_ITEMS_MIN = 2
+ORDER_ITEMS_MAX = 10
+ORDER_DISTRACTORS_MAX = 5
+ORDER_TEXT_MAX_LEN = 80
+ORDER_STYLES = ("list", "chips")
+ORDER_STYLE_LABELS = {"list": "リスト形式（項目を正しい順に並べる）", "chips": "チップ形式（語句を並べて文を作る）"}
+ORDER_FIELDS = ("order_items", "order_distractors", "order_style")
+
+def card_type(c):
+    """カードの種別（"normal"/"choice"/"order"）を返す。明示された有効な type を
+    優先し、type キーが無い（または不正な）旧カードは choices の個数から推定する。"""
+    if not isinstance(c, dict):
+        return "normal"
+    t = c.get("type")
+    if t in CARD_TYPES:
+        return t
+    choices = c.get("choices")
+    return "choice" if isinstance(choices, list) and len(choices) >= CHOICE_MIN else "normal"
+
+def _card_type_counts(cards):
+    """cards の種別ごとの枚数を {"normal":n, "choice":n, "order":n} の形で返す
+    （3つのキーは常に揃える＝フロント側で形を決め打ちできるように）。"""
+    counts = {t: 0 for t in CARD_TYPES}
+    for c in cards or []:
+        if isinstance(c, dict):
+            counts[card_type(c)] += 1
+    return counts
+
+def _card_types_text(counts):
+    """{"normal":3,...} を「通常3枚・選択式2枚・並び替え1枚」のような日本語にする。"""
+    if not isinstance(counts, dict):
+        return "(未集計)"
+    parts = [f"{CARD_TYPE_LABELS[t]}{int(counts.get(t) or 0)}枚" for t in CARD_TYPES if counts.get(t)]
+    return "・".join(parts) if parts else "(カードなし)"
+
+def _deck_format_label(choice_mode, counts, kanji_mode=None):
+    """デッキの「形式」表示。選択式デッキ（choice_mode）以外で、並び替えカードを含む・
+    種別が混在している場合は「混在デッキ」とする（choice_modeだけで判定すると
+    混在デッキが「暗記カード（通常デッキ）」と表示されてしまうため）。"""
+    if choice_mode:
+        return "選択式デッキ"
+    kinds = {t for t in CARD_TYPES if isinstance(counts, dict) and counts.get(t)}
+    if len(kinds) >= 2:
+        return "混在デッキ（カードごとに種別が異なる）"
+    if kinds == {"order"}:
+        return "並び替えデッキ"
+    if kinds == {"choice"}:
+        return "選択式デッキ"
+    if kanji_mode:
+        return "漢字デッキ（手書き）"
+    return "暗記カード（通常デッキ）"
+
+def _order_answer_text(items, style):
+    """並び替えカードの answer（サーバーが必ず計算し直す）。
+    list → " → " で連結、chips → 半角スペースで連結。"""
+    return (" " if style == "chips" else " → ").join(items)
+
+def _normalize_card_for_save(c, i):
+    """save_cards で1枚のカードを検証・正規化する（c を直接書き換える）。
+    不正な場合はエラーメッセージ（文字列）を、問題なければ None を返す。
+    ・type を必ず明示的に書き込む（無ければ card_type() で推定）。
+    ・order カード：order_items/order_distractors/order_style を検証し、
+      answer をサーバー側で計算し直す。choices/correct_indices は残骸として除去。
+    ・order 以外のカード：order_* は残骸として除去。type="normal" と明示された
+      カードに残っている choices/correct_indices も除去する（種別変更時の残骸対策）。"""
+    label = f"カード{i+1}"
+    t = c.get("type")
+    if t is None:
+        t = card_type(c)
+    elif t not in CARD_TYPES:
+        return f"{label}の種別が不正です"
+    c["type"] = t
+    if t == "order":
+        raw_items = c.get("order_items")
+        if not isinstance(raw_items, list):
+            return f"{label}（並び替え）の並べる項目がありません"
+        items = []
+        for x in raw_items:
+            if not isinstance(x, str):
+                return f"{label}（並び替え）の並べる項目が不正です"
+            x = x.strip()
+            if not x:
+                return f"{label}（並び替え）に空の項目があります"
+            if len(x) > ORDER_TEXT_MAX_LEN:
+                return f"{label}（並び替え）の項目は{ORDER_TEXT_MAX_LEN}文字以内にしてください"
+            items.append(x)
+        if not (ORDER_ITEMS_MIN <= len(items) <= ORDER_ITEMS_MAX):
+            return f"{label}（並び替え）の並べる項目は{ORDER_ITEMS_MIN}〜{ORDER_ITEMS_MAX}個にしてください"
+        raw_dist = c.get("order_distractors")
+        if raw_dist is None:
+            raw_dist = []
+        if not isinstance(raw_dist, list):
+            return f"{label}（並び替え）のダミー語句が不正です"
+        dist = []
+        for x in raw_dist:
+            if not isinstance(x, str):
+                return f"{label}（並び替え）のダミー語句が不正です"
+            x = x.strip()
+            if not x:
+                continue  # ★ 空欄の入力欄はエラーにせず読み飛ばす
+            if len(x) > ORDER_TEXT_MAX_LEN:
+                return f"{label}（並び替え）のダミー語句は{ORDER_TEXT_MAX_LEN}文字以内にしてください"
+            dist.append(x)
+        if len(dist) > ORDER_DISTRACTORS_MAX:
+            return f"{label}（並び替え）のダミー語句は{ORDER_DISTRACTORS_MAX}個以内にしてください"
+        style = c.get("order_style")
+        if style is None:
+            style = "list"
+        if style not in ORDER_STYLES:
+            return f"{label}（並び替え）の形式が不正です"
+        c["order_items"] = items
+        c["order_distractors"] = dist if style == "chips" else []  # ★ list形式ではダミーを持たせない（CSV・表示との食い違い防止）
+        c["order_style"] = style
+        c["answer"] = _order_answer_text(items, style)
+        c.pop("choices", None)
+        c.pop("correct_indices", None)
+    else:
+        for k in ORDER_FIELDS:
+            c.pop(k, None)
+        if t == "normal":
+            c.pop("choices", None)
+            c.pop("correct_indices", None)
+    return None
+
 def _image_count_text(imgs):
     n = len(imgs) if isinstance(imgs, list) else 0
     return f"{n}枚" if n else "(なし)"
@@ -5495,6 +5629,7 @@ def _card_lines(i, c):
     _json_block()に渡している。画像本体（base64等）はログに出すには
     大きすぎるため、実データではなく枚数だけを表示する。"""
     fields = [
+        ("種別", CARD_TYPE_LABELS[card_type(c)]),
         ("問題", _clip_text(c.get('question')) or '(空)'),
         ("解答", _clip_text(c.get('answer')) or '(空)'),
         ("解説", _clip_text(c.get('explanation')) or '(空)'),
@@ -5502,6 +5637,21 @@ def _card_lines(i, c):
         ("解答の画像", _image_count_text(c.get('imgs_a'))),
         ("解説の画像", _image_count_text(c.get('imgs_e'))),
     ]
+    if card_type(c) == "order":
+        # ★ 並べる項目・ダミー語句は1項目1行にする（1行に連結して_clip_textで
+        #   切り詰めると、後ろの方の項目の入れ替えが差分に出なくなるため）。
+        items = c.get("order_items") if isinstance(c.get("order_items"), list) else []
+        for idx, x in enumerate(items, 1):
+            fields.append((f"並び順{idx}", str(x)))
+        if not items:
+            fields.append(("並び順", "(なし)"))
+        dist = c.get("order_distractors") if isinstance(c.get("order_distractors"), list) else []
+        for idx, x in enumerate(dist, 1):
+            fields.append((f"ダミー語句{idx}", str(x)))
+        if not dist:
+            fields.append(("ダミー語句", "(なし)"))
+        style = c.get("order_style")
+        fields.append(("並び替えの形式", ORDER_STYLE_LABELS.get(style, str(style) if style else "(未設定)")))
     choices = c.get("choices")
     if choices:
         letters = ["A", "B", "C", "D", "E"]
@@ -5578,7 +5728,9 @@ def _deck_meta_text(data, folder_names=None):
     lines.append(f"科目: {data.get('subject') or '(未設定)'}")
     lines.append(f"説明: {_clip_text(data.get('description')) or '(未設定)'}")
     lines.append(f"状態: {'未完成（作成中）' if data.get('incomplete') else '完成'}")
-    lines.append(f"形式: {'選択式デッキ' if data.get('choice_mode') else ('漢字デッキ（手書き）' if data.get('kanji_mode') else '暗記カード（通常デッキ）')}")
+    card_counts = _card_type_counts(data.get("cards"))
+    lines.append(f"形式: {_deck_format_label(data.get('choice_mode'), card_counts, data.get('kanji_mode'))}")
+    lines.append(f"カード種別: {_card_types_text(card_counts)}")
     lines.append(f"由来: {'クイズ過去問（問題の編集不可）' if data.get('quiz_archive') else '通常'}")
     folder_id = data.get('folder_id')
     lines.append(f"フォルダ: {folder_names.get(folder_id, folder_id) if folder_id else '(フォルダなし)'}")
@@ -5648,6 +5800,7 @@ def _meta_from_card_data(filename, data):
         "choice_mode": data.get("choice_mode"),  # ★ null/false=通常デッキ / true=選択式デッキ（単一/複数は問題ごとに決まる。旧形式の"single"/"multi"文字列もtruthyとして扱う）
         "kanji_mode": bool(data.get("kanji_mode", False)),  # ★ 追加：漢字デッキ（手書きで採点）かどうか
         "quiz_archive": bool(data.get("quiz_archive", False)),  # ★ 追加：クイズ過去問デッキかどうか（問題編集不可の対象）
+        "card_types": _card_type_counts(cards),  # ★ 追加：カード種別ごとの枚数（{"normal","choice","order"}）
     }
 
 def _card_index_entry_lines(entry, folder_names=None):
@@ -5669,7 +5822,8 @@ def _card_index_entry_lines(entry, folder_names=None):
         ("フォルダ", folder_names.get(folder_id, folder_id) if folder_id else "(フォルダなし)"),
         ("公開者", entry.get("published_by") or "(不明)"),
         ("状態", "未完成（作成中）" if entry.get("incomplete") else "完成"),
-        ("形式", "選択式デッキ" if entry.get("choice_mode") else ("漢字デッキ（手書き）" if entry.get("kanji_mode") else "暗記カード（通常デッキ）")),
+        ("形式", _deck_format_label(entry.get("choice_mode"), entry.get("card_types"), entry.get("kanji_mode"))),
+        ("カード種別", _card_types_text(entry.get("card_types"))),  # ★ card_types導入前の索引エントリは「(未集計)」
         ("由来", "クイズ過去問（問題の編集不可）" if entry.get("quiz_archive") else "通常"),
     ]
     return _json_block(fields)
@@ -5772,7 +5926,21 @@ def list_cards():
         index, _ = load_cards_index(guild_id)
         if index is None:
             index = rebuild_cards_index(guild_id)
-        return jsonify({"ok": True, "sets": index})
+        # ★ 追加：card_types 導入前の索引エントリは、次に保存されるまで card_types を
+        #   持たない。導入前は並び替えカードが存在しなかったので、choice_mode と
+        #   問題数から推定して補う（応答にだけ補い、索引ファイル自体は書き換えない）。
+        sets = []
+        for entry in index or []:
+            if isinstance(entry, dict) and not isinstance(entry.get("card_types"), dict):
+                entry = dict(entry)
+                count = int(entry.get("count") or 0)
+                entry["card_types"] = {
+                    "normal": 0 if entry.get("choice_mode") else count,
+                    "choice": count if entry.get("choice_mode") else 0,
+                    "order": 0,
+                }
+            sets.append(entry)
+        return jsonify({"ok": True, "sets": sets})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -5853,6 +6021,12 @@ def save_cards():
         check_fields[f"カード{i+1}の問題文"] = c.get("question")
         check_fields[f"カード{i+1}の解答"]   = c.get("answer")
         check_fields[f"カード{i+1}の解説"]   = c.get("explanation")
+        # ★ 追加：選択肢・並び替えの項目/ダミー語句も同じく禁止文字チェックの対象にする
+        for key, field_label in (("choices", "選択肢"), ("order_items", "並べる項目"), ("order_distractors", "ダミー語句")):
+            values = c.get(key)
+            if isinstance(values, list):
+                for j, v in enumerate(values):
+                    check_fields[f"カード{i+1}の{field_label}{j+1}"] = v
     err = reject_if_bug_chars(check_fields)
     if err:
         return err
@@ -5920,6 +6094,31 @@ def save_cards():
         for c in existing_data.get("cards") or []:
             if isinstance(c, dict) and c.get("id"):
                 existing_cards_by_id[c["id"]] = c
+
+    # ★ 追加：カード種別（type）の検証・正規化（並び替えカード対応）。
+    #   古いクライアント（type/order_* を知らない版のCardmaker.js）が並び替えカードを
+    #   含むデッキを保存すると、type と order_* が落ちた状態で送られてきて
+    #   「通常カード」に化けてしまう。type キーが無く、保存済みの同じidのカードが
+    #   order_items を持っている場合は、type と order_* を保存済みから引き継ぐ
+    #   （created_by_id の引き継ぎと同じ考え方）。
+    for i, c in enumerate(cards):
+        if not isinstance(c, dict):
+            continue
+        old_c = existing_cards_by_id.get(c.get("id")) if c.get("id") else None
+        if "type" not in c and old_c and old_c.get("order_items"):
+            c["type"] = "order"
+            for k in ORDER_FIELDS:
+                if k in old_c:
+                    c[k] = old_c[k]
+        card_err = _normalize_card_for_save(c, i)
+        if card_err:
+            return jsonify({"ok": False, "error": card_err})
+
+    # ★ 追加：choice_mode はクライアント値ではなくサーバーがカード種別から決める
+    #   （1枚以上あり全カードが選択式のときだけ True。混在・通常のみ・並び替えを
+    #   含む場合は None）。クイズ過去問は下の card_payload で既存値を維持する。
+    choice_mode = True if (cards and all(card_type(c) == "choice" for c in cards)) else None
+
     for c in cards:
         if not isinstance(c, dict):
             continue
@@ -5994,8 +6193,17 @@ def save_cards():
     #   ＝incomplete=Trueの間は発火させない。作成中に触るたびAIへ無駄な問い合わせが
     #   走ってしまうため）。選択式デッキ（choice_mode）・クイズ過去問は対象外
     #   （既に選択肢を持っている／編集不可のため）。
-    if not card_payload["choice_mode"] and not is_quiz_archive and not incomplete:
-        _cardmaker_start_cache_generation(guild_id, filename, cards)  # ★ 修正：二重生成防止ロックを経由させる
+    # ★ 変更：カード種別の混在に対応し、choice_mode ではなく「通常カードが
+    #   1枚でもあるか」で判定する（4択にできるのは通常カードだけ）。通常カードが
+    #   無くなったデッキは、残っている古いキャッシュを消しておく。
+    if not is_quiz_archive and not incomplete:
+        if any(isinstance(c, dict) and card_type(c) == "normal" for c in cards):
+            _cardmaker_start_cache_generation(guild_id, filename, cards)  # ★ 修正：二重生成防止ロックを経由させる
+        else:
+            try:
+                _cardmaker_cache_write(filename, {})
+            except Exception as e:
+                print(f"[WARN] 4択キャッシュの削除に失敗しました（{filename}）: {e}")
 
     # --- Discord通知（silentがtrueならスキップ） ---
     if guild_id and not silent:
@@ -6115,7 +6323,16 @@ def _deck_to_csv_text(data):
     含めない）。先頭にBOMを付け、Excelで開いても文字化けしないようにする。"""
     cards = data.get("cards") or []
     lines = []
-    if data.get("choice_mode"):
+    # ★ 追加：並び替えカードを含む／通常・選択式が混在するデッキだけは、種別列付きの
+    #   統一書式（_deck_to_csv_unified）で出力する。全カード通常・全カード選択式の
+    #   デッキ（＝今までのデッキ）は従来の書式を一切変えない。
+    types = [card_type(c) for c in cards if isinstance(c, dict)]
+    has_order = "order" in types
+    has_choice = "choice" in types
+    has_normal = "normal" in types
+    if has_order or (has_normal and has_choice and not data.get("choice_mode")):
+        return _deck_to_csv_unified(cards)
+    if data.get("choice_mode") or has_choice:
         lines.append(",".join(["問題", "選択肢1", "選択肢2", "選択肢3", "選択肢4", "選択肢5", "正解"]))
         for c in cards:
             if not isinstance(c, dict):
@@ -6133,6 +6350,40 @@ def _deck_to_csv_text(data):
                 continue
             row = [c.get("question") or "", c.get("answer") or "", c.get("explanation") or ""]
             lines.append(",".join(_csv_field(v) for v in row))
+    return chr(0xFEFF) + "\r\n".join(lines) + "\r\n"  # 先頭にBOM（Excelでの文字化け対策）
+
+def _csv_pipe_join(items):
+    """並び順・ダミー語句のセル（項目を「|」区切り）。項目中のバックスラッシュ1文字は
+    バックスラッシュ2文字に、「|」は「バックスラッシュ＋|」にエスケープする（バックスラッシュを
+    先に置換する。Cardmaker.js の buildDeckCsvText と同じ規則）。"""
+    if not isinstance(items, list):
+        return ""
+    return "|".join(str(x).replace("\\", "\\\\").replace("|", "\\|") for x in items)
+
+def _deck_to_csv_unified(cards):
+    """種別の混在するデッキ（並び替えカードを含む、または通常・選択式の混在）用の
+    統一CSV書式。見出し「種別,問題,解答,解説,選択肢1〜5,正解,並び順,ダミー」。
+    使わない列は空欄。正解は従来の選択式書式と同じ「1,3」のような表記。"""
+    lines = [",".join(["種別", "問題", "解答", "解説", "選択肢1", "選択肢2", "選択肢3", "選択肢4", "選択肢5", "正解", "並び順", "ダミー", "形式"])]
+    for c in cards:
+        if not isinstance(c, dict):
+            continue
+        t = card_type(c)
+        row = [CARD_TYPE_LABELS[t], c.get("question") or "", c.get("answer") or "", c.get("explanation") or ""]
+        if t == "choice":
+            choices = c.get("choices") or []
+            row.extend(choices[i] if i < len(choices) else "" for i in range(5))
+            correct = sorted(c.get("correct_indices") or [])
+            row.append(",".join(str(i + 1) for i in correct))
+        else:
+            row.extend([""] * 6)
+        if t == "order":
+            row.append(_csv_pipe_join(c.get("order_items")))
+            row.append(_csv_pipe_join(c.get("order_distractors")))
+        else:
+            row.extend(["", ""])
+        row.append(("語句" if c.get("order_style") == "chips" else "リスト") if t == "order" else "")  # 並び替えの形式（chips=語句を選ぶ / list=項目を並べる）
+        lines.append(",".join(_csv_field(v) for v in row))
     return chr(0xFEFF) + "\r\n".join(lines) + "\r\n"  # 先頭にBOM（Excelでの文字化け対策）
 
 @app.route("/export_cards_csv", methods=["GET"])
@@ -7352,7 +7603,9 @@ def _quiz_room_snapshot_raw(room, student_id):
     elif room["state"] in ("question", "reveal"):
         q = room["questions"][room["current_q"]]
         revealed = room["state"] == "reveal"
-        question_payload = {"question": q["question"], "choices": q["choices"]}
+        # ★ 変更：問題の形（4択/並び替え・画像枚数）は _quiz_question_payload にまとめた
+        #   （正解は revealed のときだけ載る。下の「正解番号は…」のコメントの方針はそのまま）。
+        question_payload = _quiz_question_payload(q, revealed)
         # ★ 追加：ボーナス問題（正解時の得点2倍）かどうかをクライアントにも知らせる
         #   （画面に「ボーナス問題！2倍！」等を表示するため。得点計算自体はquiz_answer側）。
         if room["current_q"] in room.get("bonus_indices", set()):
@@ -7360,8 +7613,6 @@ def _quiz_room_snapshot_raw(room, student_id):
         # ★ 正解番号は、発表(reveal)されるまでは誰にも渡さない（レスポンスを
         #   devtools等で覗かれてカンニングされるのを防ぐ）。ホストも今は
         #   1プレイヤーとして参加するため、ホストだけ特別扱いはしない。
-        if revealed:
-            question_payload["correct_index"] = q["correct_index"]
         # ★ 途中参加でまだ「見学中」（active_from_q未到達）の人は、回答受付数・
         #   合計人数のどちらにもカウントしない（自分では回答できないため）。
         active_players = [p for p in room["players"].values() if p.get("active_from_q", 0) <= room["current_q"]]
@@ -7499,6 +7750,8 @@ def _collect_deck_unique_answers(guild_id, deck_filenames):
         for c in data.get("cards", []):
             if not isinstance(c, dict):
                 continue
+            if card_type(c) == "order":
+                continue  # ★ 並び替えカードの解答（「a → b → c」）は4択の誤答として不自然なため除外
             a = str(c.get("answer") or "").strip()
             if a and a not in seen:
                 seen.add(a)
@@ -7659,12 +7912,16 @@ def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
 
     items = []
     for i, q in enumerate(questions):
+        if (q.get("kind") or "choice") == "order":
+            continue  # ★ 並び替え問題には誤答が無いのでAI強化の対象外（元のまま残す）
         correct = q["choices"][q["correct_index"]]
         candidates = _distractor_shortlist(
             correct, [a for a in answer_pool if a != correct], QUIZ_AI_SHORTLIST_SIZE
         )
         items.append({"i": i, "question": q["question"], "correct": correct, "candidates": candidates})
 
+    if not items:
+        return None  # ★ 4択の問題が1問も無い（並び替え問題だけ）ならAIに問い合わせない
     # ★ 実測（qwen2.5-coder:7b・CPU動作）で3問あたり約35秒かかったため、問題数に応じて
     #   タイムアウトを伸ばす（固定45秒だと出題数が多いクイズで確実に間に合わない）。
     #   バックグラウンドスレッドでの実行なのでWeb側の応答をブロックする心配は無い。
@@ -7677,6 +7934,8 @@ def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
     new_questions = list(questions)
     changed = False
     for i, q in enumerate(questions):
+        if (q.get("kind") or "choice") == "order":
+            continue
         pick = picks_by_i.get(i)
         if not pick:
             continue
@@ -7686,15 +7945,15 @@ def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
             continue
         choices = distractors + [correct]
         random.shuffle(choices)
+        # ★ 変更：元の問題を丸ごと引き継いでから選択肢だけ差し替える（以前は5つのキーだけで
+        #   作り直していたため、画像枚数・解説文などの付随情報がAI強化で消えてしまっていた）。
+        #   元デッキ・カードの参照（source_deck_filename/source_card_id）もこれで引き継がれる
+        #   （引き継がないと、AI強化が効いた問題だけquiz_answer()の「わからない」裏付けが
+        #   できなくなってしまう）。
         new_questions[i] = {
-            "question": q["question"],
+            **q,
             "choices": choices,
             "correct_index": choices.index(correct),
-            # ★ 追加：誤答をAIで差し替えても、元デッキ・カードの参照は引き継ぐ
-            #   （引き継がないと、AI強化が効いた問題だけquiz_answer()の「わからない」
-            #   裏付けができなくなってしまう）。
-            "source_deck_filename": q.get("source_deck_filename"),
-            "source_card_id": q.get("source_card_id"),
         }
         changed = True
     return new_questions if changed else None
@@ -7732,6 +7991,136 @@ def _ai_enhance_quiz_room_choices(code, guild_id, deck_filenames):
         room["questions"] = improved
 
 
+# ★ 追加（並び替え問題・画像表示）：みんなでクイズの問題に使う補助関数群。
+#   画像本体（base64のdata URL）はスナップショットに載せると0.4秒ごとのポーリングで
+#   毎回巨大なJSONになってしまうため、問題には「枚数」だけを控え、本体は
+#   /quiz_question_image で1枚ずつ（ルーム参加者だけに）返す。
+QUIZ_IMAGE_KINDS = {"q": "imgs_q", "a": "imgs_a", "e": "imgs_e"}
+QUIZ_EXPLANATION_MAX_LEN = 2000
+
+
+def _quiz_card_images(card, kind):
+    """カードの画像のうち、画面に出してよい形式（data:image/...）のものだけを返す。
+    /quiz_question_image の添字もこのリストに対して数えるので、枚数と必ず一致する。"""
+    key = QUIZ_IMAGE_KINDS.get(kind)
+    imgs = card.get(key) if (key and isinstance(card, dict)) else None
+    if not isinstance(imgs, list):
+        return []
+    return [s for s in imgs if isinstance(s, str) and s.startswith("data:image/")]
+
+
+def _quiz_card_media(card):
+    """デッキ由来の問題に付ける画像枚数・解説文（クライアントへは枚数と、正解発表後の解説だけを送る）。"""
+    out = {}
+    # ★ 画像はカードidで引き直して返すので、idの無い古いカードは枚数も載せない（取得できないため）
+    for kind in (QUIZ_IMAGE_KINDS if (isinstance(card, dict) and card.get("id")) else ()):
+        n = len(_quiz_card_images(card, kind))
+        if n:
+            out[f"img_count_{kind}"] = n
+    expl = str(card.get("explanation") or "").strip() if isinstance(card, dict) else ""
+    if expl:
+        out["explanation"] = expl[:QUIZ_EXPLANATION_MAX_LEN]
+    return out
+
+
+def _quiz_shuffle_order_pool(correct_order, pool):
+    """並び替え問題の表示順を作る。先頭 len(correct_order) 個の並びが正解と
+    同じにならないようにする（チップ形式でダミー語句を含む場合も、全部を
+    正しく選んだ並びがそのまま出ないように）。作れない場合（全項目が同じ文字列等）は None。"""
+    n = len(correct_order)
+    shuffled = list(pool)
+    for _ in range(30):
+        random.shuffle(shuffled)
+        if shuffled[:n] != list(correct_order):
+            return shuffled
+    for k in range(1, len(pool)):
+        rotated = list(pool[k:]) + list(pool[:k])
+        if rotated[:n] != list(correct_order):
+            return rotated
+    return None
+
+
+def _quiz_order_question_from_card(c, deck_filename):
+    """並び替えカード1枚を、みんなでクイズの kind:"order" の問題にする。
+    表示順（items）は出題のたびに変わらないよう、ここで1回だけ決めて問題に保存する
+    （スナップショットは0.4秒ごとに作られるため、そこでシャッフルすると毎回変わってしまう）。
+    ★ 正しい順（correct_order）は正解発表まで絶対にクライアントへ送らない（_quiz_question_payload参照）。
+    不正なカードは None（出題しない）。"""
+    raw = c.get("order_items")
+    if not isinstance(raw, list):
+        return None
+    items = [x.strip() for x in raw if isinstance(x, str) and x.strip()]
+    if not (ORDER_ITEMS_MIN <= len(items) <= ORDER_ITEMS_MAX):
+        return None
+    style = c.get("order_style") if c.get("order_style") in ORDER_STYLES else "list"
+    dist = []
+    if style == "chips":
+        raw_d = c.get("order_distractors")
+        if isinstance(raw_d, list):
+            dist = [x.strip() for x in raw_d if isinstance(x, str) and x.strip()][:ORDER_DISTRACTORS_MAX]
+    shuffled = _quiz_shuffle_order_pool(items, items + dist)
+    if shuffled is None:
+        return None
+    q = {
+        "question": str(c.get("question") or "").strip(),
+        "kind": "order",
+        "style": style,
+        "correct_order": items,
+        "distractors": dist,
+        "items": [{"id": i, "text": t} for i, t in enumerate(shuffled)],
+        "pick_count": len(items),
+        "source_deck_filename": deck_filename,
+        "source_card_id": c.get("id"),
+    }
+    q.update(_quiz_card_media(c))
+    return q
+
+
+def _quiz_judge_order(q, order):
+    """並び替え問題の解答（items の id の列）を判定する。
+    正誤（True/False）を返し、形式が不正なら None を返す。
+    ★ id ではなく「文字列の並び」で比べる（同じ文字列の項目が複数あっても、
+      どちらを先に選んでも正解になるように）。"""
+    items = q.get("items") or []
+    n = q.get("pick_count")
+    if not isinstance(order, list) or not isinstance(n, int) or len(order) != n:
+        return None
+    seen = set()
+    for x in order:
+        if type(x) is not int or not (0 <= x < len(items)) or x in seen:
+            return None
+        seen.add(x)
+    return [items[x]["text"] for x in order] == list(q.get("correct_order") or [])
+
+
+def _quiz_question_payload(q, revealed):
+    """スナップショットに載せる問題（クライアント向け）。kind が無い問題
+    （オリジナル4択・クイズ過去問・旧データ）は従来通りの4択として扱う。
+    ★ 正解（correct_index / correct_order）・解答/解説画像の枚数・解説文は revealed のときだけ載せる。"""
+    if (q.get("kind") or "choice") == "order":
+        payload = {
+            "kind": "order",
+            "question": q["question"],
+            "style": q.get("style") or "list",
+            "items": [{"id": it["id"], "text": it["text"]} for it in q.get("items") or []],
+            "pick_count": q.get("pick_count"),
+        }
+        if revealed:
+            payload["correct_order"] = list(q.get("correct_order") or [])
+    else:
+        payload = {"question": q["question"], "choices": q["choices"]}
+        if revealed:
+            payload["correct_index"] = q["correct_index"]
+    img_counts = {"q": int(q.get("img_count_q") or 0)}
+    if revealed:
+        img_counts["a"] = int(q.get("img_count_a") or 0)
+        img_counts["e"] = int(q.get("img_count_e") or 0)
+        if q.get("explanation"):
+            payload["explanation"] = q["explanation"]
+    payload["img_counts"] = img_counts
+    return payload
+
+
 def _build_deck_questions(guild_id, deck_filenames, num_questions):
     """単語カードのデッキ（表面=question／裏面=answer）から、答えをシャッフルした
     4択問題を自動生成する。
@@ -7751,6 +8140,7 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
         return None, "too_many_decks"
 
     cards = []
+    order_questions = []  # ★ 追加：並び替えカードから作った問題（4択の誤答プールとは別に持つ）
     for deck_filename in deck_filenames:
         if not isinstance(deck_filename, str) or "/" in deck_filename or "\\" in deck_filename or ".." in deck_filename:
             return None, "deck_not_found"
@@ -7758,7 +8148,16 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
         if data is None:
             return None, "deck_not_found"
         for c in data.get("cards", []):
-            if not (isinstance(c, dict) and str(c.get("question") or "").strip() and str(c.get("answer") or "").strip()):
+            if not (isinstance(c, dict) and str(c.get("question") or "").strip()):
+                continue
+            if card_type(c) == "order":
+                # ★ 変更：並び替えカードも出題対象にする（kind:"order"の問題になる）。
+                #   ただし4択の誤答プール（cards）には入れない（「a → b → c」は誤答として不自然）。
+                oq = _quiz_order_question_from_card(c, deck_filename)
+                if oq is not None:
+                    order_questions.append(oq)
+                continue
+            if not str(c.get("answer") or "").strip():
                 continue
             # ★ 追加：どのデッキ・どのカード由来かを覚えておく（クライアントには一切送らない、
             #   quiz_answer()が不正解時に元デッキへ「わからない」を裏で付けるためだけに使う）。
@@ -7771,19 +8170,27 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
     unique_answers = {c["answer"].strip() for c in cards}
     # ★ 4択（正解1つ＋不正解3つ）を作るには、答えの異なり（ユニークな値）が
     #   最低4つ必要。html側の注意書き（「答えの種類が4つ以上あるデッキが必要」）と対応。
+    # ★ 変更：並び替えカードは誤答プールが要らないので、4択が作れないデッキでも
+    #   並び替えカードがあればそれだけで出題する。どちらも無ければ deck_too_small。
     if len(cards) < 4 or len(unique_answers) < 4:
+        cards = []
+    if not cards and not order_questions:
         return None, "deck_too_small"
+    candidates = [("choice", c) for c in cards] + [("order", q) for q in order_questions]
 
     try:
         num_questions = int(num_questions) if num_questions else None
     except (TypeError, ValueError):
         num_questions = None
-    n = min(num_questions, len(cards)) if num_questions else len(cards)
-    n = max(1, min(n, QUIZ_MAX_QUESTIONS, len(cards)))
+    n = min(num_questions, len(candidates)) if num_questions else len(candidates)
+    n = max(1, min(n, QUIZ_MAX_QUESTIONS, len(candidates)))
 
-    picked = random.sample(cards, n)
+    picked = random.sample(candidates, n)
     questions = []
-    for card in picked:
+    for kind, card in picked:
+        if kind == "order":
+            questions.append(card)
+            continue
         correct = card["answer"].strip()
         pool = list(dict.fromkeys(  # 同じ答え文言の重複を除去しつつ順序を保つ
             c["answer"].strip() for c in cards if c is not card and c["answer"].strip() != correct
@@ -7800,6 +8207,7 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
             #   参照（クライアントには送らない。question_payload等には含めていない）。
             "source_deck_filename": card.get("_src_deck_filename"),
             "source_card_id": card.get("_src_card_id"),
+            **_quiz_card_media(card),
         })
     return questions, None
 
@@ -7861,6 +8269,7 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname, playe
             "correct_indices": [q["correct_index"]],
             "explanation": "",
             "imgs_q": [], "imgs_a": [], "imgs_e": [],
+            "type": "choice",  # ★ 追加：カード種別を明示（並び替えカード対応で導入したtype）
             # ★ 追加：カード単位の作成者記録（ホストが全問を作ったのでホスト本人）。「作成した
             #   問題数が多い人」を基準にする各種機能（CSVダウンロード・削除依頼の通知先等）で使う。
             "created_by_id": student_id,
@@ -8323,6 +8732,8 @@ def _cardmaker_deck_answer_pool(cards):
     for c in cards:
         if not isinstance(c, dict):
             continue
+        if card_type(c) != "normal":
+            continue  # ★ 選択式・並び替えカードの解答は「4択にする」の誤答プールに使わない
         a = str(c.get("answer") or "").strip()
         if a and a not in seen:
             seen.add(a)
@@ -8356,6 +8767,8 @@ def _build_cardmaker_fallback_choices(cards):
     for c in cards:
         if not isinstance(c, dict):
             continue
+        if card_type(c) != "normal":
+            continue  # ★ 「4択にする」の対象は通常カードだけ（選択式・並び替えは対象外）
         cid = c.get("id")
         correct = str(c.get("answer") or "").strip()
         if not cid or not correct:
@@ -8477,7 +8890,8 @@ def _cardmaker_start_cache_generation(guild_id, deck_filename, cards=None):
             target_cards = cards
             if target_cards is None:
                 data, _ = get_card_file_for_guild(deck_filename, guild_id)
-                if data is None or data.get("choice_mode"):
+                # ★ 変更：choice_mode ではなく「通常カードがあるか」で判定する（種別の混在に対応）
+                if data is None or not any(isinstance(c, dict) and card_type(c) == "normal" for c in data.get("cards", [])):
                     return
                 target_cards = data.get("cards", [])
             _cardmaker_generate_choice_cache(guild_id, deck_filename, target_cards)
@@ -8722,6 +9136,71 @@ def quiz_state():
         snap = _quiz_room_snapshot(room, student_id)
     return jsonify({"ok": True, "is_host": is_host, "room": snap, "server_now": int(now * 1000)})
 
+# ★ 追加（みんなでクイズの画像表示）：問題・解答・解説の画像を1枚ずつ返す。
+#   スナップショット（0.4秒ごとのポーリング）に画像本体（base64）を載せると重すぎるため、
+#   スナップショットには枚数（question.img_counts）だけを載せ、本体はここから取得する
+#   （クライアント側はルームコード・問題番号・種別・添字ごとにキャッシュする）。
+#   認可は quiz_state と同じ（ルームのホスト・参加者だけ）に加えて、
+#   ・取得できるのは「今の問題」（current_q）の画像だけ（先の問題を覗けないように）
+#   ・問題画像(q)は出題中(question)と正解発表(reveal)中だけ
+#   ・解答画像(a)・解説画像(e)は正解発表(reveal)中だけ（出題中に取れると答えが漏れる）
+#   画像の元データはデッキファイルにあるので、ロック内では対象（デッキ名・カードid）だけ
+#   控え、ファイルの読み込みはロックを抜けてから行う。
+@app.route("/quiz_question_image", methods=["GET"])
+def quiz_question_image():
+    guild_id = request.args.get("guild_id")
+    if not guild_id:
+        return jsonify({"ok": False, "error": "missing guild_id"})
+    try:
+        guild_id = int(guild_id)
+        q_index = int(request.args.get("q", ""))
+        img_index = int(request.args.get("i", ""))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid_request"})
+    kind = request.args.get("kind") or ""
+    if kind not in QUIZ_IMAGE_KINDS:
+        return jsonify({"ok": False, "error": "invalid_request"})
+    code = (request.args.get("code") or "").strip().upper()
+    token = session_token_from_request()
+    guest = resolve_guest_token(token, guild_id, code)
+    if guest:
+        student_id = guest[0]
+    else:
+        student_id, err = require_member_session(token, guild_id)
+        if err:
+            return err
+
+    with QUIZ_ROOMS_LOCK:
+        room, err = _quiz_get_room_or_error(code, guild_id)
+        if err:
+            return err
+        if student_id != room["host_id"] and student_id not in room["players"]:
+            return jsonify({"ok": False, "error": "room_not_found"})
+        allowed_states = ("question", "reveal") if kind == "q" else ("reveal",)
+        if room["state"] not in allowed_states or q_index != room["current_q"] \
+                or not (0 <= q_index < len(room["questions"])):
+            return jsonify({"ok": False, "error": "image_not_available"})
+        q = room["questions"][q_index]
+        deck_filename = q.get("source_deck_filename")
+        card_id = q.get("source_card_id")
+        count = int(q.get(f"img_count_{kind}") or 0)
+    if not deck_filename or not card_id or not (0 <= img_index < count):
+        return jsonify({"ok": False, "error": "image_not_found"})
+    data, _ = get_card_file_for_guild(deck_filename, guild_id)
+    card = None
+    if isinstance(data, dict):
+        for c in data.get("cards", []):
+            if isinstance(c, dict) and c.get("id") == card_id:
+                card = c
+                break
+    imgs = _quiz_card_images(card, kind) if card else []
+    if not (0 <= img_index < len(imgs)):
+        return jsonify({"ok": False, "error": "image_not_found"})
+    resp = jsonify({"ok": True, "src": imgs[img_index]})
+    # ★ NO_CACHE_PATHSには足さず、ここで直接付ける（ブラウザ・中間プロキシに残さない）
+    resp.headers["Cache-Control"] = "private, no-store"
+    return resp
+
 @app.route("/quiz_start", methods=["POST"])
 def quiz_start():
     data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
@@ -8769,8 +9248,7 @@ def quiz_answer():
         return err
     code = (data.get("code") or "").strip().upper()
     choice_index = data.get("choice_index")
-    if not isinstance(choice_index, int) or isinstance(choice_index, bool) or not (0 <= choice_index < 4):
-        return jsonify({"ok": False, "error": "invalid_choice"})
+    # ★ 変更：解答の形式チェックは問題の種別（4択/並び替え）が分かってから行う（ロック内、下記）。
 
     now = time.time()
     with QUIZ_ROOMS_LOCK:
@@ -8794,7 +9272,18 @@ def quiz_answer():
             return jsonify({"ok": False, "error": "already_answered"})
 
         q = room["questions"][room["current_q"]]
-        correct = (choice_index == q["correct_index"])
+        if (q.get("kind") or "choice") == "order":
+            # ★ 追加：並び替え問題は order（items の id の列）で答える。判定は文字列の並びで行う。
+            order = data.get("order")
+            correct = _quiz_judge_order(q, order)
+            if correct is None:
+                return jsonify({"ok": False, "error": "invalid_order"})
+            answer_value = list(order)
+        else:
+            if not isinstance(choice_index, int) or isinstance(choice_index, bool) or not (0 <= choice_index < 4):
+                return jsonify({"ok": False, "error": "invalid_choice"})
+            correct = (choice_index == q["correct_index"])
+            answer_value = choice_index
         # ★ クライアントが「押した瞬間」の時刻(サーバー時計換算のms)を送ってきた場合はそれを使う。
         #   通信遅延で不利にならないよう。ただし不正防止のため [出題開始, 今] の範囲に丸め、
         #   さらに遅延の許容は最大2秒までとする。
@@ -8807,7 +9296,7 @@ def quiz_answer():
         if (answered_at - room["question_started_at"]) >= room["time_limit_sec"]:
             return jsonify({"ok": False, "error": "not_answerable"})
         # 受け付けると決まってから回答状態を書き込む（拒否した回答が残らないように）
-        player["cur_answer"] = choice_index
+        player["cur_answer"] = answer_value
         player["cur_correct"] = correct
         player["cur_answered_at"] = answered_at
         # ★ 追加：同点タイブレーク用に、回答にかかった時間（正誤にかかわらず）を積算する
