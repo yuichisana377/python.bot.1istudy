@@ -7191,7 +7191,7 @@ QUIZ_ANSWER_BASE_POINTS = 10
 #   （_pick_distractors）だけで動作する。詳細は _ai_enhance_quiz_room_choices のコメント参照。
 OLLAMA_HOST = (os.environ.get("OLLAMA_HOST") or "").strip().rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL") or "qwen2.5-coder:7b"
-QUIZ_AI_TIMEOUT_SEC = 45        # Ollamaへの問い合わせ1回あたりのタイムアウト（バックグラウンド実行なので余裕を持たせる）
+QUIZ_AI_TIMEOUT_SEC = 90        # Ollamaへの問い合わせ1回あたりのタイムアウト（バックグラウンド実行なので余裕を持たせる）
 QUIZ_AI_SHORTLIST_SIZE = 12    # AIに渡す誤答候補の数（プロンプトを軽くするため、類似度上位のみに絞る）
 QUIZ_FIRST_CORRECT_BONUS = 2
 
@@ -7926,7 +7926,7 @@ def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
     # ★ 実測（qwen2.5-coder:7b・CPU動作）で3問あたり約35秒かかったため、問題数に応じて
     #   タイムアウトを伸ばす（固定45秒だと出題数が多いクイズで確実に間に合わない）。
     #   バックグラウンドスレッドでの実行なのでWeb側の応答をブロックする心配は無い。
-    timeout = max(QUIZ_AI_TIMEOUT_SEC, 20 * len(items))
+    timeout = max(QUIZ_AI_TIMEOUT_SEC, 40 * len(items))
     result = _ollama_generate_json(_build_quiz_distractor_prompt(items), timeout=timeout)
     if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
         return None
@@ -8689,7 +8689,7 @@ def cardmaker_ai_distractors():
 
     # ★ 候補数がクイズ側より多い（最大40件/問）ぶん、1問あたりの時間見積もりも
     #   少し余裕を持たせている（25秒/問）。
-    timeout = max(QUIZ_AI_TIMEOUT_SEC, 25 * len(items))
+    timeout = max(QUIZ_AI_TIMEOUT_SEC, 60 * len(items))  # ★ CPU動作の7Bは1問あたり実測10秒前後＋プロンプト処理で、45〜75秒だと頻繁にタイムアウトしていた
     result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout, temperature=CARDMAKER_AI_TEMPERATURE)
     if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
         return jsonify({"ok": False, "error": "ai_failed"})
@@ -8841,7 +8841,7 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
                 {"i": i, "question": e["question"], "correct": e["correct"], "candidates": e["candidates"]}
                 for i, e in enumerate(batch)
             ]
-            timeout = max(QUIZ_AI_TIMEOUT_SEC, 25 * len(items))
+            timeout = max(QUIZ_AI_TIMEOUT_SEC, 60 * len(items))  # ★ CPU動作の7Bは1問あたり実測10秒前後＋プロンプト処理で、45〜75秒だと頻繁にタイムアウトしていた
             result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout, temperature=CARDMAKER_AI_TEMPERATURE)
             if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
                 return  # 失敗したら以降も見込みが薄いので打ち切る（既存の即席4択のまま残る）
