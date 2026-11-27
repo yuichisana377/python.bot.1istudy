@@ -9018,6 +9018,7 @@ def _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
             continue
         todo.append({"id": cid, "question": q200, "correct": a200})
     failures = 0
+    any_failed = False
     for start in range(0, len(todo), CLAUDE_BATCH_CARDS):
         batch = todo[start:start + CLAUDE_BATCH_CARDS]
         entries = [{"i": i, "question": e["question"], "correct": e["correct"]} for i, e in enumerate(batch)]
@@ -9025,6 +9026,7 @@ def _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
         result = _claude_generate_json(prompt, est_input_tokens=int(len(prompt) * 1.2) + 200)
         if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
             failures += 1
+            any_failed = True
             if failures >= 2 or not ANTHROPIC_API_KEY or _claude_budget_spent_jpy() >= CLAUDE_MONTHLY_BUDGET_JPY:
                 break  # 連続失敗・予算切れ。残りは従来方式のまま
             continue
@@ -9044,8 +9046,10 @@ def _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
     for cid, pv in pools.items():
         current.setdefault("cards", {})[cid] = {"distractors": _pick_from_pool(pv["pool"]), "pool": pv["pool"], "q": pv["q"], "a": pv["a"]}
     complete = all(cid in pools for cid in fallback)
-    if complete:
-        current["claude"] = True  # 全カードにプールができたときだけ。以後は使うたびの再生成をしない
+    if not any_failed:
+        # 全バッチが正常応答なら（一部カードが3件未満で不採用でも）ローテーションを止める。
+        # 毎回同じカードで再課金されるのを防ぐ。残りはローカルAIが1回だけ補う。
+        current["claude"] = True
     local_put(cache_filename, current, sha)
     return complete
 
