@@ -9019,6 +9019,7 @@ def _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
         todo.append({"id": cid, "question": q200, "correct": a200})
     failures = 0
     any_failed = False
+    spent_before = _claude_budget_spent_jpy()
     for start in range(0, len(todo), CLAUDE_BATCH_CARDS):
         batch = todo[start:start + CLAUDE_BATCH_CARDS]
         entries = [{"i": i, "question": e["question"], "correct": e["correct"]} for i, e in enumerate(batch)]
@@ -9045,8 +9046,8 @@ def _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
         return False
     # 失敗が続くデッキで課金が繰り返されないよう、失敗回数を引き継いで3回で諦める
     tries = int((old_cache or {}).get("claude_tries") or 0) if isinstance(old_cache, dict) else 0
-    if any_failed:
-        tries += 1
+    if any_failed and _claude_budget_spent_jpy() > spent_before:
+        tries += 1  # 課金されなかった失敗（HTTPエラー・タイムアウト・予算切れ）は数えない
     current["claude_tries"] = tries
     for cid, pv in pools.items():
         current.setdefault("cards", {})[cid] = {"distractors": _pick_from_pool(pv["pool"]), "pool": pv["pool"], "q": pv["q"], "a": pv["a"]}
