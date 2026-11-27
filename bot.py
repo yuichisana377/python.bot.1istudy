@@ -7536,6 +7536,9 @@ def _quiz_room_players_json(room):
     （total_answer_time）が短い方＝素早く押せていた方を上位にする。
     ロビー・"ranking"（途中経過）画面・最終結果("ended")で使う共通の並び順。"""
     players = sorted(room["players"].values(), key=lambda p: _quiz_rank_key(room, p))
+    # 同点時の順位決めに使った回答時間も一緒に返して順位表に出す
+    # （平均点モードでは1問あたりの平均、それ以外は合計。単位はクライアントに渡す）
+    time_unit = "秒/問" if room.get("score_mode") == "average" else "秒"
     return [
         {
             "id": p["id"],
@@ -7544,6 +7547,8 @@ def _quiz_room_players_json(room):
             "text_color": p["text_color"],
             "score": _quiz_display_score(room, p),
             "score_unit": _quiz_score_unit(room),
+            "time_sec": round(_quiz_rank_key(room, p)[1], 1),
+            "time_unit": time_unit,
         }
         for p in players
     ]
