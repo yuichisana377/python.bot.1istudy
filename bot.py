@@ -8968,6 +8968,10 @@ def _build_claude_pool_prompt(entries):
         "2. 正解の言い換え・同義語・正解の一部や包含関係になるものは不可（正解と解釈できてはいけない）。\n"
         "3. 長さ・形式（単語/文/番号付き複数項目など）を正解に揃える。漢字の書き取りなら、同じ字数の字形や読みが似た漢字語にする。\n"
         f"4. 候補どうしも重複させない。{CLAUDE_POOL_SIZE}個作れない場合は作れた分だけでよい（最低3個）。\n"
+        "5. 正解欄に「/」や改行の後ろの付随文（例:「とは何か」「はどこか」）が付いていても、それは反転学習用の問いなので無視し、"
+        "本体の用語だけを正解とみなして候補を作る（付随文は候補に含めない）。ただし「1.低い\\n2.平坦」のように複数行すべてが答えの一部なら、同じ形式で候補を作る。\n"
+        "6. 問題と正解が噛み合わない・穴埋め文などのカードは、問題の趣旨に沿った用語を候補にする。\n"
+        "7. 漢字の書き取り・読みは字形や読みが紛らわしい漢字・語、英語・数学など他分野はその分野で間違えやすいものを候補にする。\n"
         '出力はJSONのみ: {"questions":[{"i":番号,"distractors":["誤答1","誤答2",...]}]}\n\n'
         f"カード:\n{items}"
     )
@@ -8985,6 +8989,8 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
         text = str(d or "").strip()
         if not text or len(text) > max_len or text in seen or find_bug_chars(text):
             continue
+        if re.search(r"(とは何か|とはなにか|はどこか|はどこのやつか|ってどんな)", text):
+            continue  # 反転用の付随文が候補に紛れ込んだもの
         if kanji and (len(text) != len(correct.strip()) or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in text)):
             continue
         seen.add(text)
