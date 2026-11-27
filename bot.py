@@ -7325,6 +7325,7 @@ def _quiz_autoadvance_locked(room, now):
             room["reveal_started_at"] = None
             room["first_correct_id"] = None
             room["first_correct_nickname"] = None
+            _quiz_record_history_locked(room, include_unanswered=True)
             for p in room["players"].values():
                 p["cur_answer"] = None
                 p["cur_correct"] = None
@@ -7678,7 +7679,60 @@ def _quiz_room_snapshot_raw(room, student_id):
                     #   そのままフロントに渡す（表示側で倍率を再計算させない）。
                     if player.get("cur_points"):
                         snap["your_points"] = player["cur_points"]
+    elif room["state"] == "ended":
+        snap["review"] = _quiz_review_json(room, room["players"].get(student_id))
     return snap
+
+def _quiz_record_history_locked(room, include_unanswered):
+    """結果発表後の「振り返り」用に、今の問題の正誤を本人ごとに控える。
+    見学中でこの問題に参加していなかった人は記録しない。未回答は correct=None
+    （include_unanswered=False のときは回答済みの人だけ記録する）。"""
+    for p in room["players"].values():
+        if p.get("active_from_q", 0) > room["current_q"]:
+            continue
+        answered = p["cur_answer"] is not None
+        if not answered and not include_unanswered:
+            continue
+        p.setdefault("history", {})[room["current_q"]] = {
+            "correct": bool(p["cur_correct"]) if answered else None,
+            "answer": p["cur_answer"],
+        }
+
+def _quiz_review_json(room, player):
+    """結果発表のあとの「振り返り」画面用：本人が参加した各問題の正誤・自分の答え・正解。
+    終了後なので正解を渡してよい。参加した問題が1問も無い人（ずっと見学など）は None。"""
+    if player is None:
+        return None
+    history = player.get("history") or {}
+    items = []
+    for idx in sorted(history):
+        if not (0 <= idx < len(room["questions"])):
+            continue
+        q = room["questions"][idx]
+        h = history[idx]
+        if (q.get("kind") or "choice") == "order":
+            texts = {it["id"]: it["text"] for it in q.get("items") or []}
+            correct_text = " → ".join(str(t) for t in q.get("correct_order") or [])  # correct_order は文字列の並び（idではない）
+            ans = h.get("answer")
+            your_text = " → ".join(texts.get(i, "") for i in ans) if isinstance(ans, list) else None
+        else:
+            choices = q.get("choices") or []
+            ci = q.get("correct_index")
+            correct_text = choices[ci] if isinstance(ci, int) and 0 <= ci < len(choices) else ""
+            ai = h.get("answer")
+            your_text = choices[ai] if isinstance(ai, int) and 0 <= ai < len(choices) else None
+        items.append({
+            "index": idx,
+            "question": q["question"],
+            "correct": h.get("correct"),
+            "your_text": your_text,
+            "correct_text": correct_text,
+            "explanation": q.get("explanation") or "",
+        })
+    if not items:
+        return None
+    right = sum(1 for it in items if it["correct"] is True)
+    return {"items": items, "correct_count": right, "total": len(items)}
 
 def _pick_distractors(correct: str, pool: list, k: int, ranked: bool = False) -> list:
     """
@@ -9439,6 +9493,12 @@ def quiz_end():
             return jsonify({"ok": False, "error": "moved_to_other_device"})
         if student_id != room["host_id"]:
             return jsonify({"ok": False, "error": "not_host"})
+        # 出題中・正解発表中にホストが終了した場合も、その問題を振り返りに残す
+        #   （出題中は回答済みの人だけ。発表中は未回答も含める）
+        if room["state"] == "question":
+            _quiz_record_history_locked(room, include_unanswered=False)
+        elif room["state"] == "reveal":
+            _quiz_record_history_locked(room, include_unanswered=True)
         room["state"] = "ended"
         room["ended_at"] = now
         room["last_activity"] = now
