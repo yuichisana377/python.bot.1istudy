@@ -8844,6 +8844,212 @@ def cardmaker_choice_cache_filename(deck_filename):
     return f"four_choice_cache_{deck_filename}"
 
 
+# ================================
+#  ★ 追加（2026/11/28）：CardMaker「4択にする」の誤答をClaude Haikuで事前生成する
+#  ─────────────────────────────
+#  デッキの「公開」保存時に1回だけ、各カードの誤答候補（プール）を
+#  ANTHROPIC_MODEL_POOL_SIZE個ずつ作って保存しておき、学習開始のたびに
+#  GET /cardmaker_choice_cache がそこから3つをランダムに選んで返す。
+#  「使うたびに作り直す」ことはしない（毎回ほぼ同じ候補になるだけで課金が増えるため）。
+#  ANTHROPIC_API_KEY未設定・月予算超過・API失敗のときは何もせず、従来のローカルAI→類似度方式へ。
+#  費用は応答のusageから実測し、月の合計をclaude_budget.jsonに記録する。
+# ================================
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY") or ""
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-5-5"
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+# Haiku 5.5 の料金（USD / 100万トークン、プロンプト10万トークン以下）。環境変数で上書き可
+CLAUDE_PRICE_IN = float(os.environ.get("CLAUDE_PRICE_IN_USD") or 0.10)
+CLAUDE_PRICE_OUT = float(os.environ.get("CLAUDE_PRICE_OUT_USD") or 0.50)
+CLAUDE_USD_JPY = float(os.environ.get("CLAUDE_USD_JPY") or 160)  # 余裕を持たせた為替
+CLAUDE_MONTHLY_BUDGET_JPY = float(os.environ.get("CLAUDE_MONTHLY_BUDGET_JPY") or 80)
+CLAUDE_MAX_OUTPUT_TOKENS = 8000
+CLAUDE_BATCH_CARDS = 10  # 1回のリクエストで処理するカード数（出力がmax_tokensで途切れないよう小さめ）
+CLAUDE_POOL_SIZE = 8
+CLAUDE_BUDGET_FILE = "claude_budget.json"
+_CLAUDE_BUDGET_LOCK = Lock()
+
+
+def _claude_month_key():
+    return datetime.now(JST).strftime("%Y-%m")
+
+
+def _claude_budget_spent_jpy():
+    data, _ = local_get(CLAUDE_BUDGET_FILE)
+    if isinstance(data, dict) and data.get("month") == _claude_month_key():
+        try:
+            return float(data.get("spent_jpy") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    return 0.0
+
+
+def _claude_estimate_jpy(input_tokens, output_tokens):
+    usd = input_tokens / 1_000_000 * CLAUDE_PRICE_IN + output_tokens / 1_000_000 * CLAUDE_PRICE_OUT
+    return usd * CLAUDE_USD_JPY
+
+
+def _claude_budget_add(jpy, input_tokens, output_tokens):
+    with _CLAUDE_BUDGET_LOCK:
+        data, sha = local_get(CLAUDE_BUDGET_FILE)
+        month = _claude_month_key()
+        if not isinstance(data, dict) or data.get("month") != month:
+            data = {"month": month, "spent_jpy": 0.0, "calls": 0, "input_tokens": 0, "output_tokens": 0}
+        data["spent_jpy"] = round(float(data.get("spent_jpy") or 0) + jpy, 4)
+        data["calls"] = int(data.get("calls") or 0) + 1
+        data["input_tokens"] = int(data.get("input_tokens") or 0) + input_tokens
+        data["output_tokens"] = int(data.get("output_tokens") or 0) + output_tokens
+        try:
+            local_put(CLAUDE_BUDGET_FILE, data, sha)
+        except Exception as e:
+            print(f"[WARN] claude_budget の記録に失敗しました: {e}")
+
+
+def _claude_generate_json(prompt, est_input_tokens):
+    """Claude Haikuにプロンプトを送り、応答テキストをJSONとして返す。
+    キー未設定・予算超過・拒否・途中切れ・解析失敗など何かあればNone（呼び出し元はフォールバックすること）。
+    ★ Haiku 5.5はtemperature等のサンプリング指定が不可。思考は常時有効のためeffort=lowで抑える。
+    ★ エラーメッセージにAPIキーが載らないよう、例外の中身は出さず種別だけ記録する。"""
+    if not ANTHROPIC_API_KEY:
+        return None
+    est_cost = _claude_estimate_jpy(est_input_tokens, CLAUDE_MAX_OUTPUT_TOKENS)
+    if _claude_budget_spent_jpy() + est_cost > CLAUDE_MONTHLY_BUDGET_JPY:
+        print("[INFO] Claudeの月間予算に達する見込みのため、ローカルAIで処理します")
+        return None
+    try:
+        resp = requests.post(
+            ANTHROPIC_URL,
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": ANTHROPIC_MODEL,
+                "max_tokens": CLAUDE_MAX_OUTPUT_TOKENS,
+                "output_config": {"effort": "low"},
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=120,
+        )
+        if resp.status_code != 200:
+            try:
+                _err = (resp.json().get("error") or {})
+                print(f"[WARN] Claude APIがエラーを返しました: HTTP {resp.status_code} {_err.get('type')}: {str(_err.get('message'))[:200]}")
+            except Exception:
+                print(f"[WARN] Claude APIがエラーを返しました: HTTP {resp.status_code}")
+            return None
+        body = resp.json()
+        usage = body.get("usage") or {}
+        in_tok, out_tok = int(usage.get("input_tokens") or 0), int(usage.get("output_tokens") or 0)
+        _claude_budget_add(_claude_estimate_jpy(in_tok, out_tok), in_tok, out_tok)
+        if body.get("stop_reason") in ("refusal", "max_tokens"):
+            print(f"[WARN] Claudeの応答が使えません: {body.get('stop_reason')}")
+            return None
+        text = "".join(b.get("text", "") for b in (body.get("content") or []) if isinstance(b, dict) and b.get("type") == "text").strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", text).strip()
+        return json.loads(text)
+    except Exception as e:
+        print(f"[WARN] Claude APIの呼び出しに失敗しました: {type(e).__name__}")
+        return None
+
+
+def _build_claude_pool_prompt(entries):
+    """entries: [{"i", "question", "correct"}]。各カードの誤答候補をCLAUDE_POOL_SIZE個ずつ作らせる。"""
+    items = json.dumps(
+        [{"i": e["i"], "question": e["question"], "correct": e["correct"]} for e in entries],
+        ensure_ascii=False,
+    )
+    return (
+        "高専生向けの暗記カードの4択問題をつくります。各カードについて、正解と紛らわしい誤答の候補を"
+        f"{CLAUDE_POOL_SIZE}個ずつ日本語で作ってください。\n"
+        "守ること:\n"
+        "1. 正解と同じ単元・同じ種類の語（近い概念）にする。明らかに無関係な語は不可。\n"
+        "2. 正解の言い換え・同義語・正解の一部や包含関係になるものは不可（正解と解釈できてはいけない）。\n"
+        "3. 長さ・形式（単語/文/番号付き複数項目など）を正解に揃える。漢字の書き取りなら、同じ字数の字形や読みが似た漢字語にする。\n"
+        f"4. 候補どうしも重複させない。{CLAUDE_POOL_SIZE}個作れない場合は作れた分だけでよい（最低3個）。\n"
+        '出力はJSONのみ: {"questions":[{"i":番号,"distractors":["誤答1","誤答2",...]}]}\n\n'
+        f"カード:\n{items}"
+    )
+
+
+def _sanitize_distractor_pool(distractors, correct, question=""):
+    """_sanitize_ai_distractors と同じ検証で、3件以上CLAUDE_POOL_SIZE件以下のプールを返す。足りなければNone。"""
+    if not isinstance(distractors, list):
+        return None
+    max_len = max(60, len(correct) * 3)
+    kanji = _is_kanji_writing(question, correct)
+    cleaned = []
+    seen = {correct.strip()}
+    for d in distractors:
+        text = str(d or "").strip()
+        if not text or len(text) > max_len or text in seen or find_bug_chars(text):
+            continue
+        if kanji and (len(text) != len(correct.strip()) or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in text)):
+            continue
+        seen.add(text)
+        cleaned.append(text)
+        if len(cleaned) == CLAUDE_POOL_SIZE:
+            break
+    return cleaned if len(cleaned) >= 3 else None
+
+
+def _pick_from_pool(pool, k=3):
+    """プールからk個をランダムに選ぶ。"""
+    return random.sample(pool, k) if len(pool) > k else list(pool)
+
+
+def _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
+    """fallback（カードidごとの即席4択）の各カードに、Claudeでプールを作って保存する。
+    既存キャッシュに同じid・同じ問題・同じ答えのプールがあれば再利用して課金を避ける。
+    1つでもプールを作れたらTrueを返す。"""
+    by_id = {c.get("id"): c for c in cards if isinstance(c, dict) and c.get("id")}
+    old_cards = (old_cache or {}).get("cards") if isinstance(old_cache, dict) else {}
+    old_cards = old_cards if isinstance(old_cards, dict) else {}
+    pools = {}
+    todo = []
+    for cid, v in fallback.items():
+        card = by_id.get(cid) or {}
+        question = str(card.get("question") or "").strip()
+        old = old_cards.get(cid) if isinstance(old_cards.get(cid), dict) else None
+        q200, a200 = question[:200], v["correct"][:200]
+        if old and isinstance(old.get("pool"), list) and old.get("q") == q200 and old.get("a") == a200:
+            pools[cid] = {"pool": old["pool"], "q": q200, "a": a200}
+            continue
+        todo.append({"id": cid, "question": q200, "correct": a200})
+    failures = 0
+    for start in range(0, len(todo), CLAUDE_BATCH_CARDS):
+        batch = todo[start:start + CLAUDE_BATCH_CARDS]
+        entries = [{"i": i, "question": e["question"], "correct": e["correct"]} for i, e in enumerate(batch)]
+        prompt = _build_claude_pool_prompt(entries)
+        result = _claude_generate_json(prompt, est_input_tokens=int(len(prompt) * 1.2) + 200)
+        if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
+            failures += 1
+            if failures >= 2 or not ANTHROPIC_API_KEY or _claude_budget_spent_jpy() >= CLAUDE_MONTHLY_BUDGET_JPY:
+                break  # 連続失敗・予算切れ。残りは従来方式のまま
+            continue
+        failures = 0
+        picks = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
+        for i, e in enumerate(batch):
+            pick = picks.get(i)
+            pool = _sanitize_distractor_pool(pick.get("distractors") if pick else None, e["correct"], e["question"])
+            if pool:
+                pools[e["id"]] = {"pool": pool, "q": e["question"], "a": e["correct"]}
+    if not pools:
+        return False
+    cache_filename = cardmaker_choice_cache_filename(deck_filename)
+    current, sha = local_get(cache_filename)
+    if not isinstance(current, dict):
+        return False
+    for cid, pv in pools.items():
+        current.setdefault("cards", {})[cid] = {"distractors": _pick_from_pool(pv["pool"]), "pool": pv["pool"], "q": pv["q"], "a": pv["a"]}
+    complete = all(cid in pools for cid in fallback)
+    if complete:
+        current["claude"] = True  # 全カードにプールができたときだけ。以後は使うたびの再生成をしない
+    local_put(cache_filename, current, sha)
+    return complete
+
+
 def _cardmaker_deck_answer_pool(cards):
     """cardsのanswerを重複除去して集める（順序維持）。Cardmaker.js側のpoolFor()と同じ考え方。"""
     seen = set()
@@ -8932,14 +9138,25 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
     """
     try:
         fallback = _build_cardmaker_fallback_choices(cards)
+        old_cache, _ = local_get(cardmaker_choice_cache_filename(deck_filename))  # ★ Claudeのプールを再利用して課金を避けるため、上書き前に控える
         _cardmaker_cache_write(deck_filename, fallback)
-        if not fallback or not OLLAMA_HOST:
+        if not fallback:
+            return
+        # ★ 追加（2026/11/28）：まずClaude Haikuで誤答プールを作る（キー設定済み・予算内のときだけ）。
+        #   作れたら、使うたびの再生成もローカルAIでの強化も行わない（プールからランダムに選ぶため）。
+        if ANTHROPIC_API_KEY and _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
+            return
+        if not OLLAMA_HOST:
             return
 
         # （AI用の候補は fallback の各要素に入っているので、ここで答えの一覧を作り直す必要は無い）
         by_id = {c.get("id"): c for c in cards if isinstance(c, dict) and c.get("id")}
+        _cur, _ = local_get(cardmaker_choice_cache_filename(deck_filename))
+        _have_pool = {cid for cid, v in ((_cur or {}).get("cards") or {}).items() if isinstance(v, dict) and v.get("pool")}
         entries = []
         for cid, v in fallback.items():
+            if cid in _have_pool:
+                continue  # Claudeのプールがあるカードはローカルで上書きしない
             card = by_id.get(cid)
             question = str((card or {}).get("question") or "").strip()
             # ★ AIに渡す候補は、即席4択を作るときに採点済みの上位（v["candidates"]）を使い回す
@@ -9042,9 +9259,15 @@ def cardmaker_choice_cache():
     data, sha = local_get(cache_filename)
     if not isinstance(data, dict) or not isinstance(data.get("cards"), dict):
         return jsonify({"ok": True, "cards": {}})
-    response_cards = data["cards"]
+    # ★ 変更（2026/11/28）：Claudeのプールがあるカードは、リクエストのたびにプールから3つを
+    #   ランダムに選んで返す。プール自体（pool/q/a）はクライアントへ出さない。
+    response_cards = {
+        cid: {"distractors": (_pick_from_pool(v["pool"]) if isinstance(v, dict) and isinstance(v.get("pool"), list) and len(v["pool"]) >= 3 else v.get("distractors"))}
+        for cid, v in data["cards"].items() if isinstance(v, dict)
+    }
 
-    if not data.get("used"):
+    # ★ Claudeのプール方式のキャッシュは「使うたびの作り直し」をしない（毎回ほぼ同じ候補になるだけで課金が増えるため）
+    if not data.get("used") and not data.get("claude"):
         # ★ 修正：以前はlocal_put（競合時に無条件で強制上書き）を使っていたため、
         #   AI強化の進行中の書き込みとこの「使用済みマーク」がほぼ同時に起きると、
         #   読み直さずに古い内容で上書きしてしまい、その回のAI強化分が失われる
