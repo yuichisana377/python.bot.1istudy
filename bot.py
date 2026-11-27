@@ -7998,8 +7998,8 @@ def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
 
     items = []
     for i, q in enumerate(questions):
-        if (q.get("kind") or "choice") == "order":
-            continue  # ★ 並び替え問題には誤答が無いのでAI強化の対象外（元のまま残す）
+        if (q.get("kind") or "choice") == "order" or q.get("fixed_choices"):
+            continue  # ★ 並び替え問題・選択式カード由来の問題は誤答の差し替え対象外（元のまま残す）
         correct = q["choices"][q["correct_index"]]
         candidates = _distractor_shortlist(
             correct, [a for a in answer_pool if a != correct], QUIZ_AI_SHORTLIST_SIZE
@@ -8020,7 +8020,7 @@ def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
     new_questions = list(questions)
     changed = False
     for i, q in enumerate(questions):
-        if (q.get("kind") or "choice") == "order":
+        if (q.get("kind") or "choice") == "order" or q.get("fixed_choices"):
             continue
         pick = picks_by_i.get(i)
         if not pick:
@@ -8207,6 +8207,29 @@ def _quiz_question_payload(q, revealed):
     return payload
 
 
+def _quiz_choice_question_from_card(c, deck_filename):
+    """選択式カード（choices＋正解1つ）から、カードの選択肢そのままの問題を作る。
+    正解が1つでない・選択肢が不正なカードは None（呼び出し側が通常の4択生成へ回す）。"""
+    choices = c.get("choices")
+    ci = c.get("correct_indices")
+    if not isinstance(choices, list) or not (2 <= len(choices) <= 5):
+        return None
+    choices = [str(x).strip() if isinstance(x, str) else "" for x in choices]
+    if any(not x for x in choices) or len(set(choices)) != len(choices):
+        return None
+    if not (isinstance(ci, list) and len(ci) == 1 and isinstance(ci[0], int)
+            and not isinstance(ci[0], bool) and 0 <= ci[0] < len(choices)):
+        return None
+    return {
+        "question": str(c.get("question") or "").strip(),
+        "choices": choices,
+        "correct_index": ci[0],
+        "fixed_choices": True,  # AIによる誤答の差し替え対象外
+        "source_deck_filename": deck_filename,
+        "source_card_id": c.get("id"),
+        **_quiz_card_media(c),
+    }
+
 def _build_deck_questions(guild_id, deck_filenames, num_questions):
     """単語カードのデッキ（表面=question／裏面=answer）から、答えをシャッフルした
     4択問題を自動生成する。
@@ -8227,6 +8250,7 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
 
     cards = []
     order_questions = []  # ★ 追加：並び替えカードから作った問題（4択の誤答プールとは別に持つ）
+    fixed_questions = []  # ★ 追加：選択式カードから作った問題（カードの選択肢をそのまま使う）
     for deck_filename in deck_filenames:
         if not isinstance(deck_filename, str) or "/" in deck_filename or "\\" in deck_filename or ".." in deck_filename:
             return None, "deck_not_found"
@@ -8243,6 +8267,14 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
                 if oq is not None:
                     order_questions.append(oq)
                 continue
+            if card_type(c) == "choice":
+                # ★ 追加：選択式カードは、カード自身の選択肢をそのまま選択問題にする
+                #   （答えの文言から4択を作り直さない）。正解が1つだけのカードが対象。
+                #   正解が複数あるカードは従来通り下の4択生成に回す（クイズは単一正解のみ対応のため）。
+                cq = _quiz_choice_question_from_card(c, deck_filename)
+                if cq is not None:
+                    fixed_questions.append(cq)
+                    continue
             if not str(c.get("answer") or "").strip():
                 continue
             # ★ 追加：どのデッキ・どのカード由来かを覚えておく（クライアントには一切送らない、
@@ -8260,9 +8292,10 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
     #   並び替えカードがあればそれだけで出題する。どちらも無ければ deck_too_small。
     if len(cards) < 4 or len(unique_answers) < 4:
         cards = []
-    if not cards and not order_questions:
+    if not cards and not order_questions and not fixed_questions:
         return None, "deck_too_small"
-    candidates = [("choice", c) for c in cards] + [("order", q) for q in order_questions]
+    candidates = ([("choice", c) for c in cards] + [("order", q) for q in order_questions]
+                  + [("order", q) for q in fixed_questions])  # ("order"は「作成済みの問題をそのまま使う」の意味)
 
     try:
         num_questions = int(num_questions) if num_questions else None
@@ -8274,7 +8307,7 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
     picked = random.sample(candidates, n)
     questions = []
     for kind, card in picked:
-        if kind == "order":
+        if kind == "order":  # 作成済みの問題（並び替え・選択式カード由来）はそのまま使う
             questions.append(card)
             continue
         correct = card["answer"].strip()
@@ -9407,7 +9440,7 @@ def quiz_answer():
                 return jsonify({"ok": False, "error": "invalid_order"})
             answer_value = list(order)
         else:
-            if not isinstance(choice_index, int) or isinstance(choice_index, bool) or not (0 <= choice_index < 4):
+            if not isinstance(choice_index, int) or isinstance(choice_index, bool) or not (0 <= choice_index < len(q.get("choices") or [])):
                 return jsonify({"ok": False, "error": "invalid_choice"})
             correct = (choice_index == q["correct_index"])
             answer_value = choice_index
