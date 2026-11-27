@@ -8864,7 +8864,7 @@ CLAUDE_USD_JPY = float(os.environ.get("CLAUDE_USD_JPY") or 160)  # 余裕を持�
 CLAUDE_MONTHLY_BUDGET_JPY = float(os.environ.get("CLAUDE_MONTHLY_BUDGET_JPY") or 80)
 CLAUDE_MAX_OUTPUT_TOKENS = 8000
 CLAUDE_BATCH_CARDS = 10  # 1回のリクエストで処理するカード数（出力がmax_tokensで途切れないよう小さめ）
-CLAUDE_POOL_SIZE = 8
+CLAUDE_POOL_SIZE = 6
 CLAUDE_BUDGET_FILE = "claude_budget.json"
 _CLAUDE_BUDGET_LOCK = Lock()
 
