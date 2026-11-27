@@ -8977,24 +8977,38 @@ def _build_claude_pool_prompt(entries):
     )
 
 
+_REVERSE_SUFFIX_RE = re.compile(r"(とは何か|とはなにか|とは何でしょう|はどこか|はどこのやつか|ってどんな|とはどのような|とはどんな)")
+
+
+def _split_reverse_suffix(text):
+    """答え欄の「2行目以降の反転用の問い」（例:「プレート\nとは何か」）を (本体, 付随文) に分ける。
+    1行目は常に本体。2行目以降で最初に問いかけ表現を含む行から後ろを付随文とする（無ければ付随文は空）。"""
+    lines = str(text or "").split("\n")
+    for i in range(1, len(lines)):
+        if _REVERSE_SUFFIX_RE.search(lines[i]):
+            return "\n".join(lines[:i]).strip(), "\n".join(lines[i:])
+    return str(text or "").strip(), ""
+
+
 def _sanitize_distractor_pool(distractors, correct, question=""):
     """_sanitize_ai_distractors と同じ検証で、3件以上CLAUDE_POOL_SIZE件以下のプールを返す。足りなければNone。"""
     if not isinstance(distractors, list):
         return None
+    # ★ 正解に反転用の付随文が付いているカードは、フロントが答え全体（付随文込み）を正解として
+    #   並べるため、候補にも同じ付随文を付けて見た目を揃える（正解だけ浮くのを防ぐ）。
+    correct_body, suffix = _split_reverse_suffix(correct)
     max_len = max(60, len(correct) * 3)
     kanji = _is_kanji_writing(question, correct)
     cleaned = []
-    seen = {correct.strip()}
+    seen = {correct.strip(), correct_body}
     for d in distractors:
-        text = str(d or "").strip()
+        text, _ = _split_reverse_suffix(str(d or ""))  # AIが付随文を付けてきても一旦外す
         if not text or len(text) > max_len or text in seen or find_bug_chars(text):
             continue
-        if re.search(r"(とは何か|とはなにか|はどこか|はどこのやつか|ってどんな)", text):
-            continue  # 反転用の付随文が候補に紛れ込んだもの
         if kanji and (len(text) != len(correct.strip()) or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in text)):
             continue
         seen.add(text)
-        cleaned.append(text)
+        cleaned.append(text + ("\n" + suffix if suffix else ""))
         if len(cleaned) == CLAUDE_POOL_SIZE:
             break
     return cleaned if len(cleaned) >= 3 else None
