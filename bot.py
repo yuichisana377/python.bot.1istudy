@@ -7214,6 +7214,9 @@ QUIZ_ANSWER_BASE_POINTS = 10
 #   （_pick_distractors）だけで動作する。詳細は _ai_enhance_quiz_room_choices のコメント参照。
 OLLAMA_HOST = (os.environ.get("OLLAMA_HOST") or "").strip().rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL") or "qwen2.5-coder:7b"
+# ★ 追加：4択の誤答づくり専用のモデル。コード向けモデルでは日本語の紛らわしい誤答が弱かったため、
+#   日本語に強い汎用モデルを使う（禁止語チェック等はOLLAMA_MODELのまま）。.envのOLLAMA_DISTRACTOR_MODELで差し替え可能。
+OLLAMA_DISTRACTOR_MODEL = os.environ.get("OLLAMA_DISTRACTOR_MODEL") or "qwen2.5:7b"
 QUIZ_AI_TIMEOUT_SEC = 90        # Ollamaへの問い合わせ1回あたりのタイムアウト（バックグラウンド実行なので余裕を持たせる）
 QUIZ_AI_SHORTLIST_SIZE = 12    # AIに渡す誤答候補の数（プロンプトを軽くするため、類似度上位のみに絞る）
 QUIZ_FIRST_CORRECT_BONUS = 2
@@ -7728,7 +7731,7 @@ def _distractor_shortlist(correct: str, pool: list, k: int) -> list:
     return sorted(pool, key=_score, reverse=True)[:k]
 
 
-def _ollama_generate_json(prompt: str, timeout=QUIZ_AI_TIMEOUT_SEC, temperature=0.7):
+def _ollama_generate_json(prompt: str, timeout=QUIZ_AI_TIMEOUT_SEC, temperature=0.7, model=None):
     """ローカルAI（Ollama）にプロンプトを送り、応答をJSONとしてパースして返す。
     OLLAMA_HOST未設定・接続不可・タイムアウト・JSON解析失敗など、何かあれば
     Noneを返す（呼び出し元は必ず「AIが使えなかった場合」のフォールバックを持つこと）。
@@ -7741,7 +7744,7 @@ def _ollama_generate_json(prompt: str, timeout=QUIZ_AI_TIMEOUT_SEC, temperature=
         resp = requests.post(
             f"{OLLAMA_HOST}/api/generate",
             json={
-                "model": OLLAMA_MODEL,
+                "model": model or OLLAMA_MODEL,
                 "prompt": prompt,
                 "stream": False,
                 "format": "json",
@@ -7950,7 +7953,7 @@ def _ai_pick_quiz_distractors(questions, guild_id, deck_filenames):
     #   タイムアウトを伸ばす（固定45秒だと出題数が多いクイズで確実に間に合わない）。
     #   バックグラウンドスレッドでの実行なのでWeb側の応答をブロックする心配は無い。
     timeout = max(QUIZ_AI_TIMEOUT_SEC, 40 * len(items))
-    result = _ollama_generate_json(_build_quiz_distractor_prompt(items), timeout=timeout)
+    result = _ollama_generate_json(_build_quiz_distractor_prompt(items), timeout=timeout, model=OLLAMA_DISTRACTOR_MODEL)
     if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
         return None
     picks_by_i = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
@@ -8713,7 +8716,7 @@ def cardmaker_ai_distractors():
     # ★ 候補数がクイズ側より多い（最大40件/問）ぶん、1問あたりの時間見積もりも
     #   少し余裕を持たせている（25秒/問）。
     timeout = max(QUIZ_AI_TIMEOUT_SEC, 60 * len(items))  # ★ CPU動作の7Bは1問あたり実測10秒前後＋プロンプト処理で、45〜75秒だと頻繁にタイムアウトしていた
-    result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout, temperature=CARDMAKER_AI_TEMPERATURE)
+    result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout, temperature=CARDMAKER_AI_TEMPERATURE, model=OLLAMA_DISTRACTOR_MODEL)
     if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
         return jsonify({"ok": False, "error": "ai_failed"})
     picks_by_i = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
@@ -8865,7 +8868,7 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
                 for i, e in enumerate(batch)
             ]
             timeout = max(QUIZ_AI_TIMEOUT_SEC, 60 * len(items))  # ★ CPU動作の7Bは1問あたり実測10秒前後＋プロンプト処理で、45〜75秒だと頻繁にタイムアウトしていた
-            result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout, temperature=CARDMAKER_AI_TEMPERATURE)
+            result = _ollama_generate_json(_build_cardmaker_distractor_prompt(items), timeout=timeout, temperature=CARDMAKER_AI_TEMPERATURE, model=OLLAMA_DISTRACTOR_MODEL)
             if not isinstance(result, dict) or not isinstance(result.get("questions"), list):
                 return  # 失敗したら以降も見込みが薄いので打ち切る（既存の即席4択のまま残る）
             picks_by_i = {p["i"]: p for p in result["questions"] if isinstance(p, dict) and isinstance(p.get("i"), int)}
