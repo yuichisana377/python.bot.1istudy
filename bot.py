@@ -9002,7 +9002,7 @@ def _pick_from_pool(pool, k=3):
 def _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
     """fallback（カードidごとの即席4択）の各カードに、Claudeでプールを作って保存する。
     既存キャッシュに同じid・同じ問題・同じ答えのプールがあれば再利用して課金を避ける。
-    1つでもプールを作れたらTrueを返す。"""
+    全カードにプールができたときだけTrueを返す。"""
     by_id = {c.get("id"): c for c in cards if isinstance(c, dict) and c.get("id")}
     old_cards = (old_cache or {}).get("cards") if isinstance(old_cache, dict) else {}
     old_cards = old_cards if isinstance(old_cards, dict) else {}
@@ -9037,16 +9037,21 @@ def _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
             pool = _sanitize_distractor_pool(pick.get("distractors") if pick else None, e["correct"], e["question"])
             if pool:
                 pools[e["id"]] = {"pool": pool, "q": e["question"], "a": e["correct"]}
-    if not pools:
+    if not todo and not pools:
         return False
     cache_filename = cardmaker_choice_cache_filename(deck_filename)
     current, sha = local_get(cache_filename)
     if not isinstance(current, dict):
         return False
+    # 失敗が続くデッキで課金が繰り返されないよう、失敗回数を引き継いで3回で諦める
+    tries = int((old_cache or {}).get("claude_tries") or 0) if isinstance(old_cache, dict) else 0
+    if any_failed:
+        tries += 1
+    current["claude_tries"] = tries
     for cid, pv in pools.items():
         current.setdefault("cards", {})[cid] = {"distractors": _pick_from_pool(pv["pool"]), "pool": pv["pool"], "q": pv["q"], "a": pv["a"]}
     complete = all(cid in pools for cid in fallback)
-    if not any_failed:
+    if not any_failed or tries >= 3:
         # 全バッチが正常応答なら（一部カードが3件未満で不採用でも）ローテーションを止める。
         # 毎回同じカードで再課金されるのを防ぐ。残りはローカルAIが1回だけ補う。
         current["claude"] = True
