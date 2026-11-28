@@ -6267,7 +6267,7 @@ def save_cards():
 
                 if target_channel:
                     asyncio.run_coroutine_threadsafe(
-                        target_channel.send(embed=embed), bot.loop
+                        target_channel.send(embed=embed, silent=True), bot.loop  # ★ 通知音・プッシュ通知を鳴らさない（メッセージ自体は投稿される）
                     ).result(timeout=10)
         except Exception as e:
             print(f"[WARN] save_cards notify failed: {e}")
