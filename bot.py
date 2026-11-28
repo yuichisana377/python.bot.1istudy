@@ -817,6 +817,18 @@ async def async_write_log(guild_id: int, log_type: str, detail: str):
 # ================================
 #  勉強ログ データ
 # ================================
+# ★ 勉強ログ・ポイントの「読む→書く」を1件ずつにする共有ロック（add/delete API と クイズ由来の記録が同時に走って、
+#   片方の追加・削除をもう片方が上書きして消すのを防ぐ）。再入可能。
+import functools as _functools
+import threading as _threading
+_STUDY_LOG_LOCK = _threading.RLock()
+def _with_study_log_lock(fn):
+    @_functools.wraps(fn)
+    def _wrapped(*a, **kw):
+        with _STUDY_LOG_LOCK:
+            return fn(*a, **kw)
+    return _wrapped
+
 def load_study_logs(guild_id: int):
     data, _ = local_get(f"study_logs_{guild_id}.json")
     return data or []
@@ -2788,6 +2800,7 @@ def _latest_log_time(candidates):
     return latest
 
 @app.route("/add_study_log", methods=["POST"])
+@_with_study_log_lock
 def add_study_log():
     data = request.json or {}
     guild_id = int(data.get("guild_id"))
@@ -2944,6 +2957,7 @@ def add_study_log():
     return jsonify({"ok": True, "earned": earned, "total": pts[entry["student_id"]]})
 
 @app.route("/delete_study_log", methods=["POST"])
+@_with_study_log_lock
 def delete_study_log():
     """
     自分の勉強ログ1件を削除する（2026/08/19追加）。
@@ -8455,7 +8469,7 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname, playe
 
 _QUIZ_STUDY_LOCK = Lock()  # クイズ由来の勉強ログ書き込みどうしを1件ずつにする（同時終了ルームの上書き防止）
 def _record_quiz_study_time(guild_id, started_at, ended_at, players):
-    with _QUIZ_STUDY_LOCK:
+    with _QUIZ_STUDY_LOCK, _STUDY_LOG_LOCK:
         _record_quiz_study_time_unlocked(guild_id, started_at, ended_at, players)
 
 def _record_quiz_study_time_unlocked(guild_id, started_at, ended_at, players):
