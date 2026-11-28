@@ -8970,7 +8970,7 @@ def _build_claude_pool_prompt(entries):
         f"4. 候補どうしも重複させない。{CLAUDE_POOL_SIZE}個作れない場合は作れた分だけでよい（最低3個）。\n"
         "5. 正解欄に「/」や改行の後ろの付随文（例:「とは何か」「はどこか」）が付いていても、それは反転学習用の問いなので無視し、"
         "本体の用語だけを正解とみなして候補を作る（付随文は候補に含めない）。ただし「1.低い\\n2.平坦」のように複数行すべてが答えの一部なら、同じ形式で候補を作る。\n"
-        "6. 問題と正解が噛み合わない・穴埋め文などのカードは、問題の趣旨に沿った用語を候補にする。\n"
+        "6. 正解に「○○○」「□□」のような空欄記号を含む文章（例:「衝突帯と沈み込み帯は○○○境界に分類される」）は、反転学習用の穴埋め文なので、空欄記号を含む文章全体の形を保ち、中身の用語・主張の部分だけを紛らわしいものに変えて候補にする（空欄記号はそのまま残し、単語だけの候補にしない）。それ以外で問題と正解が噛み合わないカードは、問題の趣旨に沿った用語を候補にする。\n"
         "7. 漢字の書き取り・読みは字形や読みが紛らわしい漢字・語、英語・数学など他分野はその分野で間違えやすいものを候補にする。\n"
         '出力はJSONのみ: {"questions":[{"i":番号,"distractors":["誤答1","誤答2",...]}]}\n\n'
         f"カード:\n{items}"
@@ -9005,6 +9005,9 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
     # ★ 正解に反転用の付随文が付いているカードは、フロントが答え全体（付随文込み）を正解として
     #   並べるため、候補にも同じ付随文を付けて見た目を揃える（正解だけ浮くのを防ぐ）。
     correct_body, suffix = _split_reverse_suffix(correct)
+    # ★ 正解が空欄記号（○○○等）入りの穴埋め文なら、候補も同じ空欄記号を含む文章だけを認める
+    #   （単語だけの候補だと、文章の形をした正解だけが浮いてしまうため）。
+    blank_run = re.search(r"[○〇□＿]+", correct_body)
     max_len = max(60, len(correct) * 3)
     kanji = _is_kanji_writing(question, correct)
     cleaned = []
@@ -9012,6 +9015,8 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
     for d in distractors:
         text, _ = _split_reverse_suffix(str(d or ""))  # AIが付随文を付けてきても一旦外す
         if not text or len(text) > max_len or text in seen or find_bug_chars(text):
+            continue
+        if blank_run and blank_run.group(0) not in text:
             continue
         if kanji and (len(text) != len(correct.strip()) or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in text)):
             continue
