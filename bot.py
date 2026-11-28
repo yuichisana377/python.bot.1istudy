@@ -9145,6 +9145,7 @@ def _build_claude_pool_prompt(entries):
         "9. 正解欄が問い文・指示文（例:「〜は何帯か」「〜を3つ挙げよ」）や長い説明文の場合も、候補は同じ形・同じくらいの長さの文にし、中身だけを紛らわしく変える。単語だけの候補にしない。\n"
         "10. 正解と同じ物を指す別表記・別名・複数形・活用形・同じ尺度や同じ概念（例: Celsius に対する Centigrade、degree に対する degrees、「数千人」に対する「三千人」）は候補にしない。\n"
         "11. 正解が「読み。意味。」（例:「ふんそう。もつれて争うこと。」）の形なら、候補も必ず同じ形（別の読み。もっともらしい別の意味。）で、同じくらいの長さにする。読みだけの短い候補にしない。\n"
+        "12. 正解が「用語（補足）」のように、用語のあとに（）で読み・別名・説明を付けた形（例:「ATP（アデノシン三リン酸）」「田文(でんぶん)」）なら、候補も必ず同じ形で「用語（その用語の補足）」にする。補足の無い用語だけの候補にしない（正解だけ補足が付いて浮くため）。\n"
         "8. 正解が名詞句を「、」で並べただけの列挙（例:「中国、アフリカ諸国」。文章の途中の読点は対象外）、または同じ行の末尾に「〜の共通点」「〜の特徴」が付いた形（改行や「/」の後ろの付随文は規則5どおり無視）なら、候補も同じ項目数・同じ末尾の言い回しに揃える（例:「中国、アフリカ諸国の共通点」→「ロシア、カナダの共通点」）。正解と同じ項目は含めず、単語1つだけの候補にもしない。\n"
         '出力はJSONのみ: {"questions":[{"i":番号,"distractors":["誤答1","誤答2",...]}]}\n\n'
         f"カード:\n{items}"
@@ -9196,6 +9197,9 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
     ascii_word = correct_body.strip().lower() if re.fullmatch(r"[A-Za-z]{3,}", correct_body.strip()) else None
     # ★ 正解が「読み。意味。」の形（国語の語句）なら、候補にも「。」（意味）を求める（読みだけだと正解だけ長く浮く）
     reading_def = bool(re.match(r"^[ぁ-ゟァ-ヿー・]+。.+", first_line))
+    # ★ 正解が「用語（読み・別名・説明）」の形（かな・漢字入りの括弧つき）なら、候補にも同じ形の括弧を求める
+    _EP = r"[（(][^）)]*[ぁ-ゟァ-ヿ一-鿿][^）)]*[）)]"
+    expl_paren = bool(re.search(_EP, first_line)) and not re.search(r"[=√/→]", correct_body)
     cleaned = []
     soft = []
     seen = {correct.strip(), correct_body}
@@ -9209,7 +9213,7 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
             continue
         # 形の検査は「優先条件」: 弾いた候補は控え、足りなければ補充する（誤判定でプールが全滅しないように）
         _tl = text.lower()
-        if (list_answer and "、" not in text) or (reading_def and not re.match(r"^[ぁ-ゟァ-ヿー・]+。.+", text)) or len(text) < min_len or (
+        if (list_answer and "、" not in text) or (reading_def and not re.match(r"^[ぁ-ゟァ-ヿー・]+。.+", text)) or (expl_paren and not re.search(_EP, text)) or len(text) < min_len or (
                 ascii_word and re.fullmatch(r"[a-z ]+", _tl) and (
                     _tl in {ascii_word + s for s in ("s", "es", "d", "ed", "ing", "er")}
                     or ascii_word in {_tl + s for s in ("s", "es", "d", "ed")}
