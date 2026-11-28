@@ -9209,7 +9209,7 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
             continue
         # 形の検査は「優先条件」: 弾いた候補は控え、足りなければ補充する（誤判定でプールが全滅しないように）
         _tl = text.lower()
-        if (list_answer and "、" not in text) or (reading_def and "。" not in text) or len(text) < min_len or (
+        if (list_answer and "、" not in text) or (reading_def and not re.match(r"^[ぁ-ゟァ-ヿー・]+。.+", text)) or len(text) < min_len or (
                 ascii_word and re.fullmatch(r"[a-z ]+", _tl) and (
                     _tl in {ascii_word + s for s in ("s", "es", "d", "ed", "ing", "er")}
                     or ascii_word in {_tl + s for s in ("s", "es", "d", "ed")}
