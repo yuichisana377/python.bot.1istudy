@@ -8350,6 +8350,13 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
         pool = list(dict.fromkeys(  # 同じ答え文言の重複を除去しつつ順序を保つ
             c["answer"].strip() for c in cards if c is not card and c["answer"].strip() != correct
         ))
+        # ★ 同じ型の問題（生産国→国など）の答えが3件以上あれば、それだけから選ぶ（CardMakerの即席4択と同じ考え方）
+        _same = list(dict.fromkeys(
+            c["answer"].strip() for c in cards if c is not card and c["answer"].strip() != correct
+            and _q_tail(c.get("question")) == _q_tail(card.get("question"))
+        ))
+        if len(_same) >= 3:
+            pool = _same
         cpool = claude_pools.get((card.get("_src_deck_filename"), card.get("_src_card_id")))
         if cpool:
             # ★ Claudeが作った紛らわしい誤答プールから3つ（CardMakerの4択と同じ質）。AI差し替えの対象外にする
@@ -9319,11 +9326,21 @@ def _is_descriptive_answer_text(s):
     return False
 
 
+def _q_tail(q):
+    """問題文の「型」を見分けるための末尾8文字（例:「…の主な生産国はどこか。」→「生産国はどこか。」）。
+    即席4択の候補を、同じ型の問題の答え（国には国、産出地には産出地）に絞るために使う。"""
+    return re.sub(r"\s", "", str(q or ""))[-8:]
+
+
 def _build_cardmaker_fallback_choices(cards):
     """各カードの即席4択（綴り類似度ベース、_pick_distractors）を組み立てる。
     戻り値: {card_id: {"distractors": [...], "correct": "..."}}
     （idが無い・答えが空のカードは含まれない。デッキ内の候補が3件未満なら distractors は空）。"""
     pool_all = _cardmaker_deck_answer_pool(cards)
+    ans_tails = {}  # 答え → その答えを持つ問題の型の集合
+    for c in cards:
+        if isinstance(c, dict) and card_type(c) == "normal":
+            ans_tails.setdefault(str(c.get("answer") or "").strip(), set()).add(_q_tail(c.get("question")))
     result = {}
     for c in cards:
         if not isinstance(c, dict):
@@ -9335,6 +9352,10 @@ def _build_cardmaker_fallback_choices(cards):
         if not cid or not correct:
             continue
         pool = [a for a in pool_all if a != correct]
+        # ★ 同じ型の問題（生産国→国、産出地→産出地）の答えが3件以上あれば、それだけから選ぶ
+        _same = [a for a in pool if _q_tail(c.get("question")) in ans_tails.get(a, ())]
+        if len(_same) >= 3:
+            pool = _same
         # ★ 変更（2026/11/28）：誤答はClaudeが作る方式になったため、デッキ内の解答の種類数による
         #   下限は撤廃した。デッキ内の候補が3件未満の小さなデッキは、即席4択（distractors=[]）を
         #   作れないが、Claudeのプールが作られれば使える（作られなければクライアントは4択にしない）。
