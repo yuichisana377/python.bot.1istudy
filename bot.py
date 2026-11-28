@@ -8355,7 +8355,7 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
             c["answer"].strip() for c in cards if c is not card and c["answer"].strip() != correct
             and _q_tail(c.get("question")) == _q_tail(card.get("question"))
         ))
-        if len(_same) >= 3:
+        if len(_same) >= 4:
             pool = _same
         cpool = claude_pools.get((card.get("_src_deck_filename"), card.get("_src_card_id")))
         if cpool:
@@ -9200,6 +9200,10 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
         text, _ = _split_reverse_suffix(str(d or ""))  # AIが付随文を付けてきても一旦外す
         if not text or len(text) > max_len or text in seen or find_bug_chars(text):
             continue
+        if blank_run and not re.search(r"[○〇□＿]", text):
+            continue
+        if kanji and (len(text) != len(correct.strip()) or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in text)):
+            continue
         # 形の検査は「優先条件」: 弾いた候補は控え、足りなければ補充する（誤判定でプールが全滅しないように）
         _tl = text.lower()
         if (list_answer and "、" not in text) or len(text) < min_len or (
@@ -9208,10 +9212,6 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
                     or ascii_word in {_tl + s for s in ("s", "es", "d", "ed")}
                     or _tl.startswith(ascii_word + " "))):
             soft.append(text)
-            continue
-        if blank_run and not re.search(r"[○〇□＿]", text):
-            continue
-        if kanji and (len(text) != len(correct.strip()) or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in text)):
             continue
         seen.add(text)
         cleaned.append(text + ("\n" + suffix if suffix else ""))
@@ -9329,7 +9329,7 @@ def _is_descriptive_answer_text(s):
 def _q_tail(q):
     """問題文の「型」を見分けるための末尾8文字（例:「…の主な生産国はどこか。」→「生産国はどこか。」）。
     即席4択の候補を、同じ型の問題の答え（国には国、産出地には産出地）に絞るために使う。"""
-    return re.sub(r"\s", "", str(q or ""))[-8:]
+    return re.sub(r"[\s。．.？?！!]", "", str(q or ""))[-8:]
 
 
 def _build_cardmaker_fallback_choices(cards):
@@ -9354,7 +9354,7 @@ def _build_cardmaker_fallback_choices(cards):
         pool = [a for a in pool_all if a != correct]
         # ★ 同じ型の問題（生産国→国、産出地→産出地）の答えが3件以上あれば、それだけから選ぶ
         _same = [a for a in pool if _q_tail(c.get("question")) in ans_tails.get(a, ())]
-        if len(_same) >= 3:
+        if len(_same) >= 4:
             pool = _same
         # ★ 変更（2026/11/28）：誤答はClaudeが作る方式になったため、デッキ内の解答の種類数による
         #   下限は撤廃した。デッキ内の候補が3件未満の小さなデッキは、即席4択（distractors=[]）を
