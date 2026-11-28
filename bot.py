@@ -8835,7 +8835,7 @@ def cardmaker_ai_distractors():
 #  複雑なキャッシュ無効化（カード編集のたびに何がどう変わったか判定する等）を
 #  実装せずに済ませている。
 # ================================
-FOUR_CHOICE_POOL_MIN_SIZE = 10  # ★ Cardmaker.js側と同じ基準（答えの異なりが10件を超える＝11件以上）
+# ★ 2026/11/28：誤答はClaudeが作る方式になり、答えの種類数による下限（旧FOUR_CHOICE_POOL_MIN_SIZE=10）は撤廃した。
 _CARDMAKER_CACHE_REGEN_LOCK = Lock()
 _CARDMAKER_CACHE_REGEN_INFLIGHT = set()  # ★ 二重にバックグラウンド再生成が走らないようにする（filename単位）
 
@@ -9159,8 +9159,7 @@ def _is_descriptive_answer_text(s):
 def _build_cardmaker_fallback_choices(cards):
     """各カードの即席4択（綴り類似度ベース、_pick_distractors）を組み立てる。
     戻り値: {card_id: {"distractors": [...], "correct": "..."}}
-    （答えの異なりがFOUR_CHOICE_POOL_MIN_SIZE以下、idが無い、答えが空、のいずれかの
-    カードは含まれない＝そのカードは4択にできない）。"""
+    （idが無い・答えが空のカードは含まれない。デッキ内の候補が3件未満なら distractors は空）。"""
     pool_all = _cardmaker_deck_answer_pool(cards)
     result = {}
     for c in cards:
@@ -9173,10 +9172,11 @@ def _build_cardmaker_fallback_choices(cards):
         if not cid or not correct:
             continue
         pool = [a for a in pool_all if a != correct]
-        if len(pool) <= FOUR_CHOICE_POOL_MIN_SIZE:
-            continue
-        ranked = _distractor_shortlist(correct, pool, len(pool))  # ★ 採点は1回だけ。AI用の候補（candidates）にも使い回す
-        result[cid] = {"distractors": _pick_distractors(correct, ranked, 3, ranked=True), "correct": correct, "candidates": ranked[:CARDMAKER_AI_SHORTLIST_SIZE]}
+        # ★ 変更（2026/11/28）：誤答はClaudeが作る方式になったため、デッキ内の解答の種類数による
+        #   下限は撤廃した。デッキ内の候補が3件未満の小さなデッキは、即席4択（distractors=[]）を
+        #   作れないが、Claudeのプールが作られれば使える（作られなければクライアントは4択にしない）。
+        ranked = _distractor_shortlist(correct, pool, len(pool)) if pool else []  # ★ 採点は1回だけ。AI用の候補（candidates）にも使い回す
+        result[cid] = {"distractors": _pick_distractors(correct, ranked, 3, ranked=True) if len(ranked) >= 3 else [], "correct": correct, "candidates": ranked[:CARDMAKER_AI_SHORTLIST_SIZE]}
     return result
 
 def _cardmaker_cache_write(deck_filename, cards_map):
@@ -9236,6 +9236,8 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
             # ★ AIに渡す候補は、即席4択を作るときに採点済みの上位（v["candidates"]）を使い回す
             #   （以前はここで全候補をもう一度採点し直していた）。
             candidates = v["candidates"]
+            if len(candidates) < 3:
+                continue  # 候補が少なすぎるデッキはローカルAIでは扱えない（Claudeのプールだけが頼り）
             entries.append({"id": cid, "question": question, "correct": v["correct"], "candidates": candidates})
         # ★ 記述系カードを先に（Cardmaker.js側と同じ理由：AI強化の価値が大きいため）
         entries.sort(key=lambda e: 0 if _is_descriptive_answer_text(e["correct"]) else 1)
@@ -9301,7 +9303,9 @@ def _cardmaker_start_cache_generation(guild_id, deck_filename, cards=None):
             if target_cards is None:
                 data, _ = get_card_file_for_guild(deck_filename, guild_id)
                 # ★ 変更：choice_mode ではなく「通常カードがあるか」で判定する（種別の混在に対応）
-                if data is None or not any(isinstance(c, dict) and card_type(c) == "normal" for c in data.get("cards", [])):
+                if data is None or data.get("incomplete"):
+                    return  # ★ 作成中（未完成）のデッキは生成しない（編集しても再生成されず、古い誤答が残るため）
+                if not any(isinstance(c, dict) and card_type(c) == "normal" for c in data.get("cards", [])):
                     return
                 target_cards = data.get("cards", [])
             _cardmaker_generate_choice_cache(guild_id, deck_filename, target_cards)
@@ -9332,6 +9336,9 @@ def cardmaker_choice_cache():
     cache_filename = cardmaker_choice_cache_filename(filename)
     data, sha = local_get(cache_filename)
     if not isinstance(data, dict) or not isinstance(data.get("cards"), dict):
+        # ★ 追加（2026/11/28）：キャッシュが無い公開デッキ（下限撤廃前に「対象外」で作られなかったもの等）は、
+        #   最初に使われたときに裏で生成を始める（二重起動は_cardmaker_start_cache_generationが防ぐ）。
+        _cardmaker_start_cache_generation(guild_id, filename)
         return jsonify({"ok": True, "cards": {}})
     # ★ 変更（2026/11/28）：Claudeのプールがあるカードは、リクエストのたびにプールから3つを
     #   ランダムに選んで返す。プール自体（pool/q/a）はクライアントへ出さない。
