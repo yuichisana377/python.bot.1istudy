@@ -8981,7 +8981,7 @@ _REVERSE_SUFFIX_RE = re.compile(r"(とは何か|とはなにか|とは何でし�
 
 
 # 「は〜か」「をなんというか」のような、助詞で始まる短い問いの行（正解の語が前の行にある形）
-_REVERSE_SUFFIX_LINE_RE = re.compile(r"^(?:は|が|を|で|に|の|これは|その|って|どこ)[^0-9=()（）\[\]\n]{0,40}$")
+_REVERSE_SUFFIX_LINE_RE = re.compile(r"^(?:は|が|を|で|に|の|これは|その|って|どこ)[^0-9=()（）\[\]\n]{0,40}(?:か。?|[？?]|何|名前|造山帯)$")
 
 
 def _is_reverse_suffix_line(line):
