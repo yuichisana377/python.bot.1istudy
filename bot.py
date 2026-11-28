@@ -9007,7 +9007,7 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
     correct_body, suffix = _split_reverse_suffix(correct)
     # ★ 正解が空欄記号（○○○等）入りの穴埋め文なら、候補も同じ空欄記号を含む文章だけを認める
     #   （単語だけの候補だと、文章の形をした正解だけが浮いてしまうため）。
-    blank_run = re.search(r"[○〇□＿]+", correct_body)
+    blank_run = re.search(r"[○〇□＿]{2,}", correct_body) if len(re.sub(r"[○〇□＿\s]", "", correct_body)) >= 3 else None
     max_len = max(60, len(correct) * 3)
     kanji = _is_kanji_writing(question, correct)
     cleaned = []
@@ -9016,7 +9016,7 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
         text, _ = _split_reverse_suffix(str(d or ""))  # AIが付随文を付けてきても一旦外す
         if not text or len(text) > max_len or text in seen or find_bug_chars(text):
             continue
-        if blank_run and blank_run.group(0) not in text:
+        if blank_run and not re.search(r"[○〇□＿]", text):
             continue
         if kanji and (len(text) != len(correct.strip()) or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in text)):
             continue
