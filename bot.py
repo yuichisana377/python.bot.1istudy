@@ -9199,7 +9199,9 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
     reading_def = bool(re.match(r"^[ぁ-ゟァ-ヿー・]+。.+", first_line))
     # ★ 正解が「用語（読み・別名・説明）」の形（かな・漢字入りの括弧つき）なら、候補にも同じ形の括弧を求める
     _EP = r"[（(][^）)]*[ぁ-ゟァ-ヿ一-鿿][^）)]*[）)]"
-    expl_paren = bool(re.search(_EP, first_line)) and not re.search(r"[=√/→]", correct_body)
+    _EPT = r"^[^（(]{1,20}" + _EP + r"\s*$"
+    expl_paren = bool(re.match(_EPT, first_line.strip())) and not re.search(r"[=＝√/／→]", first_line)
+    _ep_head = re.split(r"[（(]", first_line.strip())[0].strip() if expl_paren else None
     cleaned = []
     soft = []
     seen = {correct.strip(), correct_body}
@@ -9209,11 +9211,13 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
             continue
         if blank_run and not re.search(r"[○〇□＿]", text):
             continue
+        if _ep_head and re.split(r"[（(]", text.split("\n")[0].strip())[0].strip() == _ep_head:
+            continue  # 正解と同じ用語に別の補足を付けただけの候補は実質正解
         if kanji and (len(text) != len(correct.strip()) or not all(0x4e00 <= ord(ch) <= 0x9fff or ord(ch) == 0x3005 for ch in text)):
             continue
         # 形の検査は「優先条件」: 弾いた候補は控え、足りなければ補充する（誤判定でプールが全滅しないように）
         _tl = text.lower()
-        if (list_answer and "、" not in text) or (reading_def and not re.match(r"^[ぁ-ゟァ-ヿー・]+。.+", text)) or (expl_paren and not re.search(_EP, text)) or len(text) < min_len or (
+        if (list_answer and "、" not in text) or (reading_def and not re.match(r"^[ぁ-ゟァ-ヿー・]+。.+", text)) or (expl_paren and not re.match(_EPT, text.split("\n")[0].strip())) or len(text) < min_len or (
                 ascii_word and re.fullmatch(r"[a-z ]+", _tl) and (
                     _tl in {ascii_word + s for s in ("s", "es", "d", "ed", "ing", "er")}
                     or ascii_word in {_tl + s for s in ("s", "es", "d", "ed")}
