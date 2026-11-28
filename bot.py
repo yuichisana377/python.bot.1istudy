@@ -8350,7 +8350,7 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
         pool = list(dict.fromkeys(  # 同じ答え文言の重複を除去しつつ順序を保つ
             c["answer"].strip() for c in cards if c is not card and c["answer"].strip() != correct
         ))
-        # ★ 同じ型の問題（生産国→国など）の答えが3件以上あれば、それだけから選ぶ（CardMakerの即席4択と同じ考え方）
+        # ★ 同じ型の問題（生産国→国など）の答えが4件以上あれば、それだけから選ぶ（CardMakerの即席4択と同じ考え方）
         _same = list(dict.fromkeys(
             c["answer"].strip() for c in cards if c is not card and c["answer"].strip() != correct
             and _q_tail(c.get("question")) == _q_tail(card.get("question"))
@@ -9329,7 +9329,7 @@ def _is_descriptive_answer_text(s):
 def _q_tail(q):
     """問題文の「型」を見分けるための末尾8文字（例:「…の主な生産国はどこか。」→「生産国はどこか。」）。
     即席4択の候補を、同じ型の問題の答え（国には国、産出地には産出地）に絞るために使う。"""
-    return re.sub(r"[\s。．.？?！!]", "", str(q or ""))[-8:]
+    return re.sub(r"\s", "", str(q or "")).rstrip("。．.？?！!")[-8:]
 
 
 def _build_cardmaker_fallback_choices(cards):
@@ -9352,7 +9352,7 @@ def _build_cardmaker_fallback_choices(cards):
         if not cid or not correct:
             continue
         pool = [a for a in pool_all if a != correct]
-        # ★ 同じ型の問題（生産国→国、産出地→産出地）の答えが3件以上あれば、それだけから選ぶ
+        # ★ 同じ型の問題（生産国→国、産出地→産出地）の答えが4件以上あれば、それだけから選ぶ
         _same = [a for a in pool if _q_tail(c.get("question")) in ans_tails.get(a, ())]
         if len(_same) >= 4:
             pool = _same
