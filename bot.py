@@ -925,6 +925,7 @@ async def async_save_study_logs(guild_id: int, logs: list):
 #    pause_reason      : "manual"（自分で休憩） / "checkpoint"（3時間経過での自動休憩）
 # ================================
 TIMER_CHECKPOINT_SEC = 10800  # 3時間ごとに自動的に休憩へ切り替える
+TIMER_STALE_PAUSE_SEC = 12 * 3600  # ★ 一時停止のまま12時間たったタイマーは放置とみなして自動で破棄する（止め忘れでCardMakerの自動計測が永久に始まらなくなるのを防ぐ）
 MSG_TIMER_AUTO_PAUSED = (
     "3時間が経過したため、自動的に休憩（一時停止）にしました。"
     "アプリの「再開」から続きを計測できます。"
@@ -979,10 +980,16 @@ def _finalize_study_timer(entry, now_ms):
             new_entry["pause_reason"] = "checkpoint"
             # ★ 再開後さらに3時間動かしたら、また同じように自動休憩を挟む
             new_entry["next_checkpoint_sec"] = checkpoint + TIMER_CHECKPOINT_SEC
+            new_entry["paused_at"] = now_ms  # 放置判定・クイズ時間との重なり判定用（resumeで消える。補正はmanualのみなので影響なし）
             return new_entry, "auto_paused"
         return entry, None
 
-    # paused など：変化なし
+    # ★ 一時停止のまま長時間放置されたものは破棄（paused_atが無い古い形式は判断できないので残す）
+    if state == "paused":
+        pa = entry.get("paused_at")
+        if isinstance(pa, (int, float)) and now_ms - pa > TIMER_STALE_PAUSE_SEC * 1000:
+            print(f"[INFO] 一時停止のまま放置された勉強タイマーを破棄しました（累計{entry.get('accumulated_sec', 0)}秒）")
+            return None, None
     return entry, None
 
 def _try_notify_timer(guild_id, student_id, message):
@@ -8497,8 +8504,10 @@ def _record_quiz_study_time_unlocked(guild_id, started_at, ended_at, players):
             user = find_user(guild_id, pid)
             if not user:
                 continue
-            if (timers.get(pid) or {}).get("state") == "running":
-                continue  # 勉強タイマー作動中の人だけ、同じ時間が二重に数えられるので記録しない（休憩中・止め忘れの一時停止は数えられていないので記録する）
+            _t = timers.get(pid) or {}
+            _pa = _t.get("paused_at")
+            if _t.get("state") == "running" or (isinstance(_pa, (int, float)) and _pa > started_at * 1000):
+                continue  # 作動中、またはクイズ中に一時停止した人は、同じ時間が二重に数えられるので記録しない（クイズ前から止まっていた人は記録する）
             # 並列ルームで実時間を超えて積み上げられないよう、今回の開始後に既に記録済み（重なり）なら加算しない
             if any(l.get("student_id") == pid and l.get("time", "") >= started_str for l in logs):
                 continue
