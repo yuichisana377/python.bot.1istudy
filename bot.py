@@ -8327,7 +8327,7 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
         cpool = claude_pools.get((card.get("_src_deck_filename"), card.get("_src_card_id")))
         if cpool:
             # ★ Claudeが作った紛らわしい誤答プールから3つ（CardMakerの4択と同じ質）。AI差し替えの対象外にする
-            distractors = [d for d in _pick_from_pool(cpool) if d != correct][:3]
+            distractors = _pick_from_pool([d for d in cpool if d != correct])[:3]
         else:
             distractors = []
         if len(distractors) < 3:
@@ -8450,6 +8450,42 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname, playe
     except Exception as e:
         print(f"[WARN] クイズ過去問の保存に失敗しました（クイズの進行自体は続行）: {e}")
 
+def _record_quiz_study_time(guild_id, started_at, ended_at, players):
+    """★ 追加（2026/11/28）：みんなでクイズのプレイ時間を、参加したログイン済みメンバー全員の
+    勉強ログ（教科「みんなでクイズ」）に記録する。ゲストには学習データが無いので対象外。
+    時間はサーバー自身が測った開始〜終了の経過分なので、手入力と違いクライアントの値は一切信用しない
+    （不正防止チェックは不要）。1分未満は記録しない。ベストエフォート（失敗してもクイズは止めない）。"""
+    try:
+        if not started_at or not ended_at:
+            return
+        minutes = min(int((ended_at - started_at) // 60), BASE_MAX_LOG_MINUTES)
+        if minutes < 1:
+            return
+        now_jst = datetime.now(JST)
+        member_ids = [pid for pid in players if not _is_guest_id(pid)]
+        if not member_ids:
+            return
+        logs = load_study_logs(guild_id)
+        pts = load_points(guild_id)
+        for pid in member_ids:
+            user = find_user(guild_id, pid)
+            if not user:
+                continue
+            logs.append({
+                "date": now_jst.strftime("%Y-%m-%d"),
+                "time": now_jst.strftime("%Y-%m-%d %H:%M:%S"),
+                "subject": "みんなでクイズ",
+                "minutes": minutes,
+                "memo": "",
+                "student_id": pid,
+                "nickname": user["nickname"],
+            })
+            pts[pid] = pts.get(pid, 0) + minutes // 5
+        save_study_logs(guild_id, logs)
+        save_points(guild_id, pts)
+    except Exception as e:
+        print(f"[WARN] クイズのプレイ時間の勉強ログ記録に失敗しました（クイズの進行自体は続行）: {e}")
+
 _QUIZ_ARCHIVE_LOCK = Lock()  # 過去問の保存どうしを1件ずつにする（フォルダ・索引の同時書き換え防止）
 def _archive_room_if_needed(room):
     """
@@ -8457,7 +8493,16 @@ def _archive_room_if_needed(room):
       クイズが終了した瞬間に1回だけCardMakerへ保存する（room["archived"] で二重登録を防ぐ）。
       ファイル書き込みは別スレッドで行い、全ルーム共通のこのロックを握ったままにしない。
     """
-    if room.get("source") != "manual" or room.get("archived"):
+    if room.get("archived"):
+        return
+    # ★ 追加：クイズの種類を問わず、プレイ時間を参加メンバーの勉強時間に加える
+    #   （countdown_started_atはホストが開始した時刻のまま残る）
+    _study_started = room.get("countdown_started_at")
+    _study_players = list(room["players"].keys())
+    _study_end = room.get("ended_at")
+    Thread(target=_record_quiz_study_time, args=(room["guild_id"], _study_started, _study_end, _study_players), daemon=True).start()
+    if room.get("source") != "manual":
+        room["archived"] = True
         return
     room["archived"] = True
     players = {pid: {"wrong_indices": list(p.get("wrong_indices") or [])} for pid, p in room["players"].items()}  # 写し
@@ -9199,7 +9244,7 @@ def _build_cardmaker_fallback_choices(cards):
         result[cid] = {"distractors": _pick_distractors(correct, ranked, 3, ranked=True) if len(ranked) >= 3 else [], "correct": correct, "candidates": ranked[:CARDMAKER_AI_SHORTLIST_SIZE]}
     return result
 
-def _cardmaker_cache_write(deck_filename, cards_map):
+def _cardmaker_cache_write(deck_filename, cards_map, keep=None):
     """four_choice_cache_<filename>.json を丸ごと書き込む（used=Falseにリセット）。
     cards_mapが空ならキャッシュファイル自体を削除する（4択にできるカードが無いデッキ）。"""
     cache_filename = cardmaker_choice_cache_filename(deck_filename)
@@ -9213,7 +9258,7 @@ def _cardmaker_cache_write(deck_filename, cards_map):
     local_put(cache_filename, {
         "generated_at": time.time(),
         "used": False,
-        "cards": {cid: {"distractors": v["distractors"]} for cid, v in cards_map.items()},
+        "cards": {cid: {"distractors": v["distractors"], **((keep or {}).get(cid) or {})} for cid, v in cards_map.items()},
     }, sha)
 
 
@@ -9233,7 +9278,18 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
     try:
         fallback = _build_cardmaker_fallback_choices(cards)
         old_cache, _ = local_get(cardmaker_choice_cache_filename(deck_filename))  # ★ Claudeのプールを再利用して課金を避けるため、上書き前に控える
-        _cardmaker_cache_write(deck_filename, fallback)
+        # ★ 追加：q/aが今のカードと一致するClaudeのプールは、書き直しの間も消さずに引き継ぐ
+        #   （消えている間にみんなでクイズが作られると、Claudeの誤答が使われないため）
+        _old_cards = (old_cache or {}).get("cards") if isinstance(old_cache, dict) else {}
+        _by_id = {c.get("id"): c for c in cards if isinstance(c, dict) and c.get("id")}
+        keep = {}
+        for cid, v in fallback.items():
+            ov = _old_cards.get(cid) if isinstance(_old_cards, dict) else None
+            if (isinstance(ov, dict) and isinstance(ov.get("pool"), list) and ov["pool"]
+                    and ov.get("q") == str((_by_id.get(cid) or {}).get("question") or "").strip()[:200]
+                    and ov.get("a") == v["correct"][:200]):
+                keep[cid] = {"pool": ov["pool"], "q": ov["q"], "a": ov["a"]}
+        _cardmaker_cache_write(deck_filename, fallback, keep)
         if not fallback:
             return
         # ★ 追加（2026/11/28）：まずClaude Haikuで誤答プールを作る（キー設定済み・予算内のときだけ）。
