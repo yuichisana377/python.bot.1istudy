@@ -8980,12 +8980,20 @@ def _build_claude_pool_prompt(entries):
 _REVERSE_SUFFIX_RE = re.compile(r"(とは何か|とはなにか|とは何でしょう|はどこか|はどこのやつか|ってどんな|とはどのような|とはどんな)")
 
 
+# 「は〜か」「をなんというか」のような、助詞で始まる短い問いの行（正解の語が前の行にある形）
+_REVERSE_SUFFIX_LINE_RE = re.compile(r"^(?:は|が|を|で|に|の|これは|その|って|どこ)[^0-9=()（）\[\]\n]{0,40}$")
+
+
+def _is_reverse_suffix_line(line):
+    return bool(_REVERSE_SUFFIX_RE.search(line) or _REVERSE_SUFFIX_LINE_RE.match(line.strip()))
+
+
 def _split_reverse_suffix(text):
     """答え欄の「2行目以降の反転用の問い」（例:「プレート\nとは何か」）を (本体, 付随文) に分ける。
     1行目は常に本体。2行目以降で最初に問いかけ表現を含む行から後ろを付随文とする（無ければ付随文は空）。"""
     lines = str(text or "").split("\n")
     for i in range(1, len(lines)):
-        if _REVERSE_SUFFIX_RE.search(lines[i]):
+        if _is_reverse_suffix_line(lines[i]):
             return "\n".join(lines[:i]).strip(), "\n".join(lines[i:])
     return str(text or "").strip(), ""
 
