@@ -9015,22 +9015,29 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
     kanji = _is_kanji_writing(question, correct)
     # ★ 正解が「A、B」のような名詞句の列挙（短く、句点なし）なら、候補にも「、」を必須にする（形が違うと正解だけ浮く）
     first_line = correct_body.split("\n")[0]
-    list_answer = "、" in first_line and "。" not in first_line and len(first_line) <= 30
+    _items = first_line.split("、")
+    list_answer = (len(_items) >= 2 and "。" not in first_line and len(first_line) <= 30
+                   and all(0 < len(x.strip()) <= 12 for x in _items)
+                   and not re.search(r"[ぁ-ゟ]$", _items[-1].strip()))  # 述語（ひらがな）で終わる文章は列挙とみなさない
     # ★ 正解が長い文（問い文・指示文・穴埋め文など）なら、単語だけの短い候補は認めない
-    min_len = int(len(correct_body) * 0.4) if len(correct_body) >= 15 else 0
+    min_len = int(len(re.sub(r"[（(][^）)]*[）)]", "", correct_body)) * 0.4) if len(correct_body) >= 15 else 0
     # ★ 英単語1語の正解は、語頭が同じ・語頭が正解そのもの（degrees, cash register 等）の候補を認めない
     ascii_word = correct_body.strip().lower() if re.fullmatch(r"[A-Za-z]{3,}", correct_body.strip()) else None
     cleaned = []
+    soft = []
     seen = {correct.strip(), correct_body}
     for d in distractors:
         text, _ = _split_reverse_suffix(str(d or ""))  # AIが付随文を付けてきても一旦外す
         if not text or len(text) > max_len or text in seen or find_bug_chars(text):
             continue
-        if list_answer and "、" not in text:
-            continue
-        if len(text) < min_len:
-            continue
-        if ascii_word and re.match(r"[A-Za-z]", text) and (text.lower().startswith(ascii_word) or ascii_word.startswith(text.lower())):
+        # 形の検査は「優先条件」: 弾いた候補は控え、足りなければ補充する（誤判定でプールが全滅しないように）
+        _tl = text.lower()
+        if (list_answer and "、" not in text) or len(text) < min_len or (
+                ascii_word and re.fullmatch(r"[a-z ]+", _tl) and (
+                    _tl in {ascii_word + s for s in ("s", "es", "d", "ed", "ing", "er")}
+                    or ascii_word in {_tl + s for s in ("s", "es", "d", "ed")}
+                    or _tl.startswith(ascii_word + " "))):
+            soft.append(text)
             continue
         if blank_run and not re.search(r"[○〇□＿]", text):
             continue
@@ -9040,6 +9047,14 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
         cleaned.append(text + ("\n" + suffix if suffix else ""))
         if len(cleaned) == CLAUDE_POOL_SIZE:
             break
+    for text in soft:
+        if len(cleaned) >= 3:
+            break
+        if text not in seen:
+            seen.add(text)
+            cleaned.append(text + ("\n" + suffix if suffix else ""))
+    if len(cleaned) < 3:
+        print(f"[WARN] 4択プール不成立: 入力{len(distractors)}件 / 採用{len(cleaned)}件 / 形で弾いた{len(soft)}件 / 正解={correct[:30]!r}")
     return cleaned if len(cleaned) >= 3 else None
 
 
