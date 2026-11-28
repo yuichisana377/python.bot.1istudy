@@ -8972,6 +8972,8 @@ def _build_claude_pool_prompt(entries):
         "本体の用語だけを正解とみなして候補を作る（付随文は候補に含めない）。ただし「1.低い\\n2.平坦」のように複数行すべてが答えの一部なら、同じ形式で候補を作る。\n"
         "6. 正解に「○○○」「□□」のような空欄記号を含む文章（例:「衝突帯と沈み込み帯は○○○境界に分類される」）は、反転学習用の穴埋め文なので、空欄記号を含む文章全体の形を保ち、中身の用語・主張の部分だけを紛らわしいものに変えて候補にする（空欄記号はそのまま残し、単語だけの候補にしない）。それ以外で問題と正解が噛み合わないカードは、問題の趣旨に沿った用語を候補にする。\n"
         "7. 漢字の書き取り・読みは字形や読みが紛らわしい漢字・語、英語・数学など他分野はその分野で間違えやすいものを候補にする。\n"
+        "9. 正解欄が問い文・指示文（例:「〜は何帯か」「〜を3つ挙げよ」）や長い説明文の場合も、候補は同じ形・同じくらいの長さの文にし、中身だけを紛らわしく変える。単語だけの候補にしない。\n"
+        "10. 正解と同じ物を指す別表記・別名・複数形・活用形・同じ尺度や同じ概念（例: Celsius に対する Centigrade、degree に対する degrees、「数千人」に対する「三千人」）は候補にしない。\n"
         "8. 正解が名詞句を「、」で並べただけの列挙（例:「中国、アフリカ諸国」。文章の途中の読点は対象外）、または同じ行の末尾に「〜の共通点」「〜の特徴」が付いた形（改行や「/」の後ろの付随文は規則5どおり無視）なら、候補も同じ項目数・同じ末尾の言い回しに揃える（例:「中国、アフリカ諸国の共通点」→「ロシア、カナダの共通点」）。正解と同じ項目は含めず、単語1つだけの候補にもしない。\n"
         '出力はJSONのみ: {"questions":[{"i":番号,"distractors":["誤答1","誤答2",...]}]}\n\n'
         f"カード:\n{items}"
@@ -9011,11 +9013,24 @@ def _sanitize_distractor_pool(distractors, correct, question=""):
     blank_run = re.search(r"[○〇□＿]{2,}", correct_body) if len(re.sub(r"[○〇□＿\s]", "", correct_body)) >= 3 else None
     max_len = max(60, len(correct) * 3)
     kanji = _is_kanji_writing(question, correct)
+    # ★ 正解が「A、B」のような名詞句の列挙（短く、句点なし）なら、候補にも「、」を必須にする（形が違うと正解だけ浮く）
+    first_line = correct_body.split("\n")[0]
+    list_answer = "、" in first_line and "。" not in first_line and len(first_line) <= 30
+    # ★ 正解が長い文（問い文・指示文・穴埋め文など）なら、単語だけの短い候補は認めない
+    min_len = int(len(correct_body) * 0.4) if len(correct_body) >= 15 else 0
+    # ★ 英単語1語の正解は、語頭が同じ・語頭が正解そのもの（degrees, cash register 等）の候補を認めない
+    ascii_word = correct_body.strip().lower() if re.fullmatch(r"[A-Za-z]{3,}", correct_body.strip()) else None
     cleaned = []
     seen = {correct.strip(), correct_body}
     for d in distractors:
         text, _ = _split_reverse_suffix(str(d or ""))  # AIが付随文を付けてきても一旦外す
         if not text or len(text) > max_len or text in seen or find_bug_chars(text):
+            continue
+        if list_answer and "、" not in text:
+            continue
+        if len(text) < min_len:
+            continue
+        if ascii_word and re.match(r"[A-Za-z]", text) and (text.lower().startswith(ascii_word) or ascii_word.startswith(text.lower())):
             continue
         if blank_run and not re.search(r"[○〇□＿]", text):
             continue
