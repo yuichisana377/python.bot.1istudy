@@ -8948,6 +8948,9 @@ CLAUDE_MAX_OUTPUT_TOKENS = 8000
 CLAUDE_BATCH_CARDS = 10  # 1回のリクエストで処理するカード数（出力がmax_tokensで途切れないよう小さめ）
 CLAUDE_POOL_SIZE = 6
 CLAUDE_BUDGET_FILE = "claude_budget.json"
+# ★ 4択の誤答生成にClaude APIを使ってよいサーバー（2026/11/28、ユーザー指示：このサーバーのみ）。
+#   それ以外のサーバーはローカルAI→類似度方式のみで動く（課金なし）。
+CLAUDE_ALLOWED_GUILD_IDS = {1509880344806162544}
 _CLAUDE_BUDGET_LOCK = Lock()
 
 
@@ -9311,7 +9314,7 @@ def _cardmaker_generate_choice_cache(guild_id, deck_filename, cards):
             return
         # ★ 追加（2026/11/28）：まずClaude Haikuで誤答プールを作る（キー設定済み・予算内のときだけ）。
         #   作れたら、使うたびの再生成もローカルAIでの強化も行わない（プールからランダムに選ぶため）。
-        if ANTHROPIC_API_KEY and _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
+        if ANTHROPIC_API_KEY and str(guild_id) in {str(g) for g in CLAUDE_ALLOWED_GUILD_IDS} and _cardmaker_claude_fill_pools(deck_filename, cards, fallback, old_cache):
             return
         if not OLLAMA_HOST:
             return
