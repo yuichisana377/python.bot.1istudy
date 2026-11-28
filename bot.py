@@ -5341,6 +5341,7 @@ def get_completed_tasks():
 
 
 @app.route("/complete_task", methods=["POST"])
+@_with_study_log_lock
 def complete_task():
     data     = request.json or {}
     guild_id = int(data.get("guild_id"))
@@ -5407,6 +5408,7 @@ def complete_task():
 
 
 @app.route("/uncomplete_task", methods=["POST"])
+@_with_study_log_lock
 def uncomplete_task():
     """
     /complete_task の逆操作。
