@@ -8673,6 +8673,52 @@ def _quiz_discord_ensure_watcher():
         QUIZ_DISCORD_WATCHER_STARTED = True
     Thread(target=_quiz_discord_watch_loop, daemon=True).start()
 
+def _auto_bonus_indices(guild_id, questions):
+    """★ 追加（2026/11/28）：普段の学習データから「わからない率」が高い問題を選び、得点2倍の対象にする。
+    ・対象は全体の5〜10%（乱数で決める）。最低1問。10問未満の部屋はボーナス無し。
+    ・各問題の source_deck_filename / source_card_id（デッキから作った問題のみ持つ）を、
+      全生徒の study_data（seen/unsure）で集計。2人以上が学習していて、わからない率が0より大きい問題だけが候補。
+    ・候補の中から、率の高い順に（同率は乱数で）上位を選ぶ。失敗しても部屋の作成は止めない。"""
+    try:
+        n = len(questions)
+        if n < 10:
+            return set()
+        want = max(1, round(n * random.uniform(0.05, 0.10)))
+        prefix = f"study_data_{guild_id}_"
+        stats = {}  # (deck, card) -> [学習した人数, わからない人数]
+        wanted = {(q.get("source_deck_filename"), q.get("source_card_id")) for q in questions
+                  if q.get("source_deck_filename") and q.get("source_card_id")}
+        if not wanted:
+            return set()
+        decks = {d for d, _ in wanted}
+        for name in os.listdir(DATA_DIR):
+            if not (name.startswith(prefix) and name.endswith(".json")):
+                continue
+            data, _ = local_get(name)
+            if not data:
+                continue
+            seen_map = data.get("seen", {}) or {}
+            unsure_map = data.get("unsure", {}) or {}
+            for dk in decks:
+                unsure_keys = set(unsure_map.get(dk) or [])
+                for k in (seen_map.get(dk) or []):
+                    if (dk, k) in wanted:
+                        st = stats.setdefault((dk, k), [0, 0])
+                        st[0] += 1
+                        if k in unsure_keys:
+                            st[1] += 1
+        scored = []
+        for i, q in enumerate(questions):
+            st = stats.get((q.get("source_deck_filename"), q.get("source_card_id")))
+            if st and st[0] >= 2 and st[1] > 0:
+                scored.append((st[1] / st[0], random.random(), i))
+        scored.sort(reverse=True)
+        return {i for _, _, i in scored[:want]}
+    except Exception as ex:
+        print(f"[WARN] 自動ボーナス問題の選出に失敗しました: {ex}")
+        return set()
+
+
 @app.route("/quiz_create", methods=["POST"])
 def quiz_create():
     data, guild_id, student_id, nickname, err = _quiz_auth_from_json()
@@ -8724,7 +8770,11 @@ def quiz_create():
     #   このインデックス集合を見て2倍にする。
     bonus_mode = data.get("bonus_mode")
     bonus_indices = set()
-    if bonus_mode in ("random", "last"):
+    if bonus_mode in (None, "", "auto"):
+        # ★ 追加（2026/11/28）：既定は「自動」。普段の学習（CardMaker）で「わからない」が付きやすい問題を
+        #   全体の5〜10%（最低1問、10問未満の部屋は対象外）、得点2倍にする。学習データが無ければ何もしない。
+        bonus_indices = _auto_bonus_indices(guild_id, questions)
+    elif bonus_mode in ("random", "last"):
         try:
             bonus_count = int(data.get("bonus_count"))
         except (TypeError, ValueError):
@@ -8736,7 +8786,7 @@ def quiz_create():
             bonus_indices = set(random.sample(range(len(questions)), bonus_count))
         else:  # "last"
             bonus_indices = set(range(len(questions) - bonus_count, len(questions)))
-    elif bonus_mode not in (None, "", "none"):
+    elif bonus_mode != "none":
         return jsonify({"ok": False, "error": "invalid_bonus_mode"})
 
     # ★ 追加：詳細設定「問題の出題時間」「正解発表の表示時間」。どちらも省略時は
