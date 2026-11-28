@@ -2846,9 +2846,12 @@ def add_study_log():
     #     （タイマーの経過時間を改ざんして即座に長時間記録するのを防止）
     #   ・手入力：同じ教科での連続記録は、前回の記録から1分経過していないと拒否
     my_logs = [l for l in logs if l.get("student_id") == student_id]
+    # ★ クイズ自動記録（source=="quiz"）はタイマーの経過時間チェックの対象外にする
+    #   （タイマー中にクイズを遊ぶと、終了時の自動記録でタイマー保存が拒否されるのを防ぐ）
+    my_logs_for_timer = [l for l in my_logs if l.get("source") != "quiz"]
 
     if method == "timer":
-        last_time = _latest_log_time(my_logs)
+        last_time = _latest_log_time(my_logs_for_timer)
         if last_time:
             elapsed_sec  = (now_jst - last_time).total_seconds()
             required_sec = minutes * 60
@@ -8450,7 +8453,12 @@ def _archive_manual_quiz(guild_id, title, questions, student_id, nickname, playe
     except Exception as e:
         print(f"[WARN] クイズ過去問の保存に失敗しました（クイズの進行自体は続行）: {e}")
 
+_QUIZ_STUDY_LOCK = Lock()  # クイズ由来の勉強ログ書き込みどうしを1件ずつにする（同時終了ルームの上書き防止）
 def _record_quiz_study_time(guild_id, started_at, ended_at, players):
+    with _QUIZ_STUDY_LOCK:
+        _record_quiz_study_time_unlocked(guild_id, started_at, ended_at, players)
+
+def _record_quiz_study_time_unlocked(guild_id, started_at, ended_at, players):
     """★ 追加（2026/11/28）：みんなでクイズのプレイ時間を、参加したログイン済みメンバー全員の
     勉強ログ（教科「みんなでクイズ」）に記録する。ゲストには学習データが無いので対象外。
     時間はサーバー自身が測った開始〜終了の経過分なので、手入力と違いクライアントの値は一切信用しない
@@ -8467,9 +8475,16 @@ def _record_quiz_study_time(guild_id, started_at, ended_at, players):
             return
         logs = load_study_logs(guild_id)
         pts = load_points(guild_id)
+        timers = load_study_timers(guild_id)
+        started_str = datetime.fromtimestamp(started_at, JST).strftime("%Y-%m-%d %H:%M:%S")
         for pid in member_ids:
             user = find_user(guild_id, pid)
             if not user:
+                continue
+            if timers.get(pid):
+                continue  # 勉強タイマー作動中の人は、同じ時間が二重に数えられるので記録しない
+            # 並列ルームで実時間を超えて積み上げられないよう、今回の開始後に既に記録済み（重なり）なら加算しない
+            if any(l.get("student_id") == pid and l.get("time", "") >= started_str for l in logs):
                 continue
             logs.append({
                 "date": now_jst.strftime("%Y-%m-%d"),
@@ -8479,6 +8494,7 @@ def _record_quiz_study_time(guild_id, started_at, ended_at, players):
                 "memo": "",
                 "student_id": pid,
                 "nickname": user["nickname"],
+                "source": "quiz",
             })
             pts[pid] = pts.get(pid, 0) + minutes // 5
         save_study_logs(guild_id, logs)
@@ -8498,7 +8514,8 @@ def _archive_room_if_needed(room):
     # ★ 追加：クイズの種類を問わず、プレイ時間を参加メンバーの勉強時間に加える
     #   （countdown_started_atはホストが開始した時刻のまま残る）
     _study_started = room.get("countdown_started_at")
-    _study_players = list(room["players"].keys())
+    # ★ 1問でも実際に回答した人だけが対象（放置・見学だけでは加算されない＝水増し防止）
+    _study_players = [pid for pid, p in room["players"].items() if (p.get("total_answer_time") or 0) > 0]
     _study_end = room.get("ended_at")
     Thread(target=_record_quiz_study_time, args=(room["guild_id"], _study_started, _study_end, _study_players), daemon=True).start()
     if room.get("source") != "manual":
