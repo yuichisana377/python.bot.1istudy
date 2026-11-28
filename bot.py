@@ -8497,8 +8497,8 @@ def _record_quiz_study_time_unlocked(guild_id, started_at, ended_at, players):
             user = find_user(guild_id, pid)
             if not user:
                 continue
-            if timers.get(pid):
-                continue  # 勉強タイマー作動中の人は、同じ時間が二重に数えられるので記録しない
+            if (timers.get(pid) or {}).get("state") == "running":
+                continue  # 勉強タイマー作動中の人だけ、同じ時間が二重に数えられるので記録しない（休憩中・止め忘れの一時停止は数えられていないので記録する）
             # 並列ルームで実時間を超えて積み上げられないよう、今回の開始後に既に記録済み（重なり）なら加算しない
             if any(l.get("student_id") == pid and l.get("time", "") >= started_str for l in logs):
                 continue
