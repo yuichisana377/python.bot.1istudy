@@ -8249,6 +8249,7 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
         return None, "too_many_decks"
 
     cards = []
+    claude_pools = {}  # ★ 追加（2026/11/28）：(デッキ, カードid) → CardMakerの「4択にする」用キャッシュにあるClaude製の誤答プール
     order_questions = []  # ★ 追加：並び替えカードから作った問題（4択の誤答プールとは別に持つ）
     fixed_questions = []  # ★ 追加：選択式カードから作った問題（カードの選択肢をそのまま使う）
     for deck_filename in deck_filenames:
@@ -8257,6 +8258,8 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
         data, _ = get_card_file_for_guild(deck_filename, guild_id)
         if data is None:
             return None, "deck_not_found"
+        _cc, _ = local_get(cardmaker_choice_cache_filename(deck_filename))
+        _cc_cards = _cc.get("cards") if isinstance(_cc, dict) and isinstance(_cc.get("cards"), dict) else {}
         for c in data.get("cards", []):
             if not (isinstance(c, dict) and str(c.get("question") or "").strip()):
                 continue
@@ -8284,14 +8287,21 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
             c = dict(c)
             c["_src_deck_filename"] = deck_filename
             c["_src_card_id"] = c.get("id")
+            # Claudeの誤答プールが、今のカード（問題・答えが一致）に対して作られていれば控える
+            _cv = _cc_cards.get(c.get("id")) if c.get("id") else None
+            if (isinstance(_cv, dict) and isinstance(_cv.get("pool"), list) and len(_cv["pool"]) >= 3
+                    and _cv.get("q") == str(c.get("question") or "").strip()[:200]
+                    and _cv.get("a") == str(c.get("answer") or "").strip()[:200]):
+                claude_pools[(deck_filename, c.get("id"))] = _cv["pool"]
             cards.append(c)
     unique_answers = {c["answer"].strip() for c in cards}
     # ★ 4択（正解1つ＋不正解3つ）を作るには、答えの異なり（ユニークな値）が
     #   最低4つ必要。html側の注意書き（「答えの種類が4つ以上あるデッキが必要」）と対応。
     # ★ 変更：並び替えカードは誤答プールが要らないので、4択が作れないデッキでも
     #   並び替えカードがあればそれだけで出題する。どちらも無ければ deck_too_small。
-    if len(cards) < 4 or len(unique_answers) < 4:
-        cards = []
+    if (len(cards) < 4 or len(unique_answers) < 4) and not (
+            cards and all((c.get("_src_deck_filename"), c.get("_src_card_id")) in claude_pools for c in cards)):
+        cards = []  # ★ 変更：全カードにClaudeの誤答プールがあるデッキは、答えの種類が少なくても4択にできる
     if not cards and not order_questions and not fixed_questions:
         return None, "deck_too_small"
     candidates = ([("choice", c) for c in cards] + [("order", q) for q in order_questions]
@@ -8314,11 +8324,21 @@ def _build_deck_questions(guild_id, deck_filenames, num_questions):
         pool = list(dict.fromkeys(  # 同じ答え文言の重複を除去しつつ順序を保つ
             c["answer"].strip() for c in cards if c is not card and c["answer"].strip() != correct
         ))
-        if len(pool) < 3:
-            return None, "deck_too_small"
-        choices = _pick_distractors(correct, pool, 3) + [correct]
+        cpool = claude_pools.get((card.get("_src_deck_filename"), card.get("_src_card_id")))
+        if cpool:
+            # ★ Claudeが作った紛らわしい誤答プールから3つ（CardMakerの4択と同じ質）。AI差し替えの対象外にする
+            distractors = [d for d in _pick_from_pool(cpool) if d != correct][:3]
+        else:
+            distractors = []
+        if len(distractors) < 3:
+            cpool = None
+            if len(pool) < 3:
+                return None, "deck_too_small"
+            distractors = _pick_distractors(correct, pool, 3)
+        choices = distractors + [correct]
         random.shuffle(choices)
         questions.append({
+            **({"fixed_choices": True} if cpool else {}),
             "question": card["question"].strip(),
             "choices": choices,
             "correct_index": choices.index(correct),
