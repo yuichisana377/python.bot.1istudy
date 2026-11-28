@@ -8694,19 +8694,22 @@ def _auto_bonus_indices(guild_id, questions):
         for name in os.listdir(DATA_DIR):
             if not (name.startswith(prefix) and name.endswith(".json")):
                 continue
-            data, _ = local_get(name)
-            if not data:
+            try:  # 1人分のデータが壊れていても、他の人の分は集計を続ける
+                data, _ = local_get(name)
+                if not data:
+                    continue
+                seen_map = data.get("seen", {}) or {}
+                unsure_map = data.get("unsure", {}) or {}
+                for dk in decks:
+                    unsure_keys = set(unsure_map.get(dk) or [])
+                    for k in (seen_map.get(dk) or []):
+                        if (dk, k) in wanted:
+                            st = stats.setdefault((dk, k), [0, 0])
+                            st[0] += 1
+                            if k in unsure_keys:
+                                st[1] += 1
+            except Exception:
                 continue
-            seen_map = data.get("seen", {}) or {}
-            unsure_map = data.get("unsure", {}) or {}
-            for dk in decks:
-                unsure_keys = set(unsure_map.get(dk) or [])
-                for k in (seen_map.get(dk) or []):
-                    if (dk, k) in wanted:
-                        st = stats.setdefault((dk, k), [0, 0])
-                        st[0] += 1
-                        if k in unsure_keys:
-                            st[1] += 1
         scored = []
         for i, q in enumerate(questions):
             st = stats.get((q.get("source_deck_filename"), q.get("source_card_id")))
@@ -8770,7 +8773,7 @@ def quiz_create():
     #   このインデックス集合を見て2倍にする。
     bonus_mode = data.get("bonus_mode")
     bonus_indices = set()
-    if bonus_mode in (None, "", "auto"):
+    if bonus_mode == "auto":
         # ★ 追加（2026/11/28）：既定は「自動」。普段の学習（CardMaker）で「わからない」が付きやすい問題を
         #   全体の5〜10%（最低1問、10問未満の部屋は対象外）、得点2倍にする。学習データが無ければ何もしない。
         bonus_indices = _auto_bonus_indices(guild_id, questions)
@@ -8786,7 +8789,7 @@ def quiz_create():
             bonus_indices = set(random.sample(range(len(questions)), bonus_count))
         else:  # "last"
             bonus_indices = set(range(len(questions) - bonus_count, len(questions)))
-    elif bonus_mode != "none":
+    elif bonus_mode not in (None, "", "none"):  # 未指定（旧クライアントの「なし」）はボーナス無し
         return jsonify({"ok": False, "error": "invalid_bonus_mode"})
 
     # ★ 追加：詳細設定「問題の出題時間」「正解発表の表示時間」。どちらも省略時は
